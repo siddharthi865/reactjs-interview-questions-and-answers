@@ -531,6 +531,260 @@ For end-to-end validation, use **Playwright** to simulate scrolling and verify p
 
 ## Question 3. How do you handle conditional rendering based on API response?
 
+# How do you handle conditional rendering based on API response?
+
+## Short answer
+
+Handle conditional rendering by maintaining separate UI states such as **loading**, **success**, **error**, and **empty**. Render different components based on the current API state instead of relying on nested `if` statements or checking only whether data exists.
+
+---
+
+# Explanation
+
+A typical API request goes through several states:
+
+```text
+Idle
+   │
+   ▼
+Loading
+   │
+   ▼
+Request Finished
+   │
+   ├──────────────┐
+   ▼              ▼
+Success         Error
+   │
+   ▼
+Has Data?
+   │
+ ┌─┴───────┐
+ ▼         ▼
+Data      Empty State
+```
+
+In React, you usually manage these states with:
+
+- **`loading`** → request in progress
+- **`error`** → request failed
+- **`data`** → successful response
+- **Empty state** → request succeeded but returned no records
+
+A common pattern is:
+
+```tsx
+if (loading) return <LoadingSpinner />;
+if (error) return <ErrorMessage />;
+if (data.length === 0) return <EmptyState />;
+
+return <DataList data={data} />;
+```
+
+This approach keeps components easy to read and maintain.
+
+### React 18 considerations
+
+- **Automatic batching** groups multiple state updates (`setData`, `setLoading`, `setError`) into a single render.
+- Keep API fetching logic separate from presentation, either in a custom hook or a data-fetching library like **TanStack Query**.
+- For complex applications, prefer a state machine or query library over manually tracking many boolean flags.
+
+---
+
+# Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Conditional rendering based on API response
+
+```tsx
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function App() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function fetchUsers() {
+      try {
+        const response = await fetch(
+          "https://jsonplaceholder.typicode.com/users",
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch users");
+        }
+
+        const data: User[] = await response.json();
+        setUsers(data);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchUsers();
+  }, []);
+
+  if (loading) {
+    return <h2>Loading...</h2>;
+  }
+
+  if (error) {
+    return <h2>Error: {error}</h2>;
+  }
+
+  if (users.length === 0) {
+    return <h2>No users found.</h2>;
+  }
+
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### UI flow
+
+```text
+Loading...
+      │
+      ▼
+ ┌───────────────┐
+ │ API Response  │
+ └───────────────┘
+      │
+ ┌────┴─────┐
+ ▼          ▼
+Error     Success
+             │
+      ┌──────┴──────┐
+      ▼             ▼
+ Empty Data     Show List
+```
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for modern React development. Avoid Create React App because it is deprecated.
+- For production applications requiring SSR, SEO, or streaming, use **Next.js App Router**. Initial API data can be fetched on the server, while client-side interactions continue after hydration.
+- Vite uses **ES Modules (ESM)** for fast development with Hot Module Replacement (HMR). Production builds are optimized with Rollup. CommonJS is mainly for legacy Node.js packages.
+
+---
+
+# Performance
+
+### 1. Avoid unnecessary re-renders
+
+Memoize expensive child components:
+
+```tsx
+const UserList = React.memo(UserListComponent);
+```
+
+### 2. Cache API responses
+
+Instead of manual state management, use **TanStack Query** or **SWR** for:
+
+- request caching
+- background refetching
+- retries
+- deduplication
+- stale-while-revalidate
+
+### 3. Memoize derived data
+
+```tsx
+const sortedUsers = useMemo(
+  () => [...users].sort((a, b) => a.name.localeCompare(b.name)),
+  [users],
+);
+```
+
+### 4. Stable callbacks
+
+```tsx
+const handleRefresh = useCallback(() => {
+  fetchUsers();
+}, []);
+```
+
+### 5. Lazy load heavy UI
+
+```tsx
+const Dashboard = React.lazy(() => import("./Dashboard"));
+```
+
+Wrap lazy-loaded components with `Suspense` to show a fallback while they load.
+
+### 6. Profile rendering
+
+Use the **React DevTools Profiler** to identify:
+
+- unnecessary renders
+- expensive list updates
+- slow child components
+- repeated API-triggered renders
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Typical tests include:
+
+- loading spinner is shown initially
+- successful response renders the data
+- empty response renders the empty state
+- failed response renders the error message
+- retry logic works correctly (if implemented)
+
+Use **Playwright** for end-to-end testing to validate loading, success, and error flows against a real backend or mocked API.
+
+---
+
+# Ops & Deployment
+
+- Handle API failures gracefully with user-friendly error messages and optional retry actions.
+- Use **Error Boundaries** for rendering errors; note they do **not** catch errors from asynchronous API calls.
+- Cancel in-flight requests with `AbortController` when components unmount to avoid setting state on unmounted components.
+- For SSR, prefetch critical data on the server to improve perceived performance and SEO.
+- Optimize bundle size using route-level code splitting, lazy loading, and CDN/edge deployment.
+
+---
+
+# Pitfalls
+
+- **Don't render data before checking `loading`.** This can cause UI flickering or access to undefined values.
+- **Don't rely on `data && ...` alone.** Distinguish between loading, error, empty, and success states explicitly.
+- **Don't ignore failed HTTP responses.** Always check `response.ok` before parsing the response body.
+
 ## Question 4. How do you implement a toast notification system?
 
 ## Question 5. How do you implement drag-and-drop lists in React?
