@@ -412,6 +412,220 @@ test("renders fragment content", () => {
 
 ## Question 3. How do you handle onClick events for dynamically generated buttons?
 
+# Short answer
+
+Handle `onClick` events for dynamically generated buttons by rendering them with `map()` and passing an event handler that receives the item's identifier or data.
+
+```tsx
+{
+  users.map((user) => (
+    <button key={user.id} onClick={() => handleClick(user.id)}>
+      {user.name}
+    </button>
+  ));
+}
+```
+
+Each button invokes the same handler with a different value.
+
+---
+
+# Explanation
+
+In React, dynamically generated buttons are typically created using `Array.prototype.map()`. Each button gets:
+
+- A unique `key` for React reconciliation.
+- An `onClick` handler.
+- Data specific to that item (usually an `id`).
+
+Example flow:
+
+```text
+users[]
+   │
+   ▼
+map()
+   │
+   ▼
+<button onClick={() => handleClick(user.id)} />
+```
+
+### Passing parameters
+
+Since React expects a **function reference**, don't call the function directly.
+
+✅ Correct:
+
+```tsx
+onClick={() => handleClick(user.id)}
+```
+
+❌ Incorrect:
+
+```tsx
+onClick={handleClick(user.id)}
+```
+
+The incorrect version executes immediately during rendering instead of waiting for the click.
+
+### Event object
+
+If you need both the event and item data:
+
+```tsx
+onClick={(event) => handleClick(event, user.id)}
+```
+
+```tsx
+const handleClick = (
+  event: React.MouseEvent<HTMLButtonElement>,
+  id: number,
+) => {
+  console.log(id);
+};
+```
+
+### Rendering behavior
+
+React creates a new arrow function on each render when using inline handlers. For most applications, this is perfectly acceptable. Only optimize if profiling reveals performance issues, such as thousands of frequently re-rendering items.
+
+In React 18:
+
+- Automatic batching groups multiple state updates triggered by the click into a single render.
+- Concurrent rendering can improve responsiveness but doesn't change how `onClick` handlers are written.
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function App() {
+  const [selected, setSelected] = useState<number | null>(null);
+
+  const users: User[] = [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "Bob" },
+    { id: 3, name: "Charlie" },
+  ];
+
+  const handleClick = (id: number) => {
+    setSelected(id);
+  };
+
+  return (
+    <div>
+      <h2>Users</h2>
+
+      {users.map((user) => (
+        <button
+          key={user.id}
+          onClick={() => handleClick(user.id)}
+          style={{ marginRight: "8px" }}
+        >
+          {user.name}
+        </button>
+      ))}
+
+      <p>Selected User ID: {selected ?? "None"}</p>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for modern React development. Avoid Create React App (CRA), as it is deprecated.
+- Use **TypeScript** for better type safety and editor support.
+- Vite uses **ES Modules (ESM)** for fast startup and Hot Module Replacement (HMR).
+- Choose **Next.js App Router** when SSR, Server Components, or SEO are required; Vite is ideal for client-rendered SPAs.
+
+---
+
+# Performance
+
+For small and medium lists, inline arrow functions are simple and performant.
+
+For large, frequently re-rendering lists:
+
+- Profile first using **React Profiler**.
+- Memoize child components with `React.memo`.
+- Use `useCallback` when passing handlers to memoized children to maintain stable function references.
+- Use list virtualization (e.g., `react-window` or `react-virtualized`) for thousands of items.
+- Use `React.lazy()` and `Suspense` for code splitting, and cache server data with libraries like TanStack Query or SWR.
+
+Example with a memoized child:
+
+```tsx
+const handleClick = useCallback((id: number) => {
+  setSelected(id);
+}, []);
+```
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("selects a user when button is clicked", async () => {
+  render(<App />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Alice" }));
+
+  expect(screen.getByText(/Selected User ID: 1/i)).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Log important click events (e.g., purchases or navigation) using analytics services such as Google Analytics or Segment.
+- Use Error Boundaries to isolate rendering failures (they won't catch errors inside event handlers, so handle those with `try/catch` if needed).
+- Use SSR with Next.js for SEO-focused pages and CSR with Vite for highly interactive applications.
+- Optimize bundle size with route-level code splitting and deploy static assets through a CDN.
+
+---
+
+# Pitfalls
+
+- **Don't invoke the handler during render.** Use `onClick={() => handleClick(id)}` instead of `onClick={handleClick(id)}`.
+- **Always provide a stable `key`** when rendering buttons with `map()`. Avoid using array indexes if items can be reordered.
+- **Don't overuse `useCallback`.** Apply it when it provides measurable benefits, particularly with memoized child components.
+
 ## Question 4. How do you implement a “toggle visibility” component?
 
 ## Question 5. How do you implement a simple slider using state?
