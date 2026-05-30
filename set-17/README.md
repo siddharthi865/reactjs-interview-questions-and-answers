@@ -589,6 +589,272 @@ For end-to-end testing, use **Playwright** to verify loading indicators appear a
 
 ## Question 3. How do you create a reusable input component?
 
+# How do you create a reusable input component?
+
+## Short answer
+
+Create a reusable input component by encapsulating common behavior (label, validation, error display, styling, accessibility, and event handling) into a single component that accepts props. In React, the component should be **controlled** by receiving its `value` and `onChange` from the parent, making it predictable and reusable across forms.
+
+---
+
+# Explanation
+
+Instead of repeating the same input markup throughout your application:
+
+```tsx
+<label>Name</label>
+<input type="text" />
+<p className="error">Required</p>
+```
+
+create one reusable component:
+
+```tsx
+<Input label="Name" value={name} onChange={handleChange} error={errors.name} />
+```
+
+This provides several benefits:
+
+- **Reusability** – Use the same component throughout the application.
+- **Consistency** – Common styling and behavior are centralized.
+- **Maintainability** – Update one component instead of dozens.
+- **Accessibility** – Add labels, IDs, and ARIA attributes once.
+
+### Controlled Component Pattern
+
+A reusable input is usually **controlled**.
+
+```text
+User types
+      ↓
+onChange fires
+      ↓
+Parent state updates
+      ↓
+Input receives new value
+      ↓
+React re-renders
+```
+
+Example:
+
+```tsx
+const [name, setName] = useState("");
+
+<Input value={name} onChange={(e) => setName(e.target.value)} />;
+```
+
+The input itself does not own the state.
+
+---
+
+## React 18 Rendering Behavior
+
+When the user types:
+
+```tsx
+setName(e.target.value);
+```
+
+React 18:
+
+- Automatically batches multiple state updates.
+- Re-renders only components whose state/props changed.
+- Efficiently updates only the changed DOM value.
+- Uses concurrent rendering to keep typing responsive during larger UI updates.
+
+A reusable input should avoid unnecessary internal state unless it is managing UI-only concerns (e.g., password visibility).
+
+---
+
+## Component Architecture
+
+A reusable input should focus on a single responsibility.
+
+```
+Form
+ ├── Input
+ ├── Select
+ ├── Checkbox
+ ├── Radio
+ └── TextArea
+```
+
+Each component handles its own rendering while the parent manages the form state.
+
+Good reusable inputs usually support:
+
+- label
+- value
+- onChange
+- placeholder
+- disabled
+- required
+- error message
+- helper text
+- different input types
+- forwarded refs (for focus management)
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app with Vite (recommended):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`Input.tsx`**
+
+```tsx
+import { ChangeEvent } from "react";
+
+type InputProps = {
+  label: string;
+  value: string;
+  type?: string;
+  placeholder?: string;
+  error?: string;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+};
+
+export default function Input({
+  label,
+  value,
+  type = "text",
+  placeholder,
+  error,
+  onChange,
+}: InputProps) {
+  const id = label.toLowerCase().replace(/\s+/g, "-");
+
+  return (
+    <div>
+      <label htmlFor={id}>{label}</label>
+
+      <input
+        id={id}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={onChange}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
+      />
+
+      {error && (
+        <p id={`${id}-error`} style={{ color: "red" }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+```
+
+**`App.tsx`**
+
+```tsx
+import { useState } from "react";
+import Input from "./Input";
+
+export default function App() {
+  const [name, setName] = useState("");
+
+  return (
+    <Input
+      label="Name"
+      value={name}
+      placeholder="Enter your name"
+      onChange={(e) => setName(e.target.value)}
+      error={name.length < 3 && name !== "" ? "Minimum 3 characters" : ""}
+    />
+  );
+}
+```
+
+This component is reusable for any text input by changing the props.
+
+> **Note:** For production libraries, consider using `useId()` instead of deriving IDs from the label to guarantee uniqueness.
+
+---
+
+# Tooling & Setup
+
+- Prefer **Vite** for modern React development because of its fast startup, HMR, and optimized production builds.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- Use **Next.js App Router** when building applications requiring SSR, Server Components, or SEO.
+- Vite is **ESM-first**, serving native ES modules during development and using Rollup for optimized production bundles.
+
+---
+
+# Performance
+
+Reusable inputs are lightweight, but forms can become expensive.
+
+Optimize by:
+
+- Using **React Profiler** to detect unnecessary re-renders.
+- Wrapping heavy child components with `React.memo`.
+- Using `useCallback` for stable event handlers when passing them to memoized children.
+- Splitting large forms into smaller components.
+- Using libraries like **React Hook Form** or **Formik** for complex forms to minimize re-renders and simplify validation.
+- Lazy loading large form sections when appropriate.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import Input from "./Input";
+
+test("updates input value", async () => {
+  const user = userEvent.setup();
+  const handleChange = vi.fn();
+
+  render(<Input label="Name" value="" onChange={handleChange} />);
+
+  await user.type(screen.getByLabelText("Name"), "John");
+
+  expect(handleChange).toHaveBeenCalled();
+});
+```
+
+For end-to-end testing, use **Playwright** to validate complete form interactions.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors in the component tree (note: they do not catch async validation errors).
+- Centralize logging for client-side form errors if needed.
+- Keep reusable components framework-agnostic so they work in CSR (Vite) and SSR (Next.js).
+- Optimize bundle size by exporting components individually and leveraging tree-shaking. Deploy static assets via a CDN for fast delivery.
+
+---
+
+# Pitfalls
+
+- **Avoid mixing controlled and uncontrolled inputs** (`value` with `defaultValue`) in the same component.
+- **Don't hardcode styles or validation logic**; pass them through props or compose with higher-level form components.
+- **Remember accessibility** by associating labels with inputs (`htmlFor`/`id`) and exposing validation state with appropriate ARIA attributes.
+
 ## Question 4. How do you handle simple inline validation for an input field?
 
 ## Question 5. How do you implement a "show password" toggle?
