@@ -456,6 +456,235 @@ For end-to-end testing, use Playwright to verify that the selected theme persist
 
 ## Question 3. Explain the concept of Render Props in React
 
+## Short answer
+
+**Render Props** is a React pattern where a component shares logic by accepting a **function as a prop**. Instead of deciding what to render itself, the component calls the function and passes data to it, allowing the parent to control the UI while reusing the underlying behavior.
+
+---
+
+# Explanation
+
+Before Hooks (`useState`, `useEffect`), Render Props were a popular way to **share stateful logic** between components without duplicating code.
+
+Instead of this:
+
+```tsx
+<MyComponent />
+```
+
+You pass a function:
+
+```tsx
+<MyComponent render={(data) => <Child data={data} />} />
+```
+
+or more commonly:
+
+```tsx
+<MyComponent>{(data) => <Child data={data} />}</MyComponent>
+```
+
+The component owns the logic, while the caller owns the UI.
+
+### How it works
+
+```text
+Parent
+   │
+   │ render function
+   ▼
+RenderPropComponent
+   │
+   ├── manages state
+   ├── handles events
+   └── calls render(state)
+            │
+            ▼
+      Parent decides UI
+```
+
+### Example use cases
+
+- Mouse position tracking
+- Authentication status
+- Data fetching (before Hooks)
+- Form state management
+- Animation libraries
+
+---
+
+### Render Props vs Higher-Order Components (HOCs)
+
+| Render Props                  | HOC                               |
+| ----------------------------- | --------------------------------- |
+| Uses a function prop          | Wraps a component                 |
+| More explicit                 | Can lead to wrapper nesting       |
+| Easier to pass dynamic values | Less flexible                     |
+| Avoids prop collisions        | Prop name collisions are possible |
+
+---
+
+### Render Props vs Hooks
+
+Modern React generally prefers **custom Hooks** because they:
+
+- Require less nesting
+- Produce cleaner JSX
+- Are easier to compose
+- Work naturally with function components
+
+Render Props are still encountered in legacy codebases and some libraries.
+
+---
+
+### React 18 considerations
+
+- Render Props are fully compatible with concurrent rendering.
+- Automatic batching works the same as with any functional component.
+- A new render function is created on every parent render unless memoized, which may trigger unnecessary child renders.
+
+---
+
+# Example (React + TypeScript)
+
+## Create a Vite project
+
+```bash
+npm create vite@latest render-props-demo -- --template react-ts
+cd render-props-demo
+npm install
+npm run dev
+```
+
+### `MouseTracker.tsx`
+
+```tsx
+import { ReactNode, useState } from "react";
+
+type Props = {
+  children: (position: { x: number; y: number }) => ReactNode;
+};
+
+export default function MouseTracker({ children }: Props) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+
+  return (
+    <div
+      style={{ height: 200, border: "1px solid gray" }}
+      onMouseMove={(e) =>
+        setPosition({
+          x: e.clientX,
+          y: e.clientY,
+        })
+      }
+    >
+      {children(position)}
+    </div>
+  );
+}
+```
+
+### `App.tsx`
+
+```tsx
+import MouseTracker from "./MouseTracker";
+
+export default function App() {
+  return (
+    <MouseTracker>
+      {({ x, y }) => (
+        <h2>
+          Mouse Position: {x}, {y}
+        </h2>
+      )}
+    </MouseTracker>
+  );
+}
+```
+
+Here:
+
+- `MouseTracker` owns the state.
+- `App` controls how that state is displayed.
+- The same `MouseTracker` can render any UI by changing the render function.
+
+---
+
+# Tooling & Setup
+
+**Recommended stack:** Vite + React + TypeScript
+
+Why Vite?
+
+- Fast development server with Hot Module Replacement (HMR)
+- Native ES Modules (ESM) in development
+- Rollup for optimized production builds
+- Avoid **Create React App (CRA)**, as it is deprecated
+
+Framework notes:
+
+- **Next.js:** Render Props work in Client Components. Server Components cannot accept functions as props across the server/client boundary.
+- **Remix:** Works identically in client-rendered components.
+
+---
+
+# Performance
+
+Render Props can introduce unnecessary re-renders because the render function is recreated on each parent render.
+
+Optimization techniques:
+
+- Memoize render functions with `useCallback` when passing them to memoized children.
+- Use `React.memo` for components receiving stable props.
+- Prefer custom Hooks for reusable logic in new codebases.
+- Use `React.lazy` and dynamic imports for code splitting.
+- Profile with the React DevTools Profiler to identify render bottlenecks.
+- Use caching libraries like React Query or SWR for server state instead of implementing custom data-fetching Render Props.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders mouse position", () => {
+  render(<App />);
+  expect(screen.getByText(/Mouse Position/i)).toBeInTheDocument();
+});
+```
+
+For integration tests, simulate mouse movement with `fireEvent.mouseMove`. For end-to-end testing, use Playwright to verify interactive behavior.
+
+---
+
+# Ops & Deployment
+
+- Render Props add no special deployment requirements.
+- Use Error Boundaries to isolate runtime errors in the rendered UI.
+- Avoid deeply nested Render Props ("wrapper hell") to keep bundles and component trees maintainable.
+- For SSR, ensure any browser-specific APIs (e.g., `window`, `document`) are accessed inside effects or event handlers.
+- Deploy optimized bundles via a CDN and monitor performance with browser profiling tools.
+
+---
+
+# Pitfalls
+
+- Creating a new render function every render can reduce memoization effectiveness.
+- Excessive nesting of Render Props makes JSX difficult to read ("callback hell").
+- Prefer custom Hooks for new React applications unless you need to support class components or maintain legacy APIs.
+
 ## Question 4. Difference between render props and higher-order components
 
 ## Question 5. How do you implement infinite scroll using IntersectionObserver in React?
