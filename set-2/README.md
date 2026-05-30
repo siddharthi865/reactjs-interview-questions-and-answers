@@ -389,6 +389,198 @@ For end-to-end interaction testing, use Playwright.
 
 ## Question 3. How do you conditionally apply CSS classes?
 
+## Short answer
+
+In React, you conditionally apply CSS classes by setting the `className` prop based on state, props, or other conditions. Common approaches include **ternary operators**, **logical AND (`&&`)**, template literals, or helper libraries like **`clsx`** (recommended) or `classnames` for complex class combinations.
+
+---
+
+# Explanation
+
+React doesn't have special syntax for conditional classes—you use normal JavaScript expressions inside JSX.
+
+### 1. Ternary operator (most common)
+
+Use when choosing between two class names.
+
+```tsx
+<button className={isActive ? "btn btn-active" : "btn"}>Save</button>
+```
+
+### 2. Logical AND (`&&`)
+
+Useful for appending a class only when a condition is true.
+
+```tsx
+<div className={`card ${isSelected && "selected"}`}>Card</div>
+```
+
+> Note: This pattern can produce unwanted values (`false`) in some cases. Using `clsx` is cleaner and safer.
+
+### 3. Using `clsx` (recommended for production)
+
+```tsx
+import clsx from "clsx";
+
+<div
+  className={clsx("card", {
+    selected: isSelected,
+    disabled: isDisabled,
+  })}
+/>;
+```
+
+Benefits:
+
+- Cleaner code
+- Handles multiple conditions
+- Avoids manual string concatenation
+- Easy to maintain in large applications
+
+---
+
+## Rendering behavior
+
+Whenever the state or props affecting `className` change:
+
+1. React re-renders the component.
+2. Computes the new `className`.
+3. Compares it with the previous value during reconciliation.
+4. Updates the DOM only if the class string has changed.
+
+Example:
+
+```tsx
+const [dark, setDark] = useState(false);
+
+<button
+  className={dark ? "dark-btn" : "light-btn"}
+  onClick={() => setDark(!dark)}
+>
+  Toggle Theme
+</button>;
+```
+
+Only the `class` attribute is updated when `dark` changes.
+
+---
+
+## React 18 considerations
+
+With automatic batching:
+
+```tsx
+setDark(true);
+setLoading(false);
+```
+
+Both state updates are batched into a single render, so the `className` is recalculated only once.
+
+---
+
+# Example
+
+## Scaffold with Vite (React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install clsx
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+import clsx from "clsx";
+
+export default function App() {
+  const [active, setActive] = useState(false);
+
+  return (
+    <div>
+      <button
+        className={clsx("btn", {
+          "btn-active": active,
+        })}
+        onClick={() => setActive((prev) => !prev)}
+      >
+        Toggle
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for modern React development (fast HMR, native ESM support).
+- Avoid **Create React App (CRA)**, as it is deprecated.
+- For styling:
+  - CSS Modules for scoped styles
+  - Tailwind CSS for utility-first styling
+  - CSS-in-JS (e.g., Emotion, Styled Components) when dynamic styling is a key requirement
+
+- Vite uses ESM in development and Rollup for optimized production bundles.
+
+---
+
+# Performance
+
+- `className` computation is generally inexpensive, but avoid complex calculations during every render.
+- Use:
+  - `React.memo` for memoized child components.
+  - `useMemo` if generating large or expensive class strings.
+  - `useCallback` for event handlers passed to memoized components.
+
+- Use `React.lazy` and `Suspense` for route-level code splitting.
+- Profile renders with the React DevTools Profiler before optimizing.
+
+---
+
+# Testing
+
+Use **Vitest** with React Testing Library:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+
+test("renders active class", () => {
+  render(<button className="btn btn-active">Save</button>);
+
+  expect(screen.getByRole("button")).toHaveClass("btn-active");
+});
+```
+
+Run tests:
+
+```bash
+npm run test
+```
+
+For end-to-end verification of visual states, use Playwright.
+
+---
+
+# Ops & Deployment
+
+- Keep styling predictable to avoid server/client hydration mismatches in SSR frameworks like Next.js.
+- Use Error Boundaries for rendering errors (they do not catch errors thrown in event handlers).
+- Minimize CSS bundle size by removing unused styles (e.g., Tailwind's purge/content configuration).
+- Serve static CSS assets via a CDN for better caching and performance.
+
+---
+
+# Pitfalls
+
+- Avoid long nested ternary expressions for class selection—they quickly become hard to read.
+- Prefer helper libraries like `clsx` over manual string concatenation when multiple conditions are involved.
+- Keep class names deterministic between server and client to prevent hydration warnings in SSR.
+
 ## Question 4. Explain the role of key prop in React lists
 
 ## Question 5. How do you debug React applications?
