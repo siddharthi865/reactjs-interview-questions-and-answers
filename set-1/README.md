@@ -568,6 +568,355 @@ test("renders count", () => {
 
 ## Question 3. What is JSX? Why do we use it?
 
+# JSX
+
+## Short answer
+
+**JSX (JavaScript XML)** is a syntax extension for JavaScript that allows you to write HTML-like markup inside JavaScript/TypeScript. React uses JSX to describe what the UI should look like. JSX improves readability, developer productivity, and enables powerful integration of JavaScript logic with UI.
+
+---
+
+# Explanation
+
+## What is JSX?
+
+JSX lets you write UI in a syntax that closely resembles HTML while still being JavaScript.
+
+Example:
+
+```tsx
+function App() {
+  return <h1>Hello, React!</h1>;
+}
+```
+
+Although it looks like HTML, JSX is **not HTML**. It is syntactic sugar that is transformed during compilation into JavaScript function calls.
+
+For example:
+
+```tsx
+const element = <h1>Hello, React!</h1>;
+```
+
+is compiled into something conceptually similar to:
+
+```tsx
+import { jsx as _jsx } from "react/jsx-runtime";
+
+const element = _jsx("h1", {
+  children: "Hello, React!",
+});
+```
+
+> In modern React (17+), you no longer need to explicitly `import React` just to use JSX because the new JSX Transform handles this automatically.
+
+---
+
+## Why do we use JSX?
+
+### 1. Improves Readability
+
+JSX makes UI code easier to understand because it resembles the structure of the rendered page.
+
+Without JSX:
+
+```tsx
+React.createElement("div", null, React.createElement("h1", null, "Welcome"));
+```
+
+With JSX:
+
+```tsx
+<div>
+  <h1>Welcome</h1>
+</div>
+```
+
+The JSX version is much easier to read and maintain.
+
+---
+
+### 2. JavaScript Inside UI
+
+JSX allows embedding JavaScript expressions using `{}`.
+
+```tsx
+const name = "Alice";
+
+function App() {
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+You can use:
+
+- Variables
+- Function calls
+- Ternary operators
+- Array methods like `map()`
+- Arithmetic expressions
+
+Example:
+
+```tsx
+const isLoggedIn = true;
+
+return <h1>{isLoggedIn ? "Dashboard" : "Login"}</h1>;
+```
+
+---
+
+### 3. Component Composition
+
+JSX makes it simple to compose reusable components.
+
+```tsx
+function Header() {
+  return <h2>Header</h2>;
+}
+
+function App() {
+  return (
+    <>
+      <Header />
+      <p>Main content</p>
+    </>
+  );
+}
+```
+
+This promotes modular and maintainable application architecture.
+
+---
+
+### 4. Declarative UI
+
+JSX works naturally with React's declarative programming model.
+
+Instead of manually updating the DOM:
+
+```javascript
+document.getElementById("status").textContent = "Loading...";
+```
+
+React:
+
+```tsx
+<p>{loading ? "Loading..." : "Loaded"}</p>
+```
+
+The UI automatically updates when the state changes.
+
+---
+
+### 5. Type Safety (with TypeScript)
+
+JSX integrates well with TypeScript, providing compile-time checking for props and component usage.
+
+```tsx
+type ButtonProps = {
+  label: string;
+};
+
+function Button({ label }: ButtonProps) {
+  return <button>{label}</button>;
+}
+```
+
+---
+
+## JSX Rules
+
+### Return a single parent element
+
+✅
+
+```tsx
+return (
+  <div>
+    <h1>Hello</h1>
+    <p>Welcome</p>
+  </div>
+);
+```
+
+Or use a Fragment:
+
+```tsx
+return (
+  <>
+    <h1>Hello</h1>
+    <p>Welcome</p>
+  </>
+);
+```
+
+---
+
+### Close all tags
+
+```tsx
+<img src="logo.png" alt="Logo" />
+<input />
+```
+
+---
+
+### Use `className` instead of `class`
+
+```tsx
+<div className="container">Hello</div>
+```
+
+---
+
+### Use camelCase for DOM attributes
+
+```tsx
+<button onClick={handleClick}>Click</button>
+```
+
+Examples:
+
+- `onClick`
+- `tabIndex`
+- `htmlFor`
+
+---
+
+## React 18 Considerations
+
+JSX itself is syntax and does not change rendering behavior, but it integrates seamlessly with React 18 features such as:
+
+- Automatic batching
+- Concurrent rendering
+- Suspense
+- Server Components (frameworks like Next.js App Router)
+
+React still reconciles the JSX output using the Virtual DOM and Fiber architecture to efficiently update the real DOM.
+
+---
+
+# Example
+
+### Setup (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest jsx-demo -- --template react-ts
+cd jsx-demo
+npm install
+npm run dev
+```
+
+**`App.tsx`**
+
+```tsx
+import { useState } from "react";
+
+type User = {
+  name: string;
+};
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const user: User = {
+    name: "Alice",
+  };
+
+  return (
+    <main>
+      <h1>Hello, {user.name}</h1>
+
+      <p>Count: {count}</p>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+
+      {count >= 5 && <p>Great job!</p>}
+    </main>
+  );
+}
+```
+
+This example demonstrates:
+
+- JSX syntax
+- JavaScript expressions in JSX
+- Conditional rendering
+- Functional component
+- TypeScript props and types
+- Declarative state-driven UI
+
+---
+
+# Tooling & Setup
+
+- **Recommended stack:** Vite + React + TypeScript for fast development and native ESM support.
+- **Alternative frameworks:**
+  - **Next.js** for SSR, SSG, and React Server Components.
+  - **Remix** for server-first routing and data loading.
+
+- **ESM vs CommonJS:**
+  - Modern React projects use **ES Modules** (`import`/`export`), which Vite serves directly during development for faster startup and effective tree shaking.
+
+- **Avoid Create React App (CRA):**
+  - CRA is deprecated. Prefer Vite or framework-based solutions for modern projects.
+
+---
+
+# Performance
+
+Although JSX itself doesn't optimize performance, use these React techniques:
+
+- Profile renders with **React DevTools Profiler**.
+- Use `React.memo` to avoid unnecessary child re-renders.
+- Use `useMemo` for expensive calculations.
+- Use `useCallback` for stable callback references.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Cache server state with libraries like TanStack Query to reduce unnecessary network requests.
+
+---
+
+# Testing
+
+Use **Vitest** and **React Testing Library** for unit and integration testing, and **Playwright** for end-to-end tests.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders greeting", () => {
+  render(<App />);
+  expect(screen.getByText(/Hello, Alice/i)).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors in production.
+- Add centralized logging and monitoring (e.g., Sentry).
+- Choose **CSR** (Vite) for highly interactive applications and **SSR/SSG** (Next.js) when SEO or faster initial rendering is important.
+- Monitor bundle size with tools like `rollup-plugin-visualizer`.
+- Deploy static assets via a CDN (e.g., Vercel, Netlify, Cloudflare) for improved performance.
+
+---
+
+# Pitfalls
+
+- **Using `class` instead of `className`:** JSX follows JavaScript naming conventions.
+- **Returning multiple sibling elements without a wrapper:** Wrap them in a parent element or a Fragment (`<>...</>`).
+- **Embedding statements instead of expressions:** JSX supports expressions (e.g., ternary operators), but not statements like `if` or `for` directly inside markup.
+
 ## Question 4. Explain the Virtual DOM. How is it different from the real DOM?
 
 ## Question 5. What are React components? Difference between class and functional components?
