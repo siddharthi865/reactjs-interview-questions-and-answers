@@ -523,6 +523,227 @@ npm install -D @playwright/test
 
 ## Question 3. How do you update state based on previous state in functional components?
 
+# Short answer
+
+When updating state that depends on its **previous value**, use the **functional updater** form of `useState`:
+
+```tsx
+setState((prevState) => newState);
+```
+
+This ensures React always uses the **latest state value**, even when multiple state updates are batched together in React 18.
+
+---
+
+# Explanation
+
+React state updates are **asynchronous** and may be **batched** for performance. If you calculate the next state using the current state variable directly, you can end up using a stale value.
+
+### ❌ Incorrect (can use stale state)
+
+```tsx
+setCount(count + 1);
+setCount(count + 1);
+```
+
+If `count` is `0`, both updates calculate `1`, so the final value becomes **1**, not **2**.
+
+### ✅ Correct (uses previous state)
+
+```tsx
+setCount((prevCount) => prevCount + 1);
+setCount((prevCount) => prevCount + 1);
+```
+
+Here, React passes the latest updated value into each updater function:
+
+1. `0 → 1`
+2. `1 → 2`
+
+Final value: **2**
+
+---
+
+## Why use the functional updater?
+
+Use it whenever the new state depends on:
+
+- Previous state
+- Multiple sequential updates
+- Async callbacks (`setTimeout`, promises)
+- Event handlers that may trigger several updates
+
+---
+
+## React 18 Rendering Behavior
+
+React 18 introduced **automatic batching**, which groups multiple state updates into a single render, even inside:
+
+- Promises
+- `setTimeout`
+- Native event handlers
+- Async functions
+
+Example:
+
+```tsx
+setCount((c) => c + 1);
+setCount((c) => c + 1);
+setName("John");
+```
+
+React batches these updates and performs **one render**, improving performance while ensuring each functional updater receives the latest state.
+
+---
+
+## Component Architecture
+
+Keep state as close as possible to where it's used.
+
+Example:
+
+```text
+App
+ ├── Counter
+ ├── TodoList
+ └── Profile
+```
+
+Each component manages its own state independently, reducing unnecessary re-renders.
+
+For shared or complex state:
+
+- `useReducer`
+- Context API
+- Redux Toolkit
+- Zustand
+- TanStack Query (for server state)
+
+---
+
+# Example
+
+## Scaffold a React + TypeScript app with Vite
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+`App.tsx`
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const incrementTwice = () => {
+    setCount((prev) => prev + 1);
+    setCount((prev) => prev + 1);
+  };
+
+  return (
+    <main>
+      <h2>Count: {count}</h2>
+
+      <button onClick={incrementTwice}>Increment Twice</button>
+    </main>
+  );
+}
+```
+
+Clicking the button increases the count by **2** because each update uses the latest state value.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** Vite + React + TypeScript
+
+Why Vite?
+
+- Fast dev server with native **ESM**
+- Instant Hot Module Replacement (HMR)
+- Optimized production builds with Rollup
+- Excellent TypeScript support
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### ESM vs CommonJS
+
+- Use **ES Modules** (`import`/`export`) in modern React projects.
+- CommonJS (`require`) is mainly for older Node.js projects.
+
+Framework choices:
+
+- **Vite** → SPAs
+- **Next.js** → SSR, SSG, React Server Components
+- **Remix** → Server-first applications
+
+---
+
+# Performance
+
+- React 18 **automatic batching** reduces unnecessary renders.
+- Use `React.memo` to prevent re-rendering unchanged child components.
+- Use `useMemo` for expensive computations.
+- Use `useCallback` for stable callback references passed to memoized children.
+- Use `React.lazy()` and `Suspense` for route/component code splitting.
+- Cache server data with **TanStack Query** or **SWR**.
+- Profile rendering with the **React DevTools Profiler** before optimizing.
+
+---
+
+# Testing
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("increments twice", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Increment Twice"));
+
+  expect(screen.getByText("Count: 2")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing:
+
+```bash
+npm install -D @playwright/test
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Log runtime errors with tools like Sentry.
+- Keep bundles small through lazy loading and tree shaking.
+- Prefer SSR (e.g., Next.js) for SEO-sensitive pages and CSR (e.g., Vite) for highly interactive dashboards.
+- Deploy static Vite apps to Vercel, Netlify, or any CDN-backed static host.
+
+---
+
+# Pitfalls
+
+- Using `setState(state + 1)` when the next state depends on the current state.
+- Expecting state updates to be available immediately after calling `setState`.
+- Mutating state objects or arrays instead of creating new copies before updating.
+
 ## Question 4. What is the difference between setState callback and useEffect?
 
 ## Question 5. How do you handle multiple sibling components updating the same state?
