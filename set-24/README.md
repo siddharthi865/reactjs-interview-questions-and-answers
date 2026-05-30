@@ -631,6 +631,322 @@ For integration tests, mock API failures with **MSW (Mock Service Worker)**. For
 
 ## Question 3. How do you implement a multi-select dropdown with search functionality?
 
+# How do you implement a multi-select dropdown with search functionality?
+
+## Short answer
+
+A **multi-select dropdown with search** allows users to filter a list of options, select multiple items, and manage the selected values. In React, implement it using:
+
+- `useState` for search text and selected items.
+- Filtered options derived from the search query.
+- Checkboxes (or clickable list items) for multi-selection.
+- A reusable, controlled component (`value` + `onChange`).
+- Memoization (`useMemo`) for efficient filtering of large datasets.
+
+---
+
+# Explanation
+
+A production-ready multi-select component should support:
+
+- ✅ Multiple selection
+- ✅ Search/filtering
+- ✅ Controlled component API
+- ✅ Keyboard accessibility
+- ✅ Click outside to close
+- ✅ Clear all selections
+- ✅ Custom option rendering
+- ✅ Async data support (optional)
+- ✅ Virtualization for large datasets
+
+### Component Architecture
+
+```text
+Parent Component
+      │
+      ▼
+ MultiSelect
+      │
+ ┌────┴──────────────┐
+ ▼                   ▼
+Search Input     Selected Tags
+      │
+      ▼
+ Filter Options (useMemo)
+      │
+      ▼
+ Option List (Checkboxes)
+      │
+      ▼
+ onChange(selectedItems)
+```
+
+### Why use a controlled component?
+
+Instead of managing selected values internally:
+
+```tsx
+const [selected, setSelected] = useState<string[]>([]);
+```
+
+Expose them via props:
+
+```tsx
+<MultiSelect value={selected} onChange={setSelected} />
+```
+
+This keeps the component reusable and makes it easier to integrate with forms, state libraries, and validation.
+
+### React 18 Considerations
+
+- **Automatic batching** reduces re-renders when updating multiple pieces of state.
+- Use **`useMemo`** to avoid filtering on every render.
+- Use **`useCallback`** if handlers are passed to memoized child components.
+- For very large option lists, consider **`useDeferredValue`** to keep typing responsive.
+
+---
+
+# Example (React + TypeScript + Vite)
+
+### Create project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `MultiSelect.tsx`
+
+```tsx
+import { useMemo, useState } from "react";
+
+type Option = {
+  id: number;
+  label: string;
+};
+
+type Props = {
+  options: Option[];
+  value: Option[];
+  onChange: (value: Option[]) => void;
+};
+
+export default function MultiSelect({ options, value, onChange }: Props) {
+  const [search, setSearch] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    return options.filter((option) =>
+      option.label.toLowerCase().includes(search.toLowerCase()),
+    );
+  }, [options, search]);
+
+  const toggleOption = (option: Option) => {
+    const exists = value.some((item) => item.id === option.id);
+
+    if (exists) {
+      onChange(value.filter((item) => item.id !== option.id));
+    } else {
+      onChange([...value, option]);
+    }
+  };
+
+  return (
+    <div style={{ width: 300 }}>
+      <input
+        type="text"
+        placeholder="Search..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
+      <div style={{ margin: "10px 0" }}>
+        {value.map((item) => (
+          <span
+            key={item.id}
+            style={{
+              marginRight: 6,
+              padding: "4px 8px",
+              border: "1px solid gray",
+              borderRadius: 12,
+            }}
+          >
+            {item.label}
+          </span>
+        ))}
+      </div>
+
+      <ul style={{ maxHeight: 180, overflowY: "auto" }}>
+        {filteredOptions.map((option) => (
+          <li key={option.id}>
+            <label>
+              <input
+                type="checkbox"
+                checked={value.some((v) => v.id === option.id)}
+                onChange={() => toggleOption(option)}
+              />
+              {option.label}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+import MultiSelect from "./MultiSelect";
+
+const options = [
+  { id: 1, label: "React" },
+  { id: 2, label: "Angular" },
+  { id: 3, label: "Vue" },
+  { id: 4, label: "Svelte" },
+];
+
+export default function App() {
+  const [selected, setSelected] = useState<typeof options>([]);
+
+  return (
+    <MultiSelect options={options} value={selected} onChange={setSelected} />
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+**Recommended stack**
+
+- **Vite + React + TypeScript** for fast HMR, native ESM support, and a lightweight development experience.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Use **Next.js** if SSR, Server Components, or SEO are required.
+- Use **Remix** when leveraging nested routing and data loading.
+
+**ESM vs CommonJS**
+
+- Vite uses **ES Modules (ESM)** in development, enabling faster startup and on-demand loading.
+- CommonJS is primarily used in older Node.js projects; modern React applications should favor ESM.
+
+---
+
+# Performance
+
+### 1. Memoize filtering
+
+```tsx
+const filteredOptions = useMemo(
+  () =>
+    options.filter((option) =>
+      option.label.toLowerCase().includes(search.toLowerCase()),
+    ),
+  [options, search],
+);
+```
+
+### 2. Memoize callbacks
+
+```tsx
+const toggleOption = useCallback(
+  (option: Option) => {
+    // update selection
+  },
+  [value, onChange],
+);
+```
+
+Useful when passing handlers to memoized children.
+
+### 3. React.memo
+
+Wrap expensive option row components:
+
+```tsx
+const OptionRow = React.memo(OptionRowComponent);
+```
+
+### 4. Virtualize large lists
+
+For thousands of options, use libraries like `react-window` or `@tanstack/react-virtual` to render only visible rows.
+
+### 5. Concurrent rendering
+
+For expensive filtering, use `useDeferredValue`:
+
+```tsx
+const deferredSearch = useDeferredValue(search);
+```
+
+This keeps typing smooth while filtering large datasets.
+
+### 6. Code splitting
+
+Lazy-load the dropdown if it is only used on specific routes:
+
+```tsx
+const MultiSelect = React.lazy(() => import("./MultiSelect"));
+```
+
+### 7. React Profiler
+
+Use the React DevTools Profiler to verify that typing in the search input does not trigger unnecessary re-renders across the application.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("filters options", () => {
+  render(<App />);
+
+  fireEvent.change(screen.getByPlaceholderText("Search..."), {
+    target: { value: "React" },
+  });
+
+  expect(screen.getByText("React")).toBeInTheDocument();
+});
+```
+
+For integration tests, verify selection state updates correctly. Use **Playwright** for end-to-end testing of keyboard navigation, dropdown opening/closing, and search behavior.
+
+---
+
+# Ops & Deployment
+
+- **Logging:** Capture unexpected client-side errors with services like Sentry or Datadog.
+- **Error Boundaries:** Wrap larger feature areas to catch rendering errors (event handler errors still require `try/catch`).
+- **SSR/CSR:** In Next.js, ensure browser-specific APIs are used only in client components or effects. Consider server-side fetching for option data when beneficial.
+- **Bundle size:** Avoid shipping large UI libraries if only a simple dropdown is needed. Prefer tree-shakeable dependencies and lazy-load advanced features.
+- **Accessibility:** Implement ARIA roles (`combobox`, `listbox`, `option`), support keyboard navigation (arrow keys, Enter, Escape), and manage focus correctly.
+- **Deployment:** Serve static assets via a CDN and cache option data appropriately if it changes infrequently.
+
+---
+
+# Pitfalls
+
+- **Filtering on every render without memoization**, which can become slow for large datasets.
+- **Using array indexes as keys**, leading to rendering issues when options change.
+- **Ignoring accessibility**, such as missing keyboard support, ARIA attributes, or focus management.
+
 ## Question 4. How do you implement a sortable table with dynamic columns?
 
 ## Question 5. How do you implement infinite scrolling with API pagination?
