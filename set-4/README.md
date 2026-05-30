@@ -540,6 +540,270 @@ For production-ready applications:
 
 ## Question 3. Difference between shallow rendering and full rendering in testing
 
+# Short answer
+
+**Shallow rendering** renders only the component being tested and does **not** render its child components. It was mainly associated with **Enzyme** and is now largely considered a legacy approach.
+
+**Full rendering** renders the entire component tree, including child components, and is the recommended approach today using **React Testing Library (RTL)** because it better reflects how users interact with your application.
+
+---
+
+# Explanation
+
+## Shallow Rendering
+
+Shallow rendering renders only one level of the component tree.
+
+Example:
+
+```text
+<App>
+   ├── Header
+   ├── Sidebar
+   └── Dashboard
+```
+
+With shallow rendering:
+
+```text
+<App>
+```
+
+`Header`, `Sidebar`, and `Dashboard` are **not actually rendered**.
+
+### Advantages
+
+- Fast execution
+- Easy to isolate a component
+- Less setup for unit tests
+
+### Disadvantages
+
+- Doesn't test component integration
+- Can miss real-world rendering issues
+- Encourages testing implementation details
+- Not recommended for modern React applications
+
+---
+
+## Full Rendering
+
+Full rendering mounts the complete component tree.
+
+Example:
+
+```text
+<App>
+   ├── Header
+   ├── Sidebar
+   └── Dashboard
+        ├── Card
+        └── Chart
+```
+
+Everything is rendered, just like it would be in the browser.
+
+### Advantages
+
+- Tests actual user behavior
+- Detects integration issues
+- Works well with React Context, React Router, and Redux
+- Aligns with React Testing Library's philosophy
+
+### Disadvantages
+
+- Slightly slower than shallow rendering
+- May require mocking APIs or providers
+- More setup for complex applications
+
+---
+
+## Comparison
+
+| Feature                  | Shallow Rendering   | Full Rendering               |
+| ------------------------ | ------------------- | ---------------------------- |
+| Child components         | ❌ Not rendered     | ✅ Fully rendered            |
+| DOM rendering            | Partial             | Complete                     |
+| User interaction testing | Limited             | Excellent                    |
+| React Context support    | Poor                | Excellent                    |
+| Redux support            | Limited             | Excellent                    |
+| React Router support     | Limited             | Excellent                    |
+| Best for                 | Legacy Enzyme tests | Modern React Testing Library |
+| Recommended today        | ❌ No               | ✅ Yes                       |
+
+---
+
+## React 18 considerations
+
+With React 18's features like:
+
+- Concurrent rendering
+- Automatic batching
+- Suspense
+- Transitions
+
+Shallow rendering becomes less representative because it doesn't exercise how components interact within the full tree.
+
+Modern testing emphasizes **observable behavior** rather than component internals. Full rendering with React Testing Library is better suited to React 18 and later.
+
+---
+
+## Component architecture
+
+Consider:
+
+```text
+App
+ ├── Navbar
+ ├── ProductList
+ │      ├── ProductCard
+ │      └── ProductCard
+ └── Footer
+```
+
+### Shallow rendering
+
+Tests only:
+
+```text
+ProductList
+```
+
+### Full rendering
+
+Tests:
+
+```text
+ProductList
+   ↓
+ProductCard
+   ↓
+Button
+   ↓
+Image
+```
+
+This verifies that child components work together correctly.
+
+---
+
+# Example (React + TypeScript)
+
+## Create project (Vite)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install -D vitest @testing-library/react @testing-library/user-event jsdom
+npm run dev
+```
+
+### Parent component
+
+```tsx
+function Welcome() {
+  return <h2>Welcome!</h2>;
+}
+
+export default function App() {
+  return (
+    <>
+      <h1>Home</h1>
+      <Welcome />
+    </>
+  );
+}
+```
+
+### Full rendering test
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import App from "./App";
+
+describe("App", () => {
+  it("renders parent and child components", () => {
+    render(<App />);
+
+    expect(screen.getByText("Home")).toBeInTheDocument();
+    expect(screen.getByText("Welcome!")).toBeInTheDocument();
+  });
+});
+```
+
+Unlike shallow rendering, the child component (`Welcome`) is rendered and verified as part of the test.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack**
+
+- **Vite** for development and native ESM support.
+- **Vitest** as the test runner.
+- **React Testing Library** for component testing.
+- **Playwright** for end-to-end tests.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+**ESM vs CommonJS**
+
+- Vite and Vitest are ESM-first, offering faster startup and better tree-shaking.
+- CommonJS remains primarily for older Node.js projects.
+
+---
+
+# Performance
+
+Testing strategies don't directly affect application performance, but they influence test quality and maintainability.
+
+When testing performance-sensitive components:
+
+- Use the **React DevTools Profiler** to identify unnecessary renders.
+- Verify memoized components (`React.memo`) still behave correctly.
+- Test expensive computations using `useMemo`.
+- Test callback stability when using `useCallback`.
+- Verify lazy-loaded components with `React.lazy` and `Suspense`.
+
+---
+
+# Testing
+
+Recommended approach:
+
+- **Unit tests:** React Testing Library + Vitest
+- **Integration tests:** React Testing Library with providers (Context, Router, Redux)
+- **E2E tests:** Playwright
+
+Avoid assertions based on:
+
+- Component instances
+- Internal state
+- Private methods
+
+Instead, test what users can see and do.
+
+---
+
+# Ops & Deployment
+
+- Run unit and integration tests in CI/CD pipelines.
+- Execute Playwright E2E tests before releases.
+- Use Error Boundaries to handle rendering failures gracefully.
+- Test both SSR and CSR behavior when using frameworks like Next.js.
+- Use code splitting and lazy loading to optimize bundle size.
+- Deploy assets through a CDN and monitor production issues with tools like Sentry.
+
+---
+
+# Pitfalls
+
+- Using shallow rendering to test implementation details instead of observable behavior.
+- Assuming a shallow test guarantees child components work correctly.
+- Writing brittle tests that depend on component structure rather than user-visible output.
+
 ## Question 4. How do you handle async operations in React?
 
 ## Question 5. Explain debouncing and throttling in React components
