@@ -721,6 +721,309 @@ For end-to-end validation, use **Playwright** and inspect outgoing analytics req
 
 ## Question 3. How do you handle cross-tab state synchronization using localStorage or IndexedDB?
 
+# How do you handle cross-tab state synchronization using `localStorage` or `IndexedDB`?
+
+## Short answer
+
+Cross-tab state synchronization allows multiple tabs of the same application to stay in sync. For lightweight state (theme, authentication status, filters), listen to the browser's **`storage` event** when using `localStorage`. For larger or structured data, use **IndexedDB** (often with libraries like Dexie) together with a notification mechanism such as **BroadcastChannel** or IndexedDB observers. Keep React state as the UI source of truth while browser storage acts as shared persistence.
+
+---
+
+# Explanation
+
+When a user opens multiple tabs, each tab has its own React state:
+
+```text
+Tab A               Tab B
+React State         React State
+     │                  │
+     └──── Shared Storage ────► localStorage / IndexedDB
+```
+
+Without synchronization:
+
+- Login in Tab A
+- Tab B still shows logged out
+
+With synchronization:
+
+- Login in Tab A
+- Storage updates
+- Tab B receives notification
+- React state updates automatically
+
+---
+
+## Option 1: `localStorage` + `storage` event
+
+The browser fires a **`storage`** event in **other tabs** when `localStorage` changes.
+
+```text
+Tab A
+setItem()
+
+        │
+
+        ▼
+
+localStorage updated
+
+        │
+
+        ▼
+
+Tab B receives storage event
+
+        │
+
+        ▼
+
+Update React state
+```
+
+Good for:
+
+- Theme
+- Language
+- Login/logout
+- Feature flags
+- Small preferences
+
+**Note:** The tab that performs `setItem()` does **not** receive its own `storage` event, so update local React state directly in that tab.
+
+---
+
+## Option 2: IndexedDB
+
+Use IndexedDB when data is:
+
+- Large
+- Structured
+- Offline
+- Frequently updated
+
+Examples:
+
+- Messages
+- Documents
+- Cached API responses
+- Offline-first applications
+
+Common libraries:
+
+- Dexie
+- idb
+
+---
+
+## Option 3: BroadcastChannel (Recommended)
+
+Modern applications often combine storage with **BroadcastChannel**.
+
+```text
+Tab A
+
+Update state
+
+↓
+
+Save IndexedDB
+
+↓
+
+BroadcastChannel
+
+↓
+
+Tab B
+
+↓
+
+Update React state
+```
+
+Advantages:
+
+- Immediate updates
+- Works with complex objects
+- Doesn't rely on storage events
+- Cleaner architecture
+
+---
+
+## React Architecture
+
+```text
+React Components
+        │
+        ▼
+Context / Redux / Zustand
+        │
+        ▼
+Storage Service
+   │            │
+localStorage  IndexedDB
+        │
+        ▼
+BroadcastChannel / storage event
+```
+
+Components should never manipulate storage directly.
+
+Instead:
+
+- Storage service updates storage.
+- Storage service broadcasts change.
+- State manager updates UI.
+
+---
+
+## React 18 considerations
+
+React 18 features work naturally with synchronized state.
+
+When storage changes:
+
+```text
+Storage change
+
+↓
+
+Event received
+
+↓
+
+setState()
+
+↓
+
+Automatic batching
+
+↓
+
+Single re-render
+```
+
+Use `useSyncExternalStore` when integrating an external store with React. It provides a consistent subscription model that works correctly with concurrent rendering.
+
+---
+
+# Example
+
+**Scaffold a modern React app (Vite + TypeScript):**
+
+```bash
+npm create vite@latest sync-demo -- --template react-ts
+cd sync-demo
+npm i
+npm run dev
+```
+
+**ThemeSync.tsx**
+
+```tsx
+import { useEffect, useState } from "react";
+
+const STORAGE_KEY = "theme";
+
+export default function ThemeSync() {
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem(STORAGE_KEY) ?? "light",
+  );
+
+  useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (event.key === STORAGE_KEY && event.newValue) {
+        setTheme(event.newValue);
+      }
+    }
+
+    window.addEventListener("storage", onStorage);
+
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+
+    setTheme(next);
+    localStorage.setItem(STORAGE_KEY, next);
+  }
+
+  return <button onClick={toggleTheme}>Current theme: {theme}</button>;
+}
+```
+
+If the user changes the theme in one tab, all other open tabs update automatically via the `storage` event.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + TypeScript** because it offers fast startup, HMR, and an excellent developer experience. For SSR or hybrid rendering, **Next.js App Router** is a good option. Avoid **Create React App (CRA)** since it is deprecated.
+
+For storage:
+
+- **`localStorage`**: Simple key-value data.
+- **IndexedDB**: Large structured datasets.
+- **Dexie**: A popular wrapper around IndexedDB with a clean API.
+- **BroadcastChannel**: Ideal for low-latency cross-tab messaging.
+
+**ESM vs CommonJS**
+
+- Vite uses **ES Modules (ESM)** for development and Rollup for production builds.
+- Prefer ESM for better tree-shaking and modern tooling compatibility.
+
+---
+
+# Performance
+
+- Use **React Profiler** to verify that storage updates don't trigger unnecessary component re-renders.
+- Memoize derived values with `useMemo` and callbacks with `useCallback` where appropriate.
+- Use `React.memo` for components receiving synchronized state that changes infrequently.
+- Batch multiple storage writes when possible to reduce I/O.
+- For IndexedDB, debounce or batch large write operations instead of writing on every keystroke.
+- Lazy-load storage libraries (e.g., Dexie) if only a subset of the application requires offline storage.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example approach:
+
+- Mock `localStorage`.
+- Dispatch a synthetic `StorageEvent`.
+- Verify that React state updates correctly.
+- For IndexedDB, use a mock implementation (e.g., `fake-indexeddb`) during tests.
+
+Use **Playwright** for end-to-end testing by opening multiple browser contexts or pages and verifying synchronization between them.
+
+---
+
+# Ops & Deployment
+
+- Keep storage access inside dedicated services or custom hooks rather than UI components.
+- Use **Error Boundaries** to isolate rendering failures from storage-related issues.
+- Handle quota exceeded errors and storage unavailability gracefully.
+- Consider encrypting sensitive data before storing it in IndexedDB or `localStorage`; avoid storing secrets such as JWT refresh tokens in browser storage.
+- Version your IndexedDB schema and implement migrations carefully to prevent data corruption after deployments.
+
+---
+
+# Pitfalls
+
+- **Don't rely solely on `localStorage` for large or frequently changing data**; use IndexedDB instead.
+- **Remember that the `storage` event doesn't fire in the same tab** that performs the update—update local React state directly there.
+- **Avoid direct storage access from components**; centralize persistence logic in reusable services or hooks.
+
 ## Question 4. How do you implement dynamic forms driven by JSON schema?
 
 ## Question 5. How do you handle large forms efficiently using React Hook Form?
