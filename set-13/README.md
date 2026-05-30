@@ -596,6 +596,212 @@ For end-to-end testing, use **Playwright** to validate modal behavior in the bro
 
 ## Question 3. How do you implement tab-based navigation with state?
 
+# How do you implement tab-based navigation with state?
+
+## Short answer
+
+Implement tab-based navigation by storing the **currently active tab** in React state (typically with `useState`). Render the active tab's content conditionally based on that state, and update it when a user clicks a tab. For URL-based navigation, use **React Router**, but for UI-only tabs, local state is usually sufficient.
+
+---
+
+# Explanation
+
+A tab component consists of:
+
+- **Active tab state**
+- **Tab buttons**
+- **Tab panels (content)**
+- **Click handler** to change the active tab
+
+Example flow:
+
+```text
+User clicks "Profile"
+        │
+        ▼
+setActiveTab("profile")
+        │
+        ▼
+React re-renders
+        │
+        ▼
+Profile panel is displayed
+```
+
+The active tab acts as the **single source of truth**.
+
+```text
+Tabs
+ ├── Home
+ ├── Profile
+ └── Settings
+
+State
+activeTab = "profile"
+```
+
+---
+
+## React 18 Rendering Behavior
+
+When a user clicks a tab:
+
+1. Click event fires.
+2. `setActiveTab()` updates the state.
+3. React 18 automatically batches state updates occurring in the same event or async context.
+4. The component re-renders.
+5. Only the active tab panel is displayed.
+6. React updates only the changed DOM elements.
+
+If tab content is expensive:
+
+- Memoize heavy child components.
+- Lazy-load rarely used tabs.
+- Keep inactive tabs mounted only if preserving state is required.
+
+---
+
+## Component Architecture
+
+A reusable tab component can be organized as:
+
+```text
+Tabs
+ ├── TabList
+ ├── TabButton
+ ├── TabPanels
+ └── TabPanel
+```
+
+The parent (`Tabs`) owns:
+
+- active tab
+- tab change handler
+
+Children receive props.
+
+Example:
+
+```text
+Tabs
+   activeTab
+      │
+ ┌────┴────┐
+ │         │
+Buttons   Panels
+```
+
+This keeps the component reusable and predictable.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+type Tab = "home" | "profile" | "settings";
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("home");
+
+  return (
+    <div>
+      <nav style={{ display: "flex", gap: "1rem" }}>
+        <button onClick={() => setActiveTab("home")}>Home</button>
+
+        <button onClick={() => setActiveTab("profile")}>Profile</button>
+
+        <button onClick={() => setActiveTab("settings")}>Settings</button>
+      </nav>
+
+      <hr />
+
+      {activeTab === "home" && <h2>Home Content</h2>}
+
+      {activeTab === "profile" && <h2>Profile Content</h2>}
+
+      {activeTab === "settings" && <h2>Settings Content</h2>}
+    </div>
+  );
+}
+```
+
+This approach:
+
+- Keeps the active tab in one place.
+- Makes the UI predictable.
+- Is easy to extend with dynamic tabs.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Use **Vite** for fast startup, native ESM support, and optimized production builds.
+- Use **Next.js App Router** when tabs are part of an SSR application. Use URL segments or search parameters if tab state should be shareable via links.
+- Prefer **ES Modules (ESM)** over CommonJS for better tree-shaking and compatibility with modern bundlers.
+
+---
+
+# Performance
+
+- Wrap expensive tab panels with `React.memo` if their props are stable.
+- Use `useMemo` for costly derived values inside a tab.
+- Use `useCallback` for stable event handlers passed to memoized children.
+- Lazy-load heavy tab content with `React.lazy` and `Suspense`.
+- Profile tab switches with the **React DevTools Profiler**.
+- If preserving state is important (e.g., form inputs), keep inactive panels mounted and hide them with CSS instead of unmounting them.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+render(<App />);
+fireEvent.click(screen.getByText("Profile"));
+expect(screen.getByText("Profile Content")).toBeInTheDocument();
+```
+
+For end-to-end testing, use **Playwright** to verify keyboard navigation and tab interactions.
+
+---
+
+# Ops & Deployment
+
+- Build reusable tab components instead of duplicating logic.
+- Follow accessibility guidelines by using `role="tablist"`, `role="tab"`, `role="tabpanel"`, `aria-selected`, and linking tabs to panels with `aria-controls` and `aria-labelledby`.
+- Log tab change events if analytics are required.
+- Split large tab panels into separate chunks to reduce the initial bundle size.
+- If tabs represent distinct application views, consider routing (React Router or Next.js) instead of local state.
+
+---
+
+# Pitfalls
+
+- **Using array indexes as tab identifiers**, making dynamic tabs harder to maintain.
+- **Unmounting inactive tabs unintentionally**, causing loss of form or scroll state when persistence is expected.
+- **Ignoring accessibility**, such as missing keyboard navigation (arrow keys, Home/End) and ARIA attributes.
+
 ## Question 4. How do you optimize component rendering with `React.memo`?
 
 ## Question 5. How do you use `useEffect` to listen to window resize events?
