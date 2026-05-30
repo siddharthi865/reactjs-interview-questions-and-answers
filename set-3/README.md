@@ -451,6 +451,204 @@ Rather than testing `useCallback` directly, test that memoized components avoid 
 
 ## Question 3. Explain useReducer hook with an example
 
+## Short answer
+
+`useReducer` is a React Hook used to manage **complex state logic** by centralizing state updates in a **reducer function**. It is an alternative to `useState` when state has multiple related values, complex transitions, or when the next state depends on the previous state. It follows the same principles as Redux but is built into React and scoped to a component.
+
+---
+
+## Explanation
+
+### What is `useReducer`?
+
+Instead of updating state directly, you **dispatch actions** that describe _what happened_. A reducer function receives the current state and the action, then returns the next state.
+
+```tsx
+const [state, dispatch] = useReducer(reducer, initialState);
+```
+
+Where:
+
+- **state** → current state
+- **dispatch(action)** → sends an action to the reducer
+- **reducer(state, action)** → returns the new state
+
+---
+
+### Syntax
+
+```tsx
+const [state, dispatch] = useReducer(reducer, initialState);
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "ACTION":
+      return { ...state };
+    default:
+      return state;
+  }
+}
+```
+
+---
+
+### Rendering behavior (React 18+)
+
+- Calling `dispatch()` schedules a state update and triggers a re-render if the state changes.
+- React 18 automatically batches multiple `dispatch` calls made within the same event.
+- The reducer **must be pure**:
+  - No API calls
+  - No mutations
+  - No side effects
+
+- Reducers should always return a **new state object** rather than mutating the existing one.
+
+---
+
+### When to use `useReducer`
+
+Use `useReducer` when:
+
+- State has multiple related fields.
+- There are many possible state transitions.
+- State update logic becomes difficult to manage with multiple `useState` calls.
+- Building forms, wizards, shopping carts, authentication flows, or complex UI state.
+
+Prefer `useState` for simple state like toggles, counters, or input values.
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### Counter using `useReducer`
+
+```tsx
+import { useReducer } from "react";
+
+type State = {
+  count: number;
+};
+
+type Action = { type: "increment" } | { type: "decrement" } | { type: "reset" };
+
+const initialState: State = {
+  count: 0,
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "increment":
+      return { count: state.count + 1 };
+
+    case "decrement":
+      return { count: state.count - 1 };
+
+    case "reset":
+      return initialState;
+
+    default:
+      return state;
+  }
+}
+
+export default function Counter() {
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  return (
+    <div>
+      <h2>Count: {state.count}</h2>
+
+      <button onClick={() => dispatch({ type: "increment" })}>+</button>
+
+      <button onClick={() => dispatch({ type: "decrement" })}>-</button>
+
+      <button onClick={() => dispatch({ type: "reset" })}>Reset</button>
+    </div>
+  );
+}
+```
+
+### Flow
+
+1. User clicks **+**.
+2. `dispatch({ type: "increment" })` is called.
+3. React invokes `reducer(state, action)`.
+4. Reducer returns `{ count: state.count + 1 }`.
+5. React updates the state and re-renders the component.
+
+---
+
+## Tooling & Setup
+
+- **Recommended:** Vite + React + TypeScript for fast development and type safety.
+- **Avoid:** Create React App (CRA), as it is deprecated.
+- **Bundler:** Vite uses native **ES Modules (ESM)** in development and Rollup for optimized production builds.
+- **Alternative:** Use Next.js when SSR, Server Components, or full-stack routing is required.
+
+---
+
+## Performance
+
+- Keep reducers **pure and lightweight**; expensive calculations belong in `useMemo`.
+- Split large reducers into smaller reducers or custom hooks to improve maintainability.
+- Combine `useReducer` with **Context API** for application-wide state without introducing Redux for smaller apps.
+- Use `React.memo`, `useCallback`, and `useMemo` where appropriate to reduce unnecessary renders.
+- Profile state updates with the **React DevTools Profiler**.
+- Use `React.lazy` and `Suspense` for code splitting, and libraries like TanStack Query for caching server state.
+
+---
+
+## Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example reducer unit test:
+
+```tsx
+import { expect, test } from "vitest";
+
+test("increments count", () => {
+  const state = { count: 0 };
+
+  expect(reducer(state, { type: "increment" })).toEqual({ count: 1 });
+});
+```
+
+Reducer functions are easy to unit test because they are pure functions.
+
+---
+
+## Ops & Deployment
+
+- Keep reducers free of side effects; perform API calls in event handlers or `useEffect`.
+- Use Error Boundaries to isolate rendering failures.
+- For SSR (e.g., Next.js), ensure reducer initial state is deterministic to avoid hydration mismatches.
+- Optimize bundle size by code-splitting large feature modules.
+- Deploy optimized builds to a CDN (e.g., Vercel, Netlify, Cloudflare Pages).
+
+---
+
+## Pitfalls
+
+- **Mutating state** inside the reducer instead of returning a new object.
+- **Putting side effects** (API calls, timers, logging) inside the reducer.
+- **Using `useReducer` for simple state**, where `useState` is simpler and more readable.
+
 ## Question 4. Difference between useState and useReducer
 
 ## Question 5. What is context API? How is it used?
