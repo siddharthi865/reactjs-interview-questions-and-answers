@@ -521,6 +521,222 @@ Use fake timers (`vi.useFakeTimers()`) to make debounce tests deterministic.
 
 ## Question 3. How do you memoize a component that receives multiple props?
 
+# Short answer
+
+Use **`React.memo`** to memoize the component. By default, `React.memo` performs a **shallow comparison** of all props and skips re-rendering if none of the prop references or primitive values have changed. When passing objects, arrays, or functions, stabilize them with `useMemo` and `useCallback`, or provide a custom comparison function if necessary.
+
+---
+
+# Explanation
+
+When a parent component re-renders, all of its children normally re-render as well, even if their props haven't changed.
+
+`React.memo` optimizes this by memoizing the rendered output:
+
+- If **all props are shallowly equal**, React skips rendering the component.
+- If **any prop changes**, the component re-renders.
+
+## Example with multiple props
+
+Suppose a component receives:
+
+- `title` (string)
+- `price` (number)
+- `inStock` (boolean)
+- `onAddToCart` (function)
+- `metadata` (object)
+
+```text
+Parent
+ ├── title ✓
+ ├── price ✓
+ ├── inStock ✓
+ ├── onAddToCart ⚠️
+ └── metadata ⚠️
+            │
+            ▼
+      React.memo(ProductCard)
+```
+
+If `onAddToCart` or `metadata` are recreated on every render, `React.memo` will detect different references and the child will still re-render.
+
+### Stabilize reference props
+
+Use:
+
+- `useCallback` → functions
+- `useMemo` → objects and arrays
+
+This allows `React.memo` to be effective.
+
+### React 18 considerations
+
+- React 18's automatic batching reduces unnecessary renders from grouped state updates.
+- `React.memo` only helps when rendering the component is more expensive than comparing props.
+- Measure performance with the React DevTools Profiler before adding memoization everywhere.
+
+---
+
+# Example
+
+**Scaffold (Vite + React + TypeScript)**
+
+```bash
+npm create vite@latest memo-demo -- --template react-ts
+cd memo-demo
+npm install
+npm run dev
+```
+
+```tsx
+import { memo, useCallback, useMemo, useState } from "react";
+
+type ProductCardProps = {
+  title: string;
+  price: number;
+  inStock: boolean;
+  metadata: { category: string };
+  onAddToCart: () => void;
+};
+
+const ProductCard = memo(function ProductCard({
+  title,
+  price,
+  inStock,
+  metadata,
+  onAddToCart,
+}: ProductCardProps) {
+  console.log("ProductCard rendered");
+
+  return (
+    <div>
+      <h3>{title}</h3>
+      <p>${price}</p>
+      <p>{metadata.category}</p>
+      <p>{inStock ? "In Stock" : "Out of Stock"}</p>
+      <button onClick={onAddToCart}>Add to Cart</button>
+    </div>
+  );
+});
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const metadata = useMemo(() => ({ category: "Electronics" }), []);
+
+  const handleAddToCart = useCallback(() => {
+    console.log("Added");
+  }, []);
+
+  return (
+    <>
+      <button onClick={() => setCount((c) => c + 1)}>Counter: {count}</button>
+
+      <ProductCard
+        title="Laptop"
+        price={999}
+        inStock
+        metadata={metadata}
+        onAddToCart={handleAddToCart}
+      />
+    </>
+  );
+}
+```
+
+Clicking the counter button re-renders `App`, but `ProductCard` does **not** re-render because all its props remain shallowly equal.
+
+### Custom comparison (only when necessary)
+
+If a prop changes reference frequently but only part of it matters for rendering, you can pass a custom comparator:
+
+```tsx
+const ProductCard = memo(
+  function ProductCard(props: ProductCardProps) {
+    // ...
+  },
+  (prev, next) =>
+    prev.title === next.title &&
+    prev.price === next.price &&
+    prev.inStock === next.inStock &&
+    prev.metadata.category === next.metadata.category,
+);
+```
+
+Use custom comparison sparingly, as it also has a runtime cost.
+
+---
+
+# Tooling & Setup
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+Recommended stacks:
+
+- **Vite** – Fast HMR, native ESM, excellent for SPAs.
+- **Next.js** – App Router, SSR, Server Components, and streaming.
+- **Remix** – Strong data-loading model and nested routing.
+
+### ESM vs CommonJS
+
+Modern React projects use **ES Modules (ESM)**:
+
+```ts
+import { memo, useMemo, useCallback } from "react";
+```
+
+ESM enables tree shaking and faster development with modern bundlers such as Vite.
+
+---
+
+# Performance
+
+- Use `React.memo` only for components with meaningful render cost or frequent parent updates.
+- Stabilize object, array, and function props using `useMemo` and `useCallback`.
+- Avoid creating inline objects/functions in JSX when passing them to memoized children.
+- Use `React.lazy` and dynamic imports for code splitting.
+- Profile with the React DevTools Profiler to verify that memoization reduces render time rather than adding unnecessary comparison overhead.
+- For large lists, combine `React.memo` with virtualization libraries like `@tanstack/react-virtual` or `react-window`.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit/integration testing and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test idea:
+
+```tsx
+it("does not re-render ProductCard when unrelated parent state changes", () => {
+  // Render App, update the counter,
+  // and verify ProductCard render count remains unchanged.
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Use the React DevTools Profiler in development to identify expensive renders before introducing memoization.
+- Wrap memoized UI with Error Boundaries where appropriate for resilience.
+- In SSR frameworks (e.g., Next.js), remember that `React.memo` primarily optimizes client-side re-renders after hydration.
+- Keep bundle sizes small through route-level code splitting and lazy loading.
+- Monitor real user performance (e.g., Web Vitals) to validate optimization efforts in production.
+
+---
+
+# Pitfalls
+
+- **Passing inline objects or functions:** New references on every render negate the benefits of `React.memo`.
+- **Overusing custom comparators:** Deep or complex comparisons may cost more than simply re-rendering.
+- **Memoizing everything:** Apply memoization based on profiling, not by default, as unnecessary memoization increases code complexity.
+
 ## Question 4. How do you implement a multi-select dropdown with checkboxes?
 
 ## Question 5. How do you implement conditional animations in React?
