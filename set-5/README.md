@@ -599,6 +599,317 @@ test("renders users list", () => {
 
 ## Question 3. How do you implement authentication in React?
 
+# Short answer
+
+Authentication in React is typically implemented by combining:
+
+- **An authentication provider** (JWT, OAuth, OpenID Connect, or session cookies)
+- **Protected routes** (e.g., with React Router v6)
+- **Global auth state** (Context API, Redux Toolkit, or Zustand)
+- **Secure token handling** (prefer **HttpOnly cookies** for web apps over storing JWTs in `localStorage`)
+- **Automatic token refresh** and logout handling
+
+For production applications, React should focus on UI and routing, while the backend or identity provider handles credential verification and token issuance.
+
+---
+
+# Explanation
+
+Authentication is not just a login page—it encompasses the entire lifecycle of a user's identity.
+
+A typical flow is:
+
+```text
+Login Form
+      │
+      ▼
+Backend Authentication
+      │
+      ▼
+Access Token / Session Cookie
+      │
+      ▼
+Save Authentication State
+      │
+      ▼
+Protected Routes
+      │
+      ▼
+Authenticated API Requests
+```
+
+---
+
+## Authentication Flow
+
+1. User submits email/password.
+2. Backend validates credentials.
+3. Backend returns:
+   - Session cookie (recommended for web apps), or
+   - JWT access token (often paired with a refresh token).
+
+4. React updates global authentication state.
+5. Protected routes become accessible.
+6. API requests include credentials (cookies automatically or an authorization header for tokens).
+7. On expiration, refresh the session/token or redirect to login.
+
+---
+
+## Global Authentication State
+
+Keep only the necessary information globally.
+
+Example:
+
+```ts
+type AuthState = {
+  user: User | null;
+  isAuthenticated: boolean;
+  loading: boolean;
+};
+```
+
+Possible state management choices:
+
+- **Context API** – Small to medium applications
+- **Redux Toolkit** – Large applications
+- **Zustand** – Lightweight alternative
+
+---
+
+## Protected Routes
+
+With React Router v6:
+
+```tsx
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
+```
+
+This prevents unauthenticated users from accessing protected pages.
+
+---
+
+## Token Storage
+
+### ✅ Recommended (Web Applications)
+
+Use:
+
+- **HttpOnly Secure Cookies**
+
+Advantages:
+
+- JavaScript cannot access them
+- Better protection against XSS
+- Automatically sent with requests
+- Can use `SameSite` and `Secure` attributes
+
+---
+
+### Less Recommended
+
+`localStorage`
+
+Pros:
+
+- Easy to implement
+
+Cons:
+
+- Accessible via JavaScript
+- Vulnerable to XSS attacks
+- Manual expiration handling
+
+Many production applications avoid storing long-lived JWTs in `localStorage`.
+
+---
+
+## API Integration
+
+Create a centralized API client.
+
+```ts
+api.interceptors.request.use((config) => {
+  config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+```
+
+Or, if using cookie-based authentication:
+
+```ts
+fetch("/api/profile", {
+  credentials: "include",
+});
+```
+
+This keeps authentication concerns out of UI components.
+
+---
+
+## React 18 Rendering Considerations
+
+Authentication state updates benefit from:
+
+- Automatic batching
+- Suspense for loading user/session data
+- Lazy-loaded protected routes
+- Concurrent rendering for responsive navigation
+
+Avoid triggering multiple independent authentication requests during initial app startup.
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Authentication Context
+
+```tsx
+import { createContext, useContext, useState, ReactNode } from "react";
+
+type User = {
+  name: string;
+};
+
+type AuthContextType = {
+  user: User | null;
+  login: () => void;
+  logout: () => void;
+};
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+
+  const login = () => {
+    setUser({ name: "John" });
+  };
+
+  const logout = () => {
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext)!;
+}
+```
+
+Protected route:
+
+```tsx
+import { Navigate } from "react-router-dom";
+
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const { user } = useAuth();
+
+  return user ? children : <Navigate to="/login" replace />;
+}
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack**
+
+- **Vite + React + TypeScript** for client-rendered applications.
+- **Next.js App Router** when SSR, React Server Components, or SEO are required.
+- Avoid **Create React App (CRA)** because it is deprecated.
+
+**Authentication libraries**
+
+- Use the provider's official SDK where possible (e.g., OAuth/OIDC providers).
+- For custom backends, use `fetch` or libraries like Axios with centralized interceptors.
+
+**ESM vs CommonJS**
+
+- Prefer ESM-based tooling (Vite).
+- Vite provides fast HMR and Rollup-optimized production builds.
+- Next.js supports ESM while handling bundling internally.
+
+---
+
+# Performance
+
+- Lazy-load authenticated routes with `React.lazy` and `Suspense`.
+- Cache authenticated user data with RTK Query or TanStack Query.
+- Memoize authentication context values to avoid unnecessary re-renders.
+- Profile authentication flows with the React DevTools Profiler.
+- Avoid repeated session validation by caching user information and refreshing it only when necessary.
+
+---
+
+# Testing
+
+Use:
+
+- **Vitest** + **React Testing Library** for unit/integration tests.
+- **Playwright** for end-to-end authentication flows.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+
+test("redirects unauthenticated users", () => {
+  render(
+    <ProtectedRoute>
+      <div>Dashboard</div>
+    </ProtectedRoute>,
+  );
+  expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
+});
+```
+
+For end-to-end tests, verify login, logout, token/session expiration, and protected route access.
+
+---
+
+# Ops & Deployment
+
+- Prefer **HttpOnly, Secure, SameSite cookies** for session management in browser-based apps.
+- Use HTTPS in production.
+- Handle expired sessions by redirecting users gracefully.
+- Implement refresh-token rotation when using token-based authentication.
+- Wrap protected sections with Error Boundaries to handle failures cleanly.
+- Centralize authentication logging and monitoring (e.g., failed logins, refresh failures).
+- Deploy behind a CDN or edge infrastructure while ensuring authenticated API endpoints remain protected.
+
+---
+
+# Pitfalls
+
+- Storing long-lived JWTs in `localStorage`, increasing exposure to XSS.
+- Performing authentication checks separately in every component instead of using a centralized provider and protected routes.
+- Forgetting to handle token/session expiration, refresh logic, and logout consistently.
+
 ## Question 4. Explain JWT-based authentication in React apps
 
 ## Question 5. How do you implement route guards in React Router?
