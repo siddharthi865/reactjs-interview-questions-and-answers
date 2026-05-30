@@ -628,6 +628,269 @@ For end-to-end testing, use **Playwright**.
 
 ## Question 3. What is the difference between inline, internal, and external CSS in React?
 
+# What is the difference between inline, internal, and external CSS in React?
+
+## Short answer
+
+In React:
+
+- **Inline CSS** → Styles are written as JavaScript objects using the `style` prop.
+- **Internal CSS** → Traditional `<style>` tags inside HTML are **generally not used** in React components. If needed, styles can be injected, but this is uncommon. React developers instead use CSS Modules or CSS-in-JS.
+- **External CSS** → Styles are stored in separate `.css` files and imported into components. This is the most common approach.
+
+---
+
+# Explanation
+
+Although the concepts of inline, internal, and external CSS come from standard HTML, React applications (especially those built with Vite or Next.js) typically rely on **external CSS**, **CSS Modules**, or **CSS-in-JS** rather than internal `<style>` blocks.
+
+| Feature         | Inline CSS                              | Internal CSS       | External CSS                            |
+| --------------- | --------------------------------------- | ------------------ | --------------------------------------- |
+| Location        | `style` prop                            | `<style>` tag      | Separate `.css` file                    |
+| Syntax          | JavaScript object                       | CSS                | CSS                                     |
+| Reusability     | Low                                     | Medium             | High                                    |
+| Dynamic styling | Excellent                               | Limited            | Limited (without CSS variables/classes) |
+| Performance     | New objects each render unless memoized | Good               | Excellent                               |
+| Best for        | Dynamic values                          | Small demos (rare) | Production apps                         |
+
+---
+
+## 1. Inline CSS
+
+Styles are passed as a JavaScript object to the `style` prop.
+
+```tsx
+export default function Button() {
+  return (
+    <button
+      style={{
+        backgroundColor: "royalblue",
+        color: "white",
+        padding: "10px",
+      }}
+    >
+      Save
+    </button>
+  );
+}
+```
+
+### Characteristics
+
+- Uses **camelCase** property names.
+- Values are strings or numbers.
+- Cannot directly use pseudo-classes (`:hover`) or media queries.
+- Best for styles that change dynamically based on state or props.
+
+---
+
+## 2. Internal CSS
+
+Traditional HTML uses:
+
+```html
+<style>
+  .button {
+    color: white;
+  }
+</style>
+```
+
+In React, placing `<style>` tags inside components is **not a recommended styling strategy** because:
+
+- Styles are recreated if rendered repeatedly.
+- Styles remain globally scoped unless managed carefully.
+- It becomes difficult to maintain.
+
+Example (possible but uncommon):
+
+```tsx
+export default function App() {
+  return (
+    <>
+      <style>{`
+        .title {
+          color: blue;
+        }
+      `}</style>
+
+      <h1 className="title">Hello React</h1>
+    </>
+  );
+}
+```
+
+Use this sparingly, such as for embedding third-party snippets or dynamically generated CSS.
+
+---
+
+## 3. External CSS
+
+Create a separate CSS file.
+
+**App.css**
+
+```css
+.button {
+  background: royalblue;
+  color: white;
+  padding: 10px;
+}
+```
+
+Import it:
+
+```tsx
+import "./App.css";
+
+export default function App() {
+  return <button className="button">Submit</button>;
+}
+```
+
+This is the standard approach for shared and global styles.
+
+---
+
+## CSS Modules (Recommended Alternative)
+
+For large React applications, CSS Modules provide scoped styles.
+
+**Button.module.css**
+
+```css
+.button {
+  background: green;
+}
+```
+
+```tsx
+import styles from "./Button.module.css";
+
+export default function Button() {
+  return <button className={styles.button}>Save</button>;
+}
+```
+
+Benefits:
+
+- No class name collisions
+- Easier maintenance
+- Better scalability
+
+---
+
+## Rendering Behavior
+
+- React treats `className` and `style` as props and updates the DOM only when they change.
+- With React 18, automatic batching reduces unnecessary renders caused by multiple state updates.
+- Passing a newly created inline style object to a memoized child component on every render can defeat `React.memo`; use `useMemo` if a stable object reference is important.
+
+---
+
+# Example
+
+**Create a Vite + React + TypeScript project:**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**App.css**
+
+```css
+.container {
+  padding: 20px;
+}
+
+.primary {
+  background: #2563eb;
+  color: white;
+}
+```
+
+**App.tsx**
+
+```tsx
+import "./App.css";
+
+export default function App() {
+  return (
+    <div className="container">
+      <button className="primary" style={{ borderRadius: "8px" }}>
+        Click Me
+      </button>
+    </div>
+  );
+}
+```
+
+This example combines external CSS for reusable styles with an inline style for a dynamic or one-off property.
+
+---
+
+# Tooling & Setup
+
+- **Vite** is recommended for React projects due to fast development, HMR, and built-in support for CSS imports and CSS Modules.
+- **Next.js** is preferred for applications requiring SSR, Server Components, routing, and SEO.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Modern React ecosystems use **ES Modules (ESM)**, and bundlers such as Vite handle CSS bundling, tree-shaking, and code splitting automatically.
+
+---
+
+# Performance
+
+- Use **React Profiler** to identify unnecessary renders.
+- Prefer CSS classes over large inline style objects for static styling.
+- Memoize dynamic style objects with `useMemo` when passing them to memoized children.
+- Use `React.memo`, `useCallback`, and `useMemo` appropriately.
+- Split large feature bundles with `React.lazy` and `Suspense`.
+- Remove unused CSS and leverage caching/CDNs for static assets.
+
+---
+
+# Testing
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders button", () => {
+  render(<App />);
+  expect(screen.getByRole("button")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Keep global CSS minimal and organize component-specific styles using CSS Modules or a utility framework.
+- Use Error Boundaries to isolate rendering failures.
+- Optimize CSS delivery with code splitting and CDN caching.
+- Monitor bundle size using build analysis tools.
+
+---
+
+# Pitfalls
+
+- **Use `className` instead of `class`** in JSX.
+- **Avoid relying on `<style>` tags inside components** for application styling; prefer external CSS, CSS Modules, or CSS-in-JS.
+- **Don't overuse inline styles** for static UI because they reduce reusability and don't support pseudo-classes or media queries directly.
+
 ## Question 4. How do you apply conditional rendering with ternary operators?
 
 ## Question 5. How do you handle multiple class names dynamically?
