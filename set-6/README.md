@@ -580,6 +580,307 @@ For end-to-end testing, **Playwright** is an excellent choice for both ecosystem
 
 ## Question 3. How does React handle DOM updates?
 
+# Short answer
+
+React updates the DOM efficiently by using a **Virtual DOM**. When state or props change, React creates a new Virtual DOM tree, compares it with the previous one using the **reconciliation (diffing) algorithm**, determines the minimal set of changes, and applies only those updates to the real DOM. In React 18, **automatic batching** and **concurrent rendering** further optimize rendering performance and responsiveness.
+
+---
+
+# Explanation
+
+## 1. What is the Virtual DOM?
+
+The **Virtual DOM (VDOM)** is a lightweight JavaScript representation of the real DOM.
+
+When a component renders:
+
+1. React creates a Virtual DOM tree.
+2. State or props change.
+3. React creates a new Virtual DOM tree.
+4. React compares the old and new trees.
+5. Only the changed nodes are updated in the real DOM.
+
+This minimizes expensive DOM operations.
+
+```
+State Change
+      │
+      ▼
+Render Component
+      │
+      ▼
+New Virtual DOM
+      │
+      ▼
+Compare with Previous Virtual DOM
+      │
+      ▼
+Find Differences (Diffing)
+      │
+      ▼
+Update Only Changed DOM Nodes
+```
+
+---
+
+## 2. Reconciliation (Diffing Algorithm)
+
+React's reconciliation algorithm determines what has changed between renders.
+
+For example:
+
+```jsx
+Before: <h1>Hello</h1>;
+
+After: <h1>Hello React</h1>;
+```
+
+React updates **only the text node**, not the entire `<h1>` element.
+
+Similarly:
+
+```jsx
+Before: <ul>
+  <li>A</li>
+  <li>B</li>
+</ul>;
+
+After: <ul>
+  <li>A</li>
+  <li>C</li>
+</ul>;
+```
+
+Only the second `<li>` is updated.
+
+---
+
+## 3. React's Diffing Assumptions
+
+React optimizes comparisons using two assumptions:
+
+### Different element types
+
+```jsx
+<div />
+```
+
+↓
+
+```jsx
+<span />
+```
+
+React destroys the old tree and creates a new one.
+
+---
+
+### Same element type
+
+```jsx
+<button className="red">
+```
+
+↓
+
+```jsx
+<button className="blue">
+```
+
+React updates only the `className` attribute.
+
+---
+
+### Keys in lists
+
+Keys help React identify items efficiently.
+
+```tsx
+users.map((user) => <li key={user.id}>{user.name}</li>);
+```
+
+Without stable keys, React may unnecessarily re-render or recreate list items.
+
+---
+
+## 4. Render Phase vs Commit Phase
+
+React rendering occurs in two phases.
+
+### Render Phase
+
+- Calls component functions.
+- Computes the next Virtual DOM.
+- Can be interrupted in concurrent rendering.
+
+### Commit Phase
+
+- Applies the calculated changes to the real DOM.
+- Runs layout effects (`useLayoutEffect`) synchronously.
+- Schedules passive effects (`useEffect`) after the browser paints.
+
+---
+
+## 5. React 18 Concurrent Rendering
+
+Concurrent rendering lets React prepare updates without blocking the main thread.
+
+Benefits include:
+
+- Interruptible rendering.
+- Better responsiveness.
+- Prioritized updates.
+- Smoother user interactions.
+
+Example:
+
+```tsx
+startTransition(() => {
+  setSearchQuery(value);
+});
+```
+
+Urgent updates (typing) are prioritized over expensive UI updates.
+
+---
+
+## 6. Automatic Batching (React 18)
+
+React batches multiple state updates into a single render, even in asynchronous contexts.
+
+```tsx
+setCount((c) => c + 1);
+setLoading(true);
+```
+
+Only **one render** occurs instead of two.
+
+Automatic batching works across:
+
+- Event handlers
+- Promises
+- `setTimeout`
+- Native event listeners
+
+---
+
+## 7. When Does React Re-render?
+
+A component re-renders when:
+
+- State changes.
+- Props change.
+- A parent re-renders (unless memoized).
+- Context values change.
+
+A re-render does **not** necessarily mean the real DOM is updated. If the diff finds no changes, the commit phase performs no DOM mutations.
+
+---
+
+# Example
+
+### Scaffold (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  console.log("Component rendered");
+
+  return (
+    <div>
+      <h2>Count: {count}</h2>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+**What happens when the button is clicked?**
+
+1. `setCount` schedules a state update.
+2. React re-renders `App`.
+3. A new Virtual DOM tree is created.
+4. React compares it with the previous tree.
+5. Only the text inside `<h2>` changes.
+6. The `<button>` element is reused because it hasn't changed.
+
+---
+
+# Tooling & Setup
+
+- **Preferred setup:** Vite + React + TypeScript for fast development and native ESM support.
+- **Avoid Create React App (CRA)** because it is deprecated.
+- For SSR, routing, and React Server Components, use **Next.js**.
+- Vite uses **ES Modules (ESM)** during development with fast Hot Module Replacement (HMR), while production builds are optimized with Rollup.
+
+---
+
+# Performance
+
+- Use the **React DevTools Profiler** to identify unnecessary re-renders.
+- Memoize components with `React.memo`.
+- Memoize expensive calculations with `useMemo`.
+- Memoize callback props with `useCallback` when passing them to memoized children.
+- Use `React.lazy` and `Suspense` for code splitting and lazy loading.
+- Cache server state with libraries like **TanStack Query** to reduce unnecessary network requests and re-renders.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders initial count", () => {
+  render(<App />);
+  expect(screen.getByText("Count: 0")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to prevent UI crashes from component errors.
+- Integrate logging and monitoring tools such as Sentry for production diagnostics.
+- Prefer **SSR** (e.g., Next.js) for SEO and faster initial page loads; use **CSR** for highly interactive applications where SEO is less critical.
+- Optimize bundle size with tree shaking, dynamic imports, and dependency analysis tools.
+- Deploy static assets through a CDN and leverage HTTP caching for faster content delivery.
+
+---
+
+# Pitfalls
+
+- Using unstable or array-index keys in lists, causing unnecessary DOM updates.
+- Assuming every component re-render results in a real DOM update—React only commits actual differences.
+- Prematurely applying `React.memo`, `useMemo`, or `useCallback` without profiling; these optimizations also have a maintenance and runtime cost.
+
 ## Question 4. What is the purpose of React.createElement?
 
 ## Question 5. Explain the difference between functional and class components in terms of lifecycle methods
