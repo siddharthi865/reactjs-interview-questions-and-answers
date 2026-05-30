@@ -576,6 +576,235 @@ For end-to-end testing, use **Playwright** to validate real user typing behavior
 
 ## Question 3. How do you implement a reusable modal component with animations?
 
+# How do you implement a reusable modal component with animations?
+
+## Short answer
+
+A reusable animated modal should:
+
+- Be **controlled** via `isOpen` and `onClose` props.
+- Render through a **React Portal** so it sits outside the normal DOM hierarchy.
+- Animate entry/exit using CSS transitions or an animation library (e.g., Framer Motion).
+- Support **Escape key**, **backdrop click**, **focus management**, and **accessibility** (`role="dialog"`, `aria-modal="true"`).
+
+---
+
+# Explanation
+
+A production-ready modal separates **state**, **presentation**, and **behavior**.
+
+```text
+Parent Component
+       │
+       ▼
+isOpen + onClose
+       │
+       ▼
+Reusable Modal
+ ├── Portal
+ ├── Backdrop
+ ├── Animation
+ ├── Keyboard Events
+ ├── Focus Trap
+ └── Content
+```
+
+### Component API
+
+```tsx
+<Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Delete Item">
+  <p>Are you sure?</p>
+</Modal>
+```
+
+This makes the component reusable for confirmations, forms, image previews, etc.
+
+### Why use React Portal?
+
+Without a portal, the modal may be clipped by parent containers with `overflow: hidden` or affected by stacking contexts.
+
+Using `createPortal()` renders the modal into a dedicated DOM node (e.g., `#modal-root` or `document.body`), ensuring proper layering.
+
+### Animation strategies
+
+Common approaches:
+
+- **CSS transitions** (simple, lightweight).
+- **Framer Motion** (rich animations, gestures).
+- **React Transition Group** (transition lifecycle management).
+
+Typical animation:
+
+- Backdrop fades in/out.
+- Modal scales from 95% → 100%.
+- Opacity transitions from 0 → 1.
+
+### React 18 considerations
+
+- Automatic batching minimizes unnecessary renders when opening/closing.
+- Concurrent rendering keeps UI responsive during state updates.
+- Animation state should remain local to the modal; avoid unnecessary global state.
+
+---
+
+# Example
+
+### Scaffold with Vite (React + TypeScript)
+
+```bash
+npm create vite@latest animated-modal -- --template react-ts
+cd animated-modal
+npm install
+npm install framer-motion
+npm run dev
+```
+
+### `Modal.tsx`
+
+```tsx
+import { ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
+
+type ModalProps = {
+  isOpen: boolean;
+  title?: string;
+  children: ReactNode;
+  onClose: () => void;
+};
+
+export function Modal({ isOpen, title, children, onClose }: ModalProps) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            className="modal"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? "modal-title" : undefined}
+          >
+            {title && <h2 id="modal-title">{title}</h2>}
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+```
+
+### Usage
+
+```tsx
+import { useState } from "react";
+import { Modal } from "./Modal";
+
+export default function App() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Open Modal</button>
+
+      <Modal isOpen={open} title="Confirmation" onClose={() => setOpen(false)}>
+        <p>Delete this item?</p>
+        <button onClick={() => setOpen(false)}>Close</button>
+      </Modal>
+    </>
+  );
+}
+```
+
+This example demonstrates:
+
+- Controlled component pattern.
+- React Portal.
+- Entry/exit animations.
+- Escape key handling.
+- Backdrop click to close.
+- Accessible dialog semantics.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)**; it is deprecated.
+- Prefer **Vite** for client-side React applications due to fast HMR and ESM support.
+- Use **Next.js App Router** if the modal is part of an SSR application. Mark interactive modal components with `"use client"` because they rely on browser APIs and event handlers.
+- **ESM vs CommonJS:** Use ESM imports/exports. Vite and modern bundlers optimize ESM for tree-shaking and faster builds.
+- For advanced animations, **Framer Motion** provides declarative APIs and integrates well with React.
+
+---
+
+# Performance
+
+- Render the modal only when `isOpen` is `true`.
+- Memoize heavy child components with `React.memo` if their props are stable.
+- Memoize callbacks passed to the modal using `useCallback`.
+- Lazy-load infrequently used modal content with `React.lazy` and `Suspense`.
+- Use the **React DevTools Profiler** to verify opening/closing doesn't trigger unnecessary parent renders.
+- For data shown inside the modal, use caching libraries such as **TanStack Query** or **SWR** to avoid redundant fetches.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Test cases:
+
+- Modal renders only when `isOpen` is `true`.
+- Clicking the backdrop calls `onClose`.
+- Pressing **Escape** closes the modal.
+- Clicking inside the modal does not close it.
+- Verify `role="dialog"` and `aria-modal="true"` for accessibility.
+
+Use **Playwright** for end-to-end tests to validate focus behavior, keyboard navigation, and animation timing.
+
+---
+
+# Ops & Deployment
+
+- Implement a proper **focus trap** (e.g., `focus-trap-react`) and restore focus to the triggering element when the modal closes.
+- Lock background scrolling (`document.body.style.overflow = "hidden"`) while the modal is open.
+- Wrap modal content with an **Error Boundary** if it contains complex UI.
+- Monitor runtime errors and interaction metrics through your logging platform.
+- Code-split large modal content to reduce the initial bundle size, and serve static assets through a CDN.
+
+---
+
+# Pitfalls
+
+- **Not using a Portal**, causing clipping or z-index issues.
+- **Ignoring accessibility**, such as missing focus management, `role="dialog"`, or keyboard support.
+- **Unmounting immediately**, which prevents exit animations; use an animation library or transition lifecycle to animate before removal.
+
 ## Question 4. How do you implement a multi-step wizard form with progress tracking?
 
 ## Question 5. How do you implement a global loader for API requests?
