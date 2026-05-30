@@ -771,6 +771,416 @@ Also test that selectors return expected derived values and remain pure for iden
 
 ## Question 3. How do you implement asynchronous Redux actions using Thunk or Saga?
 
+# How do you implement asynchronous Redux actions using Thunk or Saga?
+
+## Short answer
+
+Asynchronous Redux actions are implemented using middleware because Redux reducers must remain **pure and synchronous**. The two most common approaches are:
+
+- **Redux Thunk**: Write async logic inside action creators (recommended for most applications and included by default in Redux Toolkit).
+- **Redux Saga**: Handle async workflows using generator functions (`function*`) for complex side effects like retries, polling, cancellation, and orchestration.
+
+For modern React applications, **Redux Toolkit + `createAsyncThunk` or RTK Query** is the preferred solution unless your application has highly complex side-effect workflows.
+
+---
+
+# Explanation
+
+Redux follows a unidirectional data flow:
+
+```text
+Component
+    │
+dispatch()
+    │
+    ▼
+Middleware (Thunk/Saga)
+    │
+    ▼
+API Call
+    │
+    ▼
+Success / Failure Action
+    │
+    ▼
+Reducer
+    │
+    ▼
+Updated Store
+    │
+    ▼
+React Re-renders
+```
+
+Reducers should never perform:
+
+- API requests
+- Timers
+- Local storage writes
+- Navigation
+- Logging with side effects
+
+These belong in middleware.
+
+---
+
+## Option 1: Redux Thunk
+
+Thunk allows an action creator to return a **function** instead of a plain object.
+
+Example:
+
+```ts
+dispatch(fetchUsers());
+```
+
+Internally:
+
+```text
+dispatch()
+      ↓
+Thunk Middleware
+      ↓
+Execute async function
+      ↓
+API request
+      ↓
+Dispatch pending
+      ↓
+Dispatch fulfilled
+      ↓
+Reducer updates state
+```
+
+Redux Toolkit simplifies this with `createAsyncThunk`.
+
+Example lifecycle:
+
+```text
+fetchUsers.pending
+
+↓
+
+fetchUsers.fulfilled
+
+↓
+
+fetchUsers.rejected
+```
+
+Benefits:
+
+- Easy to learn
+- Minimal boilerplate
+- Great TypeScript support
+- Built into Redux Toolkit
+- Best choice for most CRUD applications
+
+---
+
+## Option 2: Redux Saga
+
+Saga uses **generator functions**.
+
+Example flow:
+
+```text
+dispatch(fetchUsers)
+
+↓
+
+watcherSaga
+
+↓
+
+workerSaga
+
+↓
+
+call(API)
+
+↓
+
+put(success)
+
+↓
+
+Reducer
+```
+
+Common Saga effects:
+
+```ts
+takeLatest();
+
+takeEvery();
+
+call();
+
+put();
+
+select();
+
+delay();
+
+race();
+
+cancel();
+
+fork();
+```
+
+Saga excels when coordinating complex asynchronous workflows.
+
+Example scenarios:
+
+- Authentication flows
+- WebSockets
+- Background synchronization
+- Retry strategies
+- Request cancellation
+- Polling
+- Multiple dependent API calls
+
+---
+
+## Thunk vs Saga
+
+| Feature                   | Thunk   | Saga                            |
+| ------------------------- | ------- | ------------------------------- |
+| Learning curve            | Easy    | Steeper                         |
+| Uses async/await          | ✅      | ❌ (Generators)                 |
+| Boilerplate               | Low     | Higher                          |
+| Complex workflows         | Limited | Excellent                       |
+| Request cancellation      | Manual  | Built-in                        |
+| Parallel execution        | Manual  | Excellent                       |
+| Official RTK support      | ✅      | External middleware             |
+| Recommended for most apps | ✅      | Only when workflows are complex |
+
+---
+
+## React 18 Rendering Behavior
+
+With React 18:
+
+- Automatic batching reduces unnecessary renders.
+- React Redux integrates with concurrent rendering.
+- Multiple state updates triggered by async actions are batched where appropriate.
+
+Example:
+
+```ts
+dispatch(fetchUsers());
+dispatch(fetchPosts());
+```
+
+React minimizes re-renders when these updates occur within the same batching context.
+
+---
+
+# Example
+
+### Create a Vite project
+
+```bash
+npm create vite@latest redux-async-demo -- --template react-ts
+cd redux-async-demo
+
+npm install
+npm install @reduxjs/toolkit react-redux
+
+npm run dev
+```
+
+### `store.ts` (Redux Toolkit + Thunk)
+
+```tsx
+import {
+  configureStore,
+  createSlice,
+  createAsyncThunk,
+} from "@reduxjs/toolkit";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export const fetchUsers = createAsyncThunk<User[]>(
+  "users/fetchUsers",
+  async () => {
+    const response = await fetch("https://jsonplaceholder.typicode.com/users");
+    return response.json();
+  },
+);
+
+const usersSlice = createSlice({
+  name: "users",
+  initialState: {
+    users: [] as User[],
+    loading: false,
+    error: "",
+  },
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchUsers.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchUsers.fulfilled, (state, action) => {
+        state.loading = false;
+        state.users = action.payload;
+      })
+      .addCase(fetchUsers.rejected, (state) => {
+        state.loading = false;
+        state.error = "Failed to load users";
+      });
+  },
+});
+
+export const store = configureStore({
+  reducer: {
+    users: usersSlice.reducer,
+  },
+});
+
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+```
+
+### `App.tsx`
+
+```tsx
+import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchUsers } from "./store";
+import type { AppDispatch, RootState } from "./store";
+
+export default function App() {
+  const dispatch = useDispatch<AppDispatch>();
+  const { users, loading } = useSelector((state: RootState) => state.users);
+
+  useEffect(() => {
+    dispatch(fetchUsers());
+  }, [dispatch]);
+
+  if (loading) return <p>Loading...</p>;
+
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Flow:
+
+```text
+Component Mount
+      │
+dispatch(fetchUsers())
+      │
+      ▼
+pending
+      │
+      ▼
+HTTP Request
+      │
+ ┌────┴────┐
+ │         │
+Success   Failure
+ │         │
+fulfilled rejected
+ │         │
+Reducer Updates State
+      │
+      ▼
+React Re-renders
+```
+
+> **Saga equivalent (conceptual):**
+>
+> ```ts
+> function* fetchUsersWorker() {
+>   const users = yield call(api.fetchUsers);
+>   yield put(usersLoaded(users));
+> }
+>
+> function* watchUsers() {
+>   yield takeLatest(fetchUsers.type, fetchUsersWorker);
+> }
+> ```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid Create React App (CRA), as it is deprecated.
+
+- **Bundler:** Vite for fast HMR and optimized production builds.
+- **ESM vs CommonJS:** Use ES Modules (`import`/`export`) in modern React applications.
+- **Redux Toolkit:** Includes Redux Thunk by default.
+- **Redux Saga:** Install separately (`redux-saga`) and configure it as middleware when your application requires advanced side-effect orchestration.
+- **Alternative:** For server-state fetching and caching, consider **RTK Query**, which removes much of the manual async Redux code.
+
+---
+
+# Performance
+
+- Avoid dispatching duplicate requests; cache or deduplicate where appropriate.
+- Prefer **RTK Query** for API-heavy applications because it provides caching, request deduplication, automatic refetching, and cache invalidation.
+- Memoize derived state with `createSelector`.
+- Use `React.memo`, `useMemo`, and `useCallback` where profiling shows measurable benefits.
+- Code split large feature modules with `React.lazy()` and dynamic imports.
+- Use the React DevTools **Profiler** and Redux DevTools to analyze render frequency and action timelines.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for components and **Mock Service Worker (MSW)** to mock network requests during integration tests.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom msw
+```
+
+Example command:
+
+```bash
+npx vitest
+```
+
+Typical async tests verify:
+
+- Pending state
+- Successful responses
+- Error handling
+- Loading indicators
+- Reducer state after fulfilled/rejected actions
+
+---
+
+# Ops & Deployment
+
+- Centralize API clients and error handling to avoid duplicating request logic.
+- Log async failures through an observability platform (e.g., Sentry) rather than only displaying UI errors.
+- Use Error Boundaries for rendering errors; async errors should be handled in middleware or async thunks.
+- For SSR frameworks like Next.js, consider where data should be fetched (server vs. client) to reduce client-side waterfalls.
+- Monitor bundle size—if using Redux Saga, remember it adds additional runtime overhead compared to Thunk.
+
+---
+
+# Pitfalls
+
+- **Performing async work inside reducers.** Reducers must always remain pure and synchronous.
+- **Using Redux Saga for simple CRUD operations.** `createAsyncThunk` or RTK Query is usually simpler and easier to maintain.
+- **Ignoring loading and error states.** Always model request lifecycle (`pending`, `fulfilled`, `rejected`) for a better user experience.
+
 ## Question 4. How do you integrate React with GraphQL?
 
 ## Question 5. How do you handle caching with Apollo Client?
