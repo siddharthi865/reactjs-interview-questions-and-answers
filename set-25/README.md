@@ -494,6 +494,251 @@ Use **Playwright** to verify synchronization between two browser tabs in an end-
 
 ## Question 3. How do you implement dynamic component rendering based on a JSON configuration?
 
+# Short answer
+
+**Dynamic component rendering** maps values from a JSON configuration (such as a `type` field) to React components. Instead of hardcoding JSX, React looks up the appropriate component from a registry and renders it with props from the JSON. This pattern is commonly used in **form builders, dashboards, CMS-driven UIs, page builders, and feature-flagged interfaces**.
+
+---
+
+# Explanation
+
+Instead of writing:
+
+```tsx
+return (
+  <>
+    <Button />
+    <Input />
+    <Card />
+  </>
+);
+```
+
+you can describe the UI with JSON:
+
+```json
+[
+  {
+    "type": "heading",
+    "props": {
+      "text": "Welcome"
+    }
+  },
+  {
+    "type": "button",
+    "props": {
+      "label": "Login"
+    }
+  }
+]
+```
+
+React reads the configuration and renders components dynamically.
+
+## Architecture
+
+```
+JSON Configuration
+        │
+        ▼
+Component Registry
+(type → Component)
+        │
+        ▼
+React.createElement / JSX
+        │
+        ▼
+Rendered UI
+```
+
+A typical component registry:
+
+```tsx
+const componentMap = {
+  heading: Heading,
+  button: Button,
+  card: Card,
+};
+```
+
+Rendering:
+
+```tsx
+const Component = componentMap[item.type];
+
+return Component ? <Component {...item.props} /> : null;
+```
+
+This keeps rendering logic generic and makes it easy to add new component types without modifying the renderer.
+
+---
+
+## React 18 considerations
+
+For production applications:
+
+- Keep the JSON **declarative** (describe _what_ to render, not executable logic).
+- Validate JSON before rendering (using libraries like Zod or JSON Schema).
+- Memoize expensive derived configurations with `useMemo`.
+- React 18's automatic batching minimizes unnecessary renders when multiple state updates occur together.
+- For very large configurations (hundreds of widgets), combine dynamic rendering with virtualization and lazy loading.
+
+Avoid storing React components directly in JSON. Store identifiers and resolve them through a registry.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest dynamic-render-demo -- --template react-ts
+cd dynamic-render-demo
+npm install
+npm run dev
+```
+
+`App.tsx`
+
+```tsx
+import React from "react";
+
+type ConfigItem =
+  | {
+      id: number;
+      type: "heading";
+      props: { text: string };
+    }
+  | {
+      id: number;
+      type: "button";
+      props: { label: string };
+    };
+
+const Heading = ({ text }: { text: string }) => <h2>{text}</h2>;
+
+const Button = ({ label }: { label: string }) => <button>{label}</button>;
+
+const componentMap = {
+  heading: Heading,
+  button: Button,
+};
+
+const config: ConfigItem[] = [
+  {
+    id: 1,
+    type: "heading",
+    props: { text: "Dynamic UI" },
+  },
+  {
+    id: 2,
+    type: "button",
+    props: { label: "Submit" },
+  },
+];
+
+export default function App() {
+  return (
+    <div>
+      {config.map((item) => {
+        const Component = componentMap[item.type];
+
+        return <Component key={item.id} {...item.props} />;
+      })}
+    </div>
+  );
+}
+```
+
+Output:
+
+```
+Dynamic UI
+
+[ Submit ]
+```
+
+To add another component, simply:
+
+1. Create the component.
+2. Register it in `componentMap`.
+3. Add a JSON entry.
+
+No changes to the renderer are required.
+
+---
+
+# Tooling & Setup
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+Preferred tooling:
+
+- **Vite** for SPAs with fast HMR and native ESM support.
+- **Next.js (App Router)** when server rendering or React Server Components are required. JSON can be fetched on the server and rendered by Client Components when interactivity is needed.
+- **Remix** for route-centric data loading.
+
+Module notes:
+
+- Use **ES Modules (ESM)** (`import`/`export`) as the modern JavaScript standard.
+- Vite uses native ESM during development and Rollup for optimized production bundles.
+
+---
+
+# Performance
+
+When rendering many dynamic components:
+
+- Profile rendering with the **React Profiler**.
+- Wrap frequently reused components in `React.memo` to avoid unnecessary re-renders.
+- Memoize derived configuration with `useMemo`.
+- Memoize callbacks passed to dynamic children with `useCallback`.
+- Use `React.lazy()` and `Suspense` to lazily load rarely used component types.
+- Virtualize long lists (e.g., with `react-window`) if the JSON describes hundreds or thousands of items.
+- Cache fetched JSON configurations with libraries such as TanStack Query or RTK Query to avoid redundant network requests.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/user-event
+```
+
+Test scenarios:
+
+- Correct component is rendered for each `type`.
+- Unknown component types render a fallback UI or nothing.
+- Props from JSON are passed correctly.
+- Invalid JSON is handled gracefully.
+
+For end-to-end testing of CMS-driven pages, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Validate JSON from external sources before rendering to prevent runtime errors.
+- Log unsupported component types for observability.
+- Use an **Error Boundary** around the dynamic renderer to isolate rendering failures.
+- Split large widget libraries into separate bundles with dynamic imports.
+- Serve configuration files through a CDN with appropriate cache headers if they are shared across users.
+- Avoid embedding executable code in JSON; keep it as pure data.
+
+---
+
+# Pitfalls
+
+- **Using user-provided component names directly** without validation, which can lead to rendering errors or security concerns.
+- **Not providing a fallback** for unknown component types.
+- **Embedding business logic in JSON**, making configurations difficult to validate, test, and maintain.
+
 ## Question 4. How do you implement complex drag-and-drop dashboards?
 
 ## Question 5. How do you implement multi-language internationalization (i18n) in React apps?
