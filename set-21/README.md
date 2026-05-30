@@ -538,6 +538,250 @@ Test rendered output and user interactions rather than implementation details.
 
 ## Question 3. What are the rules of hooks in React?
 
+# Short answer
+
+The **Rules of Hooks** ensure React can correctly preserve state and effects between renders. The two primary rules are:
+
+1. **Only call Hooks at the top level** (never inside loops, conditions, or nested functions).
+2. **Only call Hooks from React function components or custom Hooks** (not from regular JavaScript functions or class components).
+
+Following these rules allows React to associate each Hook call with the correct component state across renders.
+
+---
+
+# Explanation
+
+Hooks (such as `useState`, `useEffect`, and `useMemo`) rely on the **order in which they are called**. React internally tracks Hook state by their call order during each render.
+
+If the order changes between renders, React cannot determine which state belongs to which Hook, leading to bugs.
+
+## Rule 1: Only Call Hooks at the Top Level
+
+✅ Correct:
+
+```tsx
+import { useEffect, useState } from "react";
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    document.title = `Count: ${count}`;
+  }, [count]);
+
+  return <button onClick={() => setCount((c) => c + 1)}>{count}</button>;
+}
+```
+
+❌ Incorrect (inside a condition):
+
+```tsx
+if (loggedIn) {
+  useEffect(() => {
+    // ❌ Wrong
+  }, []);
+}
+```
+
+❌ Incorrect (inside a loop):
+
+```tsx
+items.forEach(() => {
+  useState(0); // ❌ Wrong
+});
+```
+
+❌ Incorrect (inside a nested function):
+
+```tsx
+function handleClick() {
+  useState(0); // ❌ Wrong
+}
+```
+
+Instead, call the Hook unconditionally and place conditional logic **inside** the Hook:
+
+```tsx
+useEffect(() => {
+  if (loggedIn) {
+    // Safe
+  }
+}, [loggedIn]);
+```
+
+---
+
+## Rule 2: Only Call Hooks from React Components or Custom Hooks
+
+✅ React component:
+
+```tsx
+function Profile() {
+  const [user, setUser] = useState(null);
+
+  return <div>{user?.name}</div>;
+}
+```
+
+✅ Custom Hook:
+
+```tsx
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  return width;
+}
+```
+
+❌ Regular JavaScript function:
+
+```tsx
+function calculatePrice() {
+  useState(0); // ❌ Invalid
+}
+```
+
+Custom Hooks are simply functions whose names start with `use` and that can call other Hooks to encapsulate reusable stateful logic.
+
+---
+
+## Why These Rules Exist
+
+React stores Hook state in the order Hooks are called.
+
+Correct order:
+
+```text
+Render 1
+1. useState
+2. useEffect
+3. useMemo
+
+Render 2
+1. useState
+2. useEffect
+3. useMemo
+```
+
+Incorrect order:
+
+```text
+Render 1
+1. useState
+2. useEffect
+3. useMemo
+
+Render 2
+1. useState
+2. useMemo   ❌
+```
+
+Because the second render skipped `useEffect`, React would associate the wrong state with subsequent Hooks.
+
+---
+
+## Rendering Behavior (React 18)
+
+React 18's **automatic batching** and **concurrent rendering** improve update scheduling and responsiveness, but they **do not change the Rules of Hooks**.
+
+- Components may render more than once before committing updates.
+- React still expects Hooks to be called in the same order on every render.
+- In development, **Strict Mode** intentionally re-renders components to help detect side effects, making adherence to the Rules of Hooks even more important.
+
+---
+
+# Example
+
+**Modern setup (Vite + React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`src/App.tsx`**
+
+```tsx
+import { useEffect, useState } from "react";
+
+function useDocumentTitle(title: string) {
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  useDocumentTitle(`Count: ${count}`);
+
+  return <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>;
+}
+```
+
+This example follows both rules:
+
+- Hooks are called at the top level.
+- `useDocumentTitle` is a valid custom Hook that can use other Hooks internally.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA):** It is deprecated.
+- **Prefer Vite** for client-side React development due to its fast startup, native ESM support, and HMR.
+- Use **Next.js** when you need SSR, SSG, or React Server Components.
+- Modern React projects are ESM-first; CommonJS is mainly found in older Node.js ecosystems.
+- Enable the **ESLint Hooks plugin** (`eslint-plugin-react-hooks`). It automatically detects violations of the Rules of Hooks and missing effect dependencies.
+
+---
+
+# Performance
+
+- Use the **React DevTools Profiler** to identify unnecessary renders.
+- Memoize expensive calculations with `useMemo`.
+- Memoize callback props with `useCallback` when passing them to memoized children.
+- Use `React.memo` for components with stable props.
+- Split large bundles with `React.lazy` and `Suspense`.
+- Cache server data with libraries such as TanStack Query instead of storing all fetched data in component state.
+
+---
+
+# Testing
+
+Use:
+
+- **Vitest** + **React Testing Library** for unit and integration tests.
+- **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+When testing custom Hooks, verify their observable behavior through components or dedicated Hook testing utilities rather than relying on implementation details.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures (they do not catch errors inside event handlers or async callbacks).
+- Enable **Strict Mode** during development to surface side-effect issues early.
+- Monitor production errors with tools like Sentry or OpenTelemetry.
+- Keep bundles small using code splitting and lazy loading.
+- Deploy Vite apps as static assets behind a CDN, or use Next.js for SSR/edge deployments.
+
+---
+
+# Pitfalls
+
+- **Never call Hooks inside `if`, `for`, `while`, callbacks, or nested functions.**
+- **Don't call Hooks from regular JavaScript utility functions**—extract reusable stateful logic into custom Hooks instead.
+- **Use the `eslint-plugin-react-hooks` plugin** to catch Hook rule violations and dependency issues automatically.
+
 ## Question 4. How do you handle events with parameters in functional components?
 
 ## Question 5. How do you render text, numbers, and expressions in JSX?
