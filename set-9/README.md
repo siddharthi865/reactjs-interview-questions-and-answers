@@ -488,6 +488,236 @@ For end-to-end verification, use **Playwright** to ensure navigating away from a
 
 ## Question 3. How do you use React Context with TypeScript?
 
+# Short answer
+
+Use **React Context with TypeScript** by creating a strongly typed context, providing it through a Provider component, and consuming it via a custom hook. A custom hook ensures consumers are used within the Provider and eliminates repetitive null checks.
+
+---
+
+# Explanation
+
+React Context allows you to share state across the component tree without prop drilling. With TypeScript, the goal is to:
+
+- Define a type for the context value.
+- Create the context with `undefined` as the default value.
+- Wrap your application (or part of it) with a Provider.
+- Expose a custom hook that throws an error if used outside the Provider.
+
+This pattern provides:
+
+- **Type safety**
+- **Better developer experience (IntelliSense)**
+- **Runtime safety**
+- **Reusable state management**
+
+### Context architecture
+
+```text
+App
+│
+└── ThemeProvider
+      │
+      ├── Header
+      ├── Sidebar
+      └── Content
+             │
+             ├── Button
+             └── Card
+```
+
+Every component inside `ThemeProvider` can access the shared context.
+
+### React 18 considerations
+
+React 18 introduced:
+
+- Concurrent Rendering
+- Automatic Batching
+
+When the context value changes:
+
+- Every consumer using that context re-renders.
+- React batches multiple state updates automatically.
+- Context updates are propagated consistently across concurrent renders.
+
+For frequently changing state (e.g., typing into an input), Context can trigger many re-renders. In such cases, consider:
+
+- Splitting contexts by concern (Theme, Auth, Settings).
+- Memoizing the provider value with `useMemo`.
+- Using state libraries like Redux, Zustand, or Jotai for highly dynamic global state.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest react-context-ts -- --template react-ts
+cd react-context-ts
+npm install
+npm run dev
+```
+
+### `ThemeContext.tsx`
+
+```tsx
+import { createContext, useContext, useMemo, useState, ReactNode } from "react";
+
+type Theme = "light" | "dark";
+
+interface ThemeContextType {
+  theme: Theme;
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+interface ThemeProviderProps {
+  children: ReactNode;
+}
+
+export function ThemeProvider({ children }: ThemeProviderProps) {
+  const [theme, setTheme] = useState<Theme>("light");
+
+  const value = useMemo(
+    () => ({
+      theme,
+      toggleTheme: () =>
+        setTheme((prev) => (prev === "light" ? "dark" : "light")),
+    }),
+    [theme],
+  );
+
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+
+  if (!context) {
+    throw new Error("useTheme must be used within ThemeProvider");
+  }
+
+  return context;
+}
+```
+
+### `App.tsx`
+
+```tsx
+import { ThemeProvider, useTheme } from "./ThemeContext";
+
+function Home() {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <>
+      <h2>Current Theme: {theme}</h2>
+      <button onClick={toggleTheme}>Toggle Theme</button>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <Home />
+    </ThemeProvider>
+  );
+}
+```
+
+This approach is type-safe, avoids unnecessary null assertions (`!`), and provides a clean API through the `useTheme` hook.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** for fast startup, HMR, and native ESM support.
+- **Next.js App Router** if you need SSR, React Server Components, or streaming.
+- **Remix** for route-centric data loading.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### ESM vs CommonJS
+
+- Modern React applications use **ES Modules (ESM)**.
+- Vite leverages native ESM during development for faster builds and efficient production bundling.
+
+---
+
+# Performance
+
+Context is convenient but should be used thoughtfully.
+
+### Best practices
+
+- Memoize the provider value using `useMemo`.
+- Split large contexts into smaller, focused contexts (e.g., Theme, Auth, User Preferences).
+- Avoid storing rapidly changing state (such as keystrokes or mouse positions) in Context.
+- Use **React Profiler** to identify unnecessary re-renders.
+- Apply **React.memo** to consumers where appropriate.
+- Use **useCallback** for stable callback references if passing functions deeply.
+- Use `React.lazy` and `Suspense` for route-level code splitting.
+- For server state, prefer **TanStack Query** instead of Context, as it provides caching, retries, and background refetching.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import { ThemeProvider } from "./ThemeContext";
+import App from "./App";
+
+test("renders theme provider", () => {
+  render(
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>,
+  );
+
+  expect(screen.getByText(/Current Theme/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright** to verify theme changes, authentication flows, or other context-driven behavior.
+
+---
+
+# Ops & Deployment
+
+- Wrap top-level providers in a predictable order (e.g., Auth → Theme → Query Client).
+- Use **Error Boundaries** to isolate rendering failures; they do not handle asynchronous errors or API failures.
+- Log unexpected provider or context errors to monitoring platforms such as Sentry or Datadog.
+- In SSR frameworks like Next.js, ensure context values are consistent between server and client to avoid hydration mismatches.
+- Keep provider scopes as narrow as practical to minimize unnecessary re-renders.
+
+---
+
+# Pitfalls
+
+- **Creating the context with a fake default value** (e.g., `{}` as `ThemeContextType`) instead of `undefined`, which can hide provider configuration mistakes.
+- **Not memoizing the provider value**, causing all consumers to re-render on every provider render.
+- **Putting unrelated state into one context**, leading to unnecessary updates across the application.
+
 ## Question 4. How do you implement tab navigation in React?
 
 ## Question 5. How do you implement a modal component with portals?
