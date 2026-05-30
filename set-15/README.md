@@ -665,6 +665,336 @@ Use **Playwright** for end-to-end tests covering login, role changes, redirects,
 
 ## Question 3. How do you integrate GraphQL with Apollo Client?
 
+# Short answer
+
+**Apollo Client** is the most popular GraphQL client for React. It manages GraphQL queries, mutations, caching, pagination, optimistic updates, and error handling using hooks such as `useQuery`, `useMutation`, and `useSubscription`.
+
+For production React apps, configure a single `ApolloClient` instance, wrap the app with `ApolloProvider`, and use generated TypeScript types (e.g., GraphQL Code Generator) for type-safe queries.
+
+---
+
+# Explanation
+
+Apollo Client sits between your React application and the GraphQL server.
+
+```text
+React Components
+       │
+useQuery / useMutation
+       │
+Apollo Client
+       │
+InMemory Cache
+       │
+HTTP/WebSocket Link
+       │
+GraphQL Server
+       │
+Database
+```
+
+Unlike REST, GraphQL lets clients request exactly the fields they need:
+
+```graphql
+query {
+  user(id: "1") {
+    id
+    name
+    email
+  }
+}
+```
+
+Benefits include:
+
+- Single endpoint (typically `/graphql`)
+- Strongly typed schema
+- Reduced over-fetching and under-fetching
+- Built-in introspection
+- Efficient client-side caching
+
+---
+
+## Apollo Client Architecture
+
+A typical production setup includes:
+
+```text
+src/
+ ├── apollo/
+ │     ├── client.ts
+ │     ├── links.ts
+ │     └── cache.ts
+ │
+ ├── graphql/
+ │     ├── queries/
+ │     ├── mutations/
+ │     └── generated/
+ │
+ ├── providers/
+ │     └── ApolloProvider.tsx
+ │
+ └── components/
+```
+
+This separation keeps networking, caching, and GraphQL documents organized.
+
+---
+
+## Creating the Apollo Client
+
+The client is configured once with:
+
+- GraphQL endpoint
+- Cache
+- Authentication headers
+- Error handling
+- Retry policies
+- Optional WebSocket link for subscriptions
+
+Example:
+
+```ts
+const client = new ApolloClient({
+  uri: "/graphql",
+  cache: new InMemoryCache(),
+});
+```
+
+For authenticated APIs, add an authorization link that injects a bearer token or relies on secure HttpOnly cookies.
+
+---
+
+## Fetching Data
+
+Use `useQuery` to execute GraphQL queries.
+
+It provides:
+
+- `loading`
+- `error`
+- `data`
+- `refetch`
+
+Example lifecycle:
+
+```text
+Component mounts
+       │
+useQuery()
+       │
+Cache?
+   │        │
+ Yes      No
+   │        │
+Return   Fetch Server
+   │        │
+ Update Cache
+```
+
+Apollo checks the cache first (depending on the fetch policy), reducing unnecessary network requests.
+
+---
+
+## Updating Data
+
+Use `useMutation` for:
+
+- Create
+- Update
+- Delete
+
+After a mutation you can:
+
+- Update the Apollo cache manually
+- Refetch affected queries
+- Use optimistic updates for immediate UI feedback
+
+Example flow:
+
+```text
+User clicks Like
+      │
+Optimistic UI
+      │
+Mutation
+      │
+Server Response
+      │
+Cache Updated
+```
+
+---
+
+## Cache Management
+
+`InMemoryCache` normalizes data by object identifiers (commonly `id` and `__typename`).
+
+Advantages:
+
+- Shared objects across queries
+- Automatic UI updates
+- Reduced network traffic
+
+Customize cache behavior using **type policies** for pagination, custom merge logic, and key fields.
+
+---
+
+## React 18 Considerations
+
+With React 18:
+
+- Automatic batching minimizes re-renders from GraphQL state updates.
+- Combine `React.lazy` and `Suspense` with route-level code splitting to reduce the initial bundle.
+- Use background refetching and cache-first strategies for responsive UIs.
+- Memoize expensive derived values rather than the raw Apollo results unless profiling indicates a need.
+
+---
+
+# Example
+
+**Scaffold with Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install @apollo/client graphql
+npm run dev
+```
+
+**main.tsx**
+
+```tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { ApolloClient, ApolloProvider, InMemoryCache } from "@apollo/client";
+import App from "./App";
+
+const client = new ApolloClient({
+  uri: "https://example.com/graphql",
+  cache: new InMemoryCache(),
+});
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <ApolloProvider client={client}>
+    <App />
+  </ApolloProvider>,
+);
+```
+
+**App.tsx**
+
+```tsx
+import { gql, useQuery } from "@apollo/client";
+
+const GET_USERS = gql`
+  query GetUsers {
+    users {
+      id
+      name
+      email
+    }
+  }
+`;
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+type GetUsersResponse = {
+  users: User[];
+};
+
+export default function App() {
+  const { loading, error, data } = useQuery<GetUsersResponse>(GET_USERS);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error loading users.</p>;
+
+  return (
+    <ul>
+      {data?.users.map((user) => (
+        <li key={user.id}>
+          {user.name} ({user.email})
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite (fast HMR, optimized production builds).
+- **Module system:** Use **ESM** (`import`/`export`) for modern tooling.
+- **Type safety:** Use **GraphQL Code Generator** to generate typed hooks and TypeScript models directly from your GraphQL schema and operations.
+- **Frameworks:** For SSR and React Server Components, **Next.js App Router** integrates well with GraphQL. **Remix** is another solid option for server-driven data loading.
+
+Run:
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+# Performance
+
+- **Caching:** Choose appropriate Apollo fetch policies (`cache-first`, `cache-and-network`, `network-only`) based on freshness requirements.
+- **Normalization:** Configure cache **type policies** for efficient object reuse and pagination.
+- **Memoization:** Use `React.memo`, `useMemo`, and `useCallback` only where profiling shows unnecessary renders.
+- **Profiling:** Use the React DevTools Profiler to identify rendering bottlenecks after GraphQL responses.
+- **Code splitting:** Lazy-load GraphQL-heavy routes and components with `React.lazy` and `Suspense`.
+- **Optimistic updates:** Improve perceived performance for create/update/delete operations without waiting for the server.
+
+---
+
+# Testing
+
+Use **Vitest** and **React Testing Library** with Apollo's testing utilities.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { MockedProvider } from "@apollo/client/testing";
+
+// Render component with mocked GraphQL responses
+```
+
+Use **Playwright** for end-to-end testing against a real or test GraphQL backend.
+
+---
+
+# Ops & Deployment
+
+- Centralize authentication using Apollo Links to attach tokens or rely on secure HttpOnly cookies.
+- Configure global error handling for GraphQL and network errors with an `ErrorLink`.
+- Monitor request latency and failures using observability platforms such as Sentry or OpenTelemetry.
+- Use persisted queries or automatic persisted queries (APQ) where supported to reduce payload sizes.
+- Deploy static assets through a CDN and ensure GraphQL endpoints are protected with authentication, authorization, and rate limiting.
+
+---
+
+# Pitfalls
+
+- **Refetching excessively** instead of leveraging Apollo's normalized cache and cache updates.
+- **Ignoring loading and error states**, resulting in poor user experience and unhandled failures.
+- **Skipping generated TypeScript types**, leading to runtime errors and weaker type safety.
+
 ## Question 4. How do you implement lazy-loaded routes with React Router?
 
 ## Question 5. How do you implement React Query for data fetching and caching?
