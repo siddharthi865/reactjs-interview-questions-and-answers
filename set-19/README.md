@@ -593,6 +593,277 @@ For end-to-end testing, use **Playwright** to validate complete user interaction
 
 ## Question 3. How do you implement a toast notification system globally?
 
+# Short answer
+
+A global toast notification system is typically implemented using **React Context** (or a lightweight state library like Zustand) with a **ToastProvider** that manages toast state and exposes methods such as `success()`, `error()`, `info()`, and `remove()`. The provider is mounted once near the application root, allowing any component to trigger notifications without prop drilling.
+
+---
+
+# Explanation
+
+A production-ready toast system consists of three parts:
+
+1. **Toast Context**
+   - Exposes functions like `showToast()`, `success()`, and `removeToast()`.
+   - Accessible from any component through a custom hook.
+
+2. **Toast Provider**
+   - Stores an array of active toasts.
+   - Handles auto-dismiss timers.
+   - Renders the toast container.
+
+3. **Toast Component**
+   - Displays individual notifications.
+   - Supports variants (success, error, warning, info).
+   - Can include actions, icons, progress bars, and animations.
+
+Architecture:
+
+```text
+App
+│
+├── ToastProvider
+│     │
+│     ├── ToastContainer
+│     │      ├── Toast #1
+│     │      ├── Toast #2
+│     │      └── Toast #3
+│     │
+│     └── Context API
+│
+├── Dashboard
+├── Users
+├── Orders
+└── Settings
+
+Any component
+
+↓
+
+useToast().success("Saved!")
+```
+
+### Toast lifecycle
+
+```text
+User clicks Save
+
+↓
+
+API succeeds
+
+↓
+
+showToast({
+  type: "success",
+  message: "Profile updated"
+})
+
+↓
+
+Toast appears
+
+↓
+
+Auto-dismiss after 3 seconds
+
+↓
+
+Removed from state
+```
+
+### React 18 considerations
+
+React 18 improves toast systems by:
+
+- **Automatic batching** groups multiple toast-related state updates into a single render.
+- **Concurrent rendering** helps keep the UI responsive even when notifications are triggered during expensive updates.
+- Toasts are typically rendered through a **Portal**, preventing layout issues and avoiding interference with the main application tree.
+
+### State management trade-offs
+
+| Approach                                                   | Best for          | Pros               | Cons                                 |
+| ---------------------------------------------------------- | ----------------- | ------------------ | ------------------------------------ |
+| Context API                                                | Most apps         | Simple, built-in   | Provider re-renders unless optimized |
+| Zustand                                                    | Medium/Large apps | Minimal re-renders | Additional dependency                |
+| Redux Toolkit                                              | Enterprise apps   | Centralized state  | More boilerplate                     |
+| Third-party libraries (React Hot Toast, Sonner, Notistack) | Production apps   | Feature-rich       | Less customization of internals      |
+
+---
+
+# Example
+
+Using **Vite + React + TypeScript**.
+
+## Scaffold
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `ToastProvider.tsx`
+
+```tsx
+import { createContext, useContext, useState, ReactNode } from "react";
+
+type Toast = {
+  id: string;
+  message: string;
+};
+
+type ToastContextType = {
+  showToast: (message: string) => void;
+};
+
+const ToastContext = createContext<ToastContextType | null>(null);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = (message: string) => {
+    const id = crypto.randomUUID();
+
+    setToasts((prev) => [...prev, { id, message }]);
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  };
+
+  return (
+    <ToastContext.Provider value={{ showToast }}>
+      {children}
+
+      <div
+        style={{
+          position: "fixed",
+          top: 20,
+          right: 20,
+        }}
+      >
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            style={{
+              marginBottom: 8,
+              padding: 12,
+              background: "#333",
+              color: "#fff",
+              borderRadius: 6,
+            }}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+
+  if (!context) {
+    throw new Error("useToast must be used inside ToastProvider");
+  }
+
+  return context;
+}
+```
+
+### Usage
+
+```tsx
+import { useToast } from "./ToastProvider";
+
+export default function SaveButton() {
+  const { showToast } = useToast();
+
+  return (
+    <button onClick={() => showToast("Profile saved successfully!")}>
+      Save
+    </button>
+  );
+}
+```
+
+Wrap your application once:
+
+```tsx
+<ToastProvider>
+  <App />
+</ToastProvider>
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** Vite + React + TypeScript.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite (fast HMR, Rollup for production builds).
+- **Module system:** Prefer **ES Modules (ESM)**. CommonJS is mainly for legacy Node.js environments.
+- **Framework alternatives:** Next.js (App Router, SSR, Server Components) or Remix for full-stack routing and data loading.
+
+For production applications, well-maintained libraries such as **React Hot Toast**, **Sonner**, or **Notistack** provide accessibility, animations, promise-based APIs, and portal support out of the box.
+
+---
+
+# Performance
+
+- Render the toast container once at the application root.
+- Use **React Portal** to avoid layout shifts and z-index conflicts.
+- Memoize toast components with `React.memo` if they receive stable props.
+- Memoize context values with `useMemo` to avoid unnecessary consumer re-renders.
+- Memoize callbacks with `useCallback` when passing them to memoized children.
+- Use the React DevTools **Profiler** to verify that only the toast container re-renders when notifications change.
+- Code-split rarely used notification-related UI (e.g., detailed error dialogs) with `React.lazy()` and `Suspense`.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test scenarios:
+
+- Toast appears after calling `showToast()`.
+- Toast automatically disappears after the timeout.
+- Multiple toasts stack correctly.
+- Manual dismissal removes only the selected toast.
+- Different variants (success, error, warning) render the correct styling and accessibility attributes.
+
+Use **Playwright** for end-to-end testing to verify user-visible notifications during real workflows.
+
+---
+
+# Ops & Deployment
+
+- Render toasts through a **React Portal** attached to `document.body`.
+- Wrap the application in an **Error Boundary** so uncaught errors can trigger a global error toast while preventing the UI from crashing completely.
+- Integrate logging tools such as Sentry or LogRocket to capture errors alongside toast notifications.
+- In SSR frameworks (e.g., Next.js), ensure the toast provider is a client component (`"use client"` when required) since notifications are interactive.
+- Keep the notification system lightweight to avoid increasing the initial bundle size.
+
+---
+
+# Pitfalls
+
+- **Don't create multiple `ToastProvider` instances** unless separate notification scopes are intentionally required.
+- **Always clear auto-dismiss timers** if a toast is manually removed or the provider unmounts to prevent memory leaks.
+- **Ensure accessibility** by using appropriate ARIA roles (e.g., `role="status"` or `role="alert"`), keyboard support, and sufficient color contrast.
+
 ## Question 4. How do you implement a live search component that fetches results dynamically?
 
 ## Question 5. How do you create a reusable card component with dynamic content?
