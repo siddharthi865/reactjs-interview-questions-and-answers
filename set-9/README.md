@@ -291,6 +291,201 @@ In production, pair global error handling with:
 
 ## Question 2. How do you prevent memory leaks with subscriptions in React?
 
+# Short answer
+
+Prevent memory leaks by **cleaning up subscriptions inside the `useEffect` cleanup function**. Always unsubscribe from event listeners, WebSocket connections, timers, observers, and external libraries when a component unmounts or when dependencies change. In React 18, effects may mount, clean up, and re-run more than once in development (Strict Mode), so cleanup logic must be idempotent.
+
+---
+
+# Explanation
+
+A memory leak occurs when a component is removed from the UI, but resources it created continue to exist. Common causes include:
+
+- Event listeners (`window`, `document`)
+- WebSocket connections
+- Server-Sent Events (SSE)
+- Timers (`setInterval`, `setTimeout`)
+- Observers (`IntersectionObserver`, `ResizeObserver`, `MutationObserver`)
+- RxJS subscriptions
+- External libraries that require explicit cleanup
+
+React's `useEffect` hook supports cleanup by returning a function:
+
+```tsx
+useEffect(() => {
+  // Subscribe or allocate resource
+
+  return () => {
+    // Cleanup before unmount or dependency change
+  };
+}, []);
+```
+
+The cleanup function runs:
+
+1. Before the component unmounts.
+2. Before the effect re-runs because one of its dependencies changed.
+
+### React 18 rendering behavior
+
+React 18 introduced:
+
+- Concurrent Rendering
+- Automatic Batching
+- Development **Strict Mode** effect re-execution
+
+In development, Strict Mode intentionally mounts, cleans up, and remounts components to help detect unsafe side effects. If your cleanup is missing or incomplete, you'll often see duplicate event handlers, multiple WebSocket connections, or repeated timers during development—an indication that the effect isn't managing resources correctly.
+
+---
+
+## Common subscription lifecycle
+
+```text
+Component Mount
+      │
+      ▼
+useEffect runs
+      │
+      ▼
+Subscribe / Add Listener
+      │
+      ▼
+Component updates (dependencies change)?
+      │
+   Yes ▼
+Cleanup previous subscription
+      │
+      ▼
+Create new subscription
+      │
+      ▼
+Component Unmount
+      │
+      ▼
+Final Cleanup
+```
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest react-subscriptions -- --template react-ts
+cd react-subscriptions
+npm install
+npm run dev
+```
+
+### WebSocket subscription with cleanup
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function Notifications() {
+  const [messages, setMessages] = useState<string[]>([]);
+
+  useEffect(() => {
+    const socket = new WebSocket("wss://example.com/ws");
+
+    socket.onmessage = (event) => {
+      setMessages((prev) => [...prev, event.data]);
+    };
+
+    return () => {
+      socket.close(); // Prevent memory leak
+    };
+  }, []);
+
+  return (
+    <ul>
+      {messages.map((message, index) => (
+        <li key={index}>{message}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+The WebSocket is opened when the component mounts and is always closed when the component unmounts, preventing lingering connections.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** for fast development using native ESM and Hot Module Replacement (HMR).
+- **Next.js App Router** when SSR, React Server Components, or streaming are needed.
+- **Remix** for route-based data loading and cleanup.
+
+Avoid **Create React App (CRA)** since it is deprecated.
+
+### ESM vs CommonJS
+
+- Modern React projects use **ES Modules (ESM)**.
+- Vite serves ESM during development and bundles optimized production assets.
+
+---
+
+# Performance
+
+Proper cleanup improves both memory usage and application performance.
+
+Best practices:
+
+- Use **React Profiler** to identify unnecessary re-renders caused by repeated subscriptions.
+- Use **React.memo** to avoid re-rendering child components unnecessarily.
+- Use **useCallback** when passing event handlers to subscription APIs that depend on stable references.
+- Use **useMemo** for expensive derived values rather than recalculating after every update.
+- Code split subscription-heavy routes using `React.lazy()` and `Suspense`.
+- For server data, prefer **TanStack Query** or **SWR**, which manage subscriptions, caching, retries, and cancellation internally.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test idea:
+
+```tsx
+it("closes the WebSocket when the component unmounts", () => {
+  // Mock the WebSocket API
+  // Render the component
+  // Unmount it
+  // Assert that socket.close() was called
+});
+```
+
+For end-to-end verification, use **Playwright** to ensure navigating away from a page doesn't leave active connections or duplicate subscriptions.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** for rendering errors; they do not clean up or catch asynchronous subscription issues.
+- Log unexpected connection closures or subscription failures to monitoring platforms such as Sentry or Datadog.
+- Ensure subscriptions are established only on the client when using SSR frameworks like Next.js.
+- Monitor browser memory usage and long-lived connections in production using browser developer tools and observability platforms.
+
+---
+
+# Pitfalls
+
+- **Forgetting the cleanup function**, leaving event listeners, timers, or sockets active after unmount.
+- **Using incorrect dependency arrays**, causing multiple subscriptions to accumulate instead of replacing the previous one.
+- **Assuming Strict Mode causes bugs**; duplicate effect execution in development is intentional and helps reveal missing cleanup logic.
+
 ## Question 3. How do you use React Context with TypeScript?
 
 ## Question 4. How do you implement tab navigation in React?
