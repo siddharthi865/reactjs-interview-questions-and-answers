@@ -318,6 +318,275 @@ For end-to-end testing, use **Playwright**.
 
 ## Question 2. How do you render a "loading" spinner while data is being fetched?
 
+# How do you render a "loading" spinner while data is being fetched?
+
+## Short answer
+
+Render a loading spinner by maintaining a loading state (e.g., `isLoading`) and conditionally rendering either the spinner or the fetched content. Set `isLoading` to `true` before starting the request and `false` when it completes (or fails).
+
+```tsx
+return isLoading ? <Spinner /> : <UserList users={users} />;
+```
+
+---
+
+# Explanation
+
+In React, asynchronous data fetching typically involves three UI states:
+
+1. **Loading** – Request is in progress.
+2. **Success** – Data has been loaded.
+3. **Error** – Request failed.
+
+A common pattern is:
+
+```text
+Component mounts
+       ↓
+isLoading = true
+       ↓
+Fetch data
+       ↓
+Success → Render data
+Failure → Render error
+       ↓
+isLoading = false
+```
+
+Instead of manually manipulating the DOM, React declaratively renders different UI based on state.
+
+### Basic flow
+
+```tsx
+const [data, setData] = useState([]);
+const [isLoading, setIsLoading] = useState(true);
+const [error, setError] = useState<string | null>(null);
+```
+
+During fetch:
+
+```tsx
+setIsLoading(true);
+
+try {
+  const result = await fetch(...);
+  setData(...);
+} catch {
+  setError("Something went wrong");
+} finally {
+  setIsLoading(false);
+}
+```
+
+Using `finally` ensures the spinner disappears whether the request succeeds or fails.
+
+---
+
+## React 18 Rendering Behavior
+
+With React 18:
+
+- **Automatic batching** groups multiple state updates into a single render.
+- Concurrent rendering keeps the UI responsive while updates are scheduled.
+- The component re-renders automatically when `isLoading`, `data`, or `error` changes.
+
+Example:
+
+```tsx
+setData(users);
+setIsLoading(false);
+```
+
+These updates are batched into one render.
+
+---
+
+## Component Architecture
+
+Separate loading UI into reusable components.
+
+```tsx
+<Page>
+  <LoadingSpinner />
+</Page>
+```
+
+instead of repeating:
+
+```tsx
+<div>Loading...</div>
+```
+
+throughout the application.
+
+Example:
+
+```tsx
+function LoadingSpinner() {
+  return <div className="spinner">Loading...</div>;
+}
+```
+
+Large applications often standardize loading indicators for consistency.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app with Vite (recommended):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`App.tsx`**
+
+```tsx
+import { useEffect, useState } from "react";
+import "./App.css";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function App() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function fetchUsers() {
+      try {
+        setIsLoading(true);
+
+        const response = await fetch(
+          "https://jsonplaceholder.typicode.com/users",
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch users");
+        }
+
+        const data: User[] = await response.json();
+        setUsers(data);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchUsers();
+  }, []);
+
+  if (isLoading) {
+    return <div className="spinner">Loading...</div>;
+  }
+
+  if (error) {
+    return <p>{error}</p>;
+  }
+
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+**`App.css`**
+
+```css
+.spinner {
+  font-size: 20px;
+  padding: 20px;
+  text-align: center;
+}
+```
+
+This example displays a loading message while fetching data, then renders the user list or an error message.
+
+---
+
+# Tooling & Setup
+
+- **Vite** is recommended for new React projects due to its fast dev server, HMR, and optimized production builds.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Use **Next.js App Router** when you need SSR, streaming, or Server Components.
+- Vite is ESM-first, providing native module loading during development and Rollup-based production bundling.
+
+---
+
+# Performance
+
+For production applications:
+
+- Prefer **TanStack Query** or **SWR** over manual `useEffect` fetching. They provide built-in loading states, caching, retries, background refetching, and request deduplication.
+- Use **React Profiler** to identify unnecessary re-renders.
+- Memoize expensive child components with `React.memo`.
+- Use `useCallback` for callbacks passed to memoized components.
+- Lazy load routes/components with `React.lazy` and `Suspense`.
+- Cache API responses to reduce repeated network requests.
+
+Example with TanStack Query:
+
+```tsx
+const { data, isLoading, error } = useQuery({
+  queryKey: ["users"],
+  queryFn: fetchUsers,
+});
+```
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows loading spinner initially", () => {
+  render(<App />);
+  expect(screen.getByText(/loading/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright** to verify loading indicators appear and disappear correctly during network requests.
+
+---
+
+# Ops & Deployment
+
+- Handle loading, success, and error states consistently across the application.
+- Use **Error Boundaries** for rendering errors (they do not catch async fetch errors, so handle those separately).
+- For SSR frameworks like Next.js, use server-side data fetching where appropriate to reduce client-side loading states and improve SEO.
+- Keep bundles small with code splitting and deploy static assets through a CDN.
+
+---
+
+# Pitfalls
+
+- **Always reset `isLoading` in a `finally` block**, otherwise the spinner may never disappear after an error.
+- **Don't render only a spinner indefinitely**; include proper error and empty-state UIs.
+- **Avoid race conditions** by canceling or ignoring outdated requests when components unmount or when multiple fetches can overlap (e.g., using `AbortController`).
+
 ## Question 3. How do you create a reusable input component?
 
 ## Question 4. How do you handle simple inline validation for an input field?
