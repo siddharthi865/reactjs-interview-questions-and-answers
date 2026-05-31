@@ -198,6 +198,257 @@ Tip: `useMemo` is usually tested indirectly by verifying performance-sensitive b
 
 ## Question 2. What is useCallback and why is it useful?
 
+## Short answer
+
+`useCallback` is a React Hook that memoizes a **function reference**, returning the same function instance across renders until one of its dependencies changes. It is useful for preventing unnecessary re-renders of memoized child components and avoiding repeated setup/cleanup in Hooks that depend on callback references.
+
+---
+
+## Explanation
+
+### What `useCallback` does
+
+Normally, every time a component re-renders, JavaScript creates new function objects.
+
+```tsx
+const handleClick = () => {
+  console.log("Clicked");
+};
+```
+
+Even though the logic is identical, `handleClick` is a **new function reference** on every render.
+
+`useCallback` caches that function:
+
+```tsx
+const handleClick = useCallback(() => {
+  console.log("Clicked");
+}, []);
+```
+
+React returns the **same function instance** until one of the dependencies changes.
+
+---
+
+### Syntax
+
+```tsx
+const memoizedCallback = useCallback(() => {
+  // callback logic
+}, [dependencies]);
+```
+
+---
+
+### Rendering behavior (React 18+)
+
+React 18 automatically batches state updates, but it **does not automatically memoize functions**.
+
+Without `useCallback`:
+
+- Parent re-renders
+- New callback created
+- Memoized child (`React.memo`) sees a changed prop
+- Child re-renders unnecessarily
+
+With `useCallback`:
+
+- Parent re-renders
+- Callback reference remains stable
+- `React.memo` child can skip rendering if other props are unchanged
+
+---
+
+### Common use cases
+
+#### 1. Prevent unnecessary child re-renders
+
+Works especially well with `React.memo`.
+
+#### 2. Stable dependencies in Hooks
+
+Useful when passing callbacks to:
+
+- `useEffect`
+- `useMemo`
+- Custom hooks
+
+to avoid unnecessary effect executions.
+
+#### 3. Event handlers passed deep into component trees
+
+Keeps callback identity stable when many memoized components receive the same handler.
+
+---
+
+### `useMemo` vs `useCallback`
+
+| Hook          | Memoizes       | Returns  |
+| ------------- | -------------- | -------- |
+| `useMemo`     | Computed value | Value    |
+| `useCallback` | Function       | Function |
+
+Internally:
+
+```tsx
+useCallback(fn, deps);
+```
+
+is conceptually equivalent to:
+
+```tsx
+useMemo(() => fn, deps);
+```
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### Parent and memoized child
+
+```tsx
+import React, { memo, useCallback, useState } from "react";
+
+type ButtonProps = {
+  onClick: () => void;
+};
+
+const Button = memo(({ onClick }: ButtonProps) => {
+  console.log("Button rendered");
+
+  return <button onClick={onClick}>Increment</button>;
+});
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  const [theme, setTheme] = useState("light");
+
+  const increment = useCallback(() => {
+    setCount((c) => c + 1);
+  }, []);
+
+  return (
+    <>
+      <h2>Count: {count}</h2>
+
+      <Button onClick={increment} />
+
+      <button onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+        Toggle Theme
+      </button>
+    </>
+  );
+}
+```
+
+### What happens?
+
+Without `useCallback`:
+
+- Toggling the theme creates a new `increment` function.
+- `Button` receives a new function prop.
+- `React.memo` cannot skip rendering.
+
+With `useCallback`:
+
+- `increment` keeps the same reference.
+- `Button` skips re-rendering when only the theme changes.
+
+---
+
+## Tooling & Setup
+
+- Prefer **Vite + React + TypeScript** for new projects.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Vite provides:
+  - Fast HMR
+  - Native ESM during development
+  - Rollup for optimized production bundles
+
+- Use **Next.js** when you need SSR, Server Components, or full-stack routing.
+
+---
+
+## Performance
+
+Use `useCallback` only when it provides measurable benefit.
+
+Good candidates:
+
+- Functions passed to `React.memo` components
+- Dependencies of `useEffect`
+- Dependencies of custom hooks
+- Expensive child component trees
+
+Avoid using it for:
+
+- Every event handler
+- Small components
+- Functions never passed as props
+
+Profile first with the **React DevTools Profiler** to confirm it reduces unnecessary renders.
+
+Other optimizations include:
+
+- `React.memo` for component memoization
+- `useMemo` for expensive computed values
+- `React.lazy` and `Suspense` for code splitting
+- Data caching with libraries such as TanStack Query or SWR
+
+---
+
+## Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders increment button", () => {
+  render(<App />);
+  expect(screen.getByText("Increment")).toBeInTheDocument();
+});
+```
+
+Rather than testing `useCallback` directly, test that memoized components avoid unnecessary renders or that behavior remains correct after state updates.
+
+---
+
+## Ops & Deployment
+
+- Use React DevTools Profiler to verify callback memoization is actually reducing renders.
+- Add logging only in development to detect unnecessary re-renders.
+- Wrap UI sections with Error Boundaries for resilience.
+- Consider SSR (Next.js) for improved SEO and initial load performance.
+- Optimize bundles with dynamic imports and lazy loading.
+- Deploy optimized builds to a CDN (e.g., Vercel, Netlify, Cloudflare Pages).
+
+---
+
+## Pitfalls
+
+- **Overusing `useCallback`** can add unnecessary complexity and memory overhead.
+- **Missing dependencies** can lead to stale closures and bugs; rely on the `eslint-plugin-react-hooks` exhaustive-deps rule.
+- **Expecting performance gains everywhere**—`useCallback` is most effective when paired with `React.memo` or when callback identity matters.
+
 ## Question 3. Explain useReducer hook with an example
 
 ## Question 4. Difference between useState and useReducer
