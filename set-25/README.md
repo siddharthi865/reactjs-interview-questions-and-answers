@@ -262,6 +262,236 @@ For end-to-end verification, use **Playwright** to simulate real user interactio
 
 ## Question 2. How do you implement multi-tab state synchronization with localStorage events?
 
+# Short answer
+
+**Multi-tab state synchronization** is implemented by listening to the browser's **`storage`** event. When one tab updates `localStorage`, all **other open tabs** receive the event and can update their React state accordingly. Note that the tab making the change **does not receive** the `storage` event, so it must update its own state directly.
+
+---
+
+# Explanation
+
+Imagine a user has your application open in two tabs.
+
+Without synchronization:
+
+```
+Tab A                  Tab B
+
+Theme = Light          Theme = Light
+
+↓ User changes theme
+
+Theme = Dark           Theme = Light ❌
+```
+
+With `storage` events:
+
+```
+Tab A                  Tab B
+
+Theme = Light          Theme = Light
+
+↓ User changes theme
+
+Save to localStorage
+Update own state
+
+storage event
+---------------------------->
+
+Theme = Dark           Theme = Dark ✅
+```
+
+## How it works
+
+1. User updates state.
+2. Update React state immediately.
+3. Persist the value to `localStorage`.
+4. Other tabs receive the `storage` event.
+5. Parse the new value and update their state.
+
+React only manages state within a single browser tab. The browser provides the `storage` event to synchronize changes across tabs.
+
+### Key characteristics
+
+- Fires only in **other tabs/windows** of the same origin.
+- Does **not** fire in the tab that called `localStorage.setItem()`.
+- Includes:
+  - `key`
+  - `oldValue`
+  - `newValue`
+  - `storageArea`
+  - `url`
+
+---
+
+## React 18 considerations
+
+With React 18:
+
+- Automatic batching minimizes unnecessary renders when multiple state updates occur together.
+- Register the event listener inside `useEffect` and clean it up on unmount.
+- Prefer immutable updates so React can efficiently detect changes.
+- For shared application state, encapsulate the synchronization logic in a custom hook or external store.
+
+For larger applications, `useSyncExternalStore` is a better fit for subscribing to browser-backed external state because it provides a consistent subscription API and avoids tearing during concurrent rendering.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest multi-tab-demo -- --template react-ts
+cd multi-tab-demo
+npm install
+npm run dev
+```
+
+`ThemeSwitcher.tsx`
+
+```tsx
+import { useEffect, useState } from "react";
+
+const STORAGE_KEY = "theme";
+
+type Theme = "light" | "dark";
+
+export default function ThemeSwitcher() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem(STORAGE_KEY) as Theme) ?? "light";
+  });
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY && event.newValue) {
+        setTheme(event.newValue as Theme);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme: Theme = theme === "light" ? "dark" : "light";
+
+    // Update current tab
+    setTheme(nextTheme);
+
+    // Notify other tabs
+    localStorage.setItem(STORAGE_KEY, nextTheme);
+  };
+
+  return (
+    <div>
+      <h2>Current theme: {theme}</h2>
+
+      <button onClick={toggleTheme}>Toggle Theme</button>
+    </div>
+  );
+}
+```
+
+If two tabs are open:
+
+```
+Tab A clicks Toggle
+
+↓
+
+setTheme("dark")
+localStorage.setItem()
+
+↓
+
+Tab B receives storage event
+
+↓
+
+setTheme("dark")
+```
+
+Both tabs stay synchronized without polling.
+
+---
+
+# Tooling & Setup
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+Recommended options:
+
+- **Vite** for client-side React applications with fast startup, native ESM support during development, and optimized production builds.
+- **Next.js (App Router)** when you need SSR, Server Components, or full-stack capabilities. Access browser APIs like `localStorage` only in Client Components.
+- **Remix** for data-centric routing and progressive enhancement.
+
+Module notes:
+
+- Use **ES Modules (ESM)** (`import`/`export`), which are the standard in modern React tooling.
+- Vite serves ESM directly in development and bundles with Rollup for production.
+
+---
+
+# Performance
+
+For production applications:
+
+- Use the **React Profiler** to verify that only components depending on synchronized state re-render.
+- Wrap expensive child components with `React.memo`.
+- Use `useCallback` when passing handlers to memoized children.
+- Use `useMemo` for expensive derived values.
+- Code-split routes and large features using `React.lazy()` and `Suspense`.
+- If many components consume the synchronized state, expose it through a custom hook built on `useSyncExternalStore` instead of attaching multiple `storage` listeners.
+
+For high-frequency cross-tab communication (e.g., collaborative editing), consider the **BroadcastChannel API**, which is designed for messaging between tabs and is often more suitable than repeatedly writing to `localStorage`.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for component tests.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/user-event
+```
+
+Test scenarios:
+
+- Initial state is loaded from `localStorage`.
+- Clicking updates the current tab immediately.
+- A simulated `storage` event updates the component.
+- Event listeners are cleaned up on unmount.
+- Invalid or missing values are handled gracefully.
+
+Use **Playwright** to verify synchronization between two browser tabs in an end-to-end test.
+
+---
+
+# Ops & Deployment
+
+- Keep synchronized data small and serializable (typically JSON).
+- Always wrap `JSON.parse` in `try/catch` when storing structured data.
+- Don't store sensitive information such as authentication tokens in `localStorage`; prefer secure cookies for authentication.
+- Error Boundaries do not catch errors thrown in `storage` event handlers—handle parsing and validation explicitly.
+- Remember that `localStorage` is unavailable during server-side rendering, so guard access with browser checks or initialize inside effects when using SSR frameworks.
+
+---
+
+# Pitfalls
+
+- **Expecting the `storage` event to fire in the same tab** that called `localStorage.setItem()`—it only fires in other tabs.
+- **Forgetting to remove the event listener**, causing memory leaks or duplicate updates.
+- **Not validating or safely parsing stored values**, which can crash the application if the stored data is malformed.
+
 ## Question 3. How do you implement dynamic component rendering based on a JSON configuration?
 
 ## Question 4. How do you implement complex drag-and-drop dashboards?
