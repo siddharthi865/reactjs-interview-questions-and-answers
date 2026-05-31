@@ -375,6 +375,400 @@ Typical Redux tests include:
 
 ## Question 2. How do you implement Redux selectors and memoization?
 
+# How do you implement Redux selectors and memoization?
+
+## Short answer
+
+Redux selectors are functions that read data from the Redux store. For simple lookups, use plain selectors. For derived or computationally expensive data, use **memoized selectors** with **Reselect** (included in Redux Toolkit) using `createSelector()`. Memoized selectors only recompute when their input values change, reducing unnecessary work and improving rendering performance.
+
+---
+
+# Explanation
+
+A **selector** encapsulates how state is read from the Redux store.
+
+Instead of scattering state access throughout components:
+
+```tsx
+const todos = useSelector((state: RootState) => state.todos.items);
+```
+
+you centralize it:
+
+```tsx
+const todos = useSelector(selectTodos);
+```
+
+This provides:
+
+- Better code reuse
+- Easier refactoring
+- Better TypeScript support
+- Encapsulation of state shape
+
+---
+
+## Types of Selectors
+
+### 1. Basic Selector
+
+Simply returns part of the state.
+
+```ts
+export const selectTodos = (state: RootState) => state.todos.items;
+```
+
+No memoization is needed because there is no computation.
+
+---
+
+### 2. Derived Selector
+
+Computes new data.
+
+Example:
+
+```text
+Todos
+ ↓
+Filter completed
+ ↓
+Sort
+ ↓
+Count
+```
+
+Without memoization:
+
+```tsx
+const completed = todos.filter((todo) => todo.completed);
+```
+
+runs every time the component renders.
+
+For large datasets, this becomes expensive.
+
+---
+
+## Memoized Selectors with `createSelector`
+
+Use `createSelector` from Redux Toolkit (re-exported from Reselect):
+
+```ts
+createSelector(inputSelectors, resultFunction);
+```
+
+Example:
+
+```ts
+const selectCompletedTodos = createSelector([selectTodos], (todos) =>
+  todos.filter((todo) => todo.completed),
+);
+```
+
+Workflow:
+
+```text
+State Changed
+      │
+      ▼
+Input Selector
+      │
+      ▼
+Input Changed?
+   │         │
+  No        Yes
+   │         │
+Return      Recompute
+Cached      Result
+Value
+```
+
+If `todos` hasn't changed by reference, the cached result is returned.
+
+---
+
+## How Memoization Works
+
+Suppose:
+
+```ts
+todos = [...]
+```
+
+First render:
+
+```text
+Filter executes
+```
+
+Second render:
+
+```text
+Same todos reference
+↓
+Cached value returned
+```
+
+Third render:
+
+```text
+User adds todo
+↓
+New array reference
+↓
+Filter executes again
+```
+
+Only actual changes trigger recomputation.
+
+---
+
+## React Rendering Behavior
+
+`useSelector` subscribes to the Redux store.
+
+When an action is dispatched:
+
+```text
+Dispatch
+    ↓
+Store updates
+    ↓
+Selector executes
+    ↓
+Compare previous result
+    ↓
+Changed?
+    ↓
+Component re-renders
+```
+
+If a memoized selector returns the same cached reference, React Redux can avoid unnecessary re-renders caused by derived data changing identity.
+
+---
+
+## React 18 Considerations
+
+React 18 introduced:
+
+- Concurrent rendering
+- Automatic batching
+- Improved scheduling
+
+Selectors should remain:
+
+- Pure
+- Deterministic
+- Free of side effects
+
+Never perform:
+
+- API calls
+- Logging with side effects
+- State mutations
+
+inside selectors.
+
+---
+
+## When to Memoize
+
+**Use memoization for:**
+
+- Filtering large arrays
+- Sorting data
+- Aggregations
+- Grouping
+- Expensive calculations
+- Derived dashboards
+- Search results
+
+**Do not memoize:**
+
+```ts
+state.user.name;
+```
+
+or
+
+```ts
+state.theme;
+```
+
+Simple property lookups are already very fast.
+
+---
+
+# Example
+
+### Create a Vite project
+
+```bash
+npm create vite@latest redux-selectors-demo -- --template react-ts
+cd redux-selectors-demo
+npm install
+npm install @reduxjs/toolkit react-redux
+npm run dev
+```
+
+### `store.ts`
+
+```tsx
+import { configureStore, createSlice, createSelector } from "@reduxjs/toolkit";
+
+type Todo = {
+  id: number;
+  text: string;
+  completed: boolean;
+};
+
+const todosSlice = createSlice({
+  name: "todos",
+  initialState: {
+    items: [
+      { id: 1, text: "Learn Redux", completed: true },
+      { id: 2, text: "Learn React", completed: false },
+    ] as Todo[],
+  },
+  reducers: {},
+});
+
+export const store = configureStore({
+  reducer: {
+    todos: todosSlice.reducer,
+  },
+});
+
+export type RootState = ReturnType<typeof store.getState>;
+
+// Basic selector
+export const selectTodos = (state: RootState) => state.todos.items;
+
+// Memoized selector
+export const selectCompletedTodos = createSelector([selectTodos], (todos) =>
+  todos.filter((todo) => todo.completed),
+);
+```
+
+### `App.tsx`
+
+```tsx
+import { useSelector } from "react-redux";
+import { selectCompletedTodos } from "./store";
+
+export default function App() {
+  const completedTodos = useSelector(selectCompletedTodos);
+
+  return (
+    <ul>
+      {completedTodos.map((todo) => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Flow:
+
+```text
+Dispatch Action
+      ↓
+Redux Store Updates
+      ↓
+selectTodos()
+      ↓
+createSelector()
+      ↓
+Input Changed?
+   │          │
+  No         Yes
+   │          │
+Return      Recompute
+Cache       Filter
+   │
+useSelector()
+   │
+React Re-renders (only if selected result changed)
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid Create React App (CRA), as it is deprecated.
+
+- **Redux Toolkit** includes and re-exports `createSelector`, so you typically don't need to install Reselect separately.
+- **Bundler:** Vite for fast HMR and optimized production builds.
+- **ESM vs CommonJS:** Use modern ES Modules (`import`/`export`). Vite is ESM-first.
+- **Framework options:** Use **Next.js** for SSR/Server Components or **Remix** for nested routing and progressive enhancement when required.
+
+---
+
+# Performance
+
+- Memoize **derived data**, not simple state access.
+- Keep selectors small and composable by building complex selectors from simpler ones.
+- Use `React.memo` for child components receiving derived data.
+- Stabilize callback props with `useCallback` only when necessary.
+- Use `useMemo` for component-local expensive computations that are unrelated to Redux state.
+- Split large bundles with `React.lazy()` and route-level code splitting.
+- Use **React DevTools Profiler** to identify expensive renders and **Redux DevTools** to inspect dispatched actions and state updates.
+- For normalized collections, memoized selectors work well with entity adapters (`createEntityAdapter`) to efficiently derive filtered or sorted views.
+
+---
+
+# Testing
+
+Use **Vitest** and **React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example selector test:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { selectCompletedTodos } from "./store";
+
+it("returns only completed todos", () => {
+  const state = {
+    todos: {
+      items: [
+        { id: 1, text: "A", completed: true },
+        { id: 2, text: "B", completed: false },
+      ],
+    },
+  };
+
+  expect(selectCompletedTodos(state as any)).toHaveLength(1);
+});
+```
+
+Also test that selectors return expected derived values and remain pure for identical inputs.
+
+---
+
+# Ops & Deployment
+
+- Keep selectors in feature folders (e.g., `features/todos/selectors.ts`) to separate state access from UI.
+- Avoid creating selectors inside React components, as doing so resets memoization on every render.
+- For parameterized selectors (e.g., by ID), use selector factories or carefully structured selectors to preserve memoization.
+- Monitor render frequency with React Profiler and Redux DevTools before optimizing.
+- Keep Redux focused on shared client state; use dedicated libraries like RTK Query for server-state caching.
+
+---
+
+# Pitfalls
+
+- **Memoizing every selector unnecessarily.** Use `createSelector` only for derived or expensive computations.
+- **Creating new arrays or objects inside `useSelector`.** This causes new references and unnecessary re-renders unless memoized.
+- **Defining memoized selectors inside components.** Create them outside the component (or use selector factories when per-instance memoization is required).
+
 ## Question 3. How do you implement asynchronous Redux actions using Thunk or Saga?
 
 ## Question 4. How do you integrate React with GraphQL?
