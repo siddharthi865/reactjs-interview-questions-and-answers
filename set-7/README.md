@@ -201,6 +201,157 @@ npm run test
 
 ## Question 2. How do you access DOM elements in class components?
 
+# Short answer
+
+In **class components**, you access DOM elements using **refs**. Create a ref with `React.createRef()`, attach it to a JSX element via the `ref` prop, and access the DOM node using `this.ref.current`, typically inside lifecycle methods like `componentDidMount()`.
+
+---
+
+# Explanation
+
+Refs provide a way to interact directly with DOM elements when declarative React patterns aren't sufficient. Common use cases include:
+
+- Focusing an input
+- Measuring an element's size or position
+- Scrolling an element into view
+- Integrating with third-party DOM libraries (e.g., charts, maps)
+
+### How it works
+
+1. Create a ref in the constructor (or as a class field).
+2. Attach it to a DOM element using the `ref` attribute.
+3. Access the DOM node through `this.ref.current`.
+
+```text
+React.createRef()
+        ↓
+ this.inputRef
+        ↓
+<input ref={this.inputRef} />
+        ↓
+this.inputRef.current
+```
+
+### Lifecycle considerations
+
+- **`componentDidMount()`**: Safe place to access the DOM because the component has been mounted.
+- **`componentDidUpdate()`**: Use when DOM interactions depend on updated props or state.
+- **`componentWillUnmount()`**: Clean up listeners or third-party libraries attached to the DOM.
+
+Avoid accessing refs inside `render()` because the DOM has not been committed yet.
+
+---
+
+# Example
+
+## Create a Vite React + TypeScript project
+
+```bash
+npm create vite@latest react-class-ref-demo -- --template react-ts
+cd react-class-ref-demo
+npm install
+npm run dev
+```
+
+### Class component using `createRef`
+
+```tsx
+import React from "react";
+
+class InputFocus extends React.Component {
+  private inputRef = React.createRef<HTMLInputElement>();
+
+  componentDidMount() {
+    this.inputRef.current?.focus();
+  }
+
+  handleFocus = () => {
+    this.inputRef.current?.focus();
+  };
+
+  render() {
+    return (
+      <div>
+        <input ref={this.inputRef} placeholder="Type here" />
+        <button onClick={this.handleFocus}>Focus Input</button>
+      </div>
+    );
+  }
+}
+
+export default InputFocus;
+```
+
+This example automatically focuses the input after mounting and allows focusing it again via a button.
+
+---
+
+# Tooling & Setup
+
+- **Preferred bundler:** Vite for fast startup and HMR.
+- **Avoid Create React App (CRA):** It is deprecated.
+- **ESM:** Vite uses native ES Modules for faster development.
+- **Framework choices:**
+  - **Vite**: Standard React applications.
+  - **Next.js**: SSR, SSG, React Server Components.
+  - **Remix**: Nested routing and data loading.
+  - **Turbopack**: Modern bundler used with Next.js development.
+
+Although class components remain supported, new React development primarily uses functional components with `useRef`.
+
+---
+
+# Performance
+
+- Refs do **not** trigger re-renders when `.current` changes.
+- Avoid frequent DOM reads and writes during rendering.
+- Use `React.Profiler` to detect unnecessary renders.
+- Use `React.memo`, `useMemo`, and `useCallback` in functional components when optimizing surrounding components.
+- Use code splitting (`React.lazy` and `Suspense`) for large applications.
+- Cache API data using libraries like TanStack Query or SWR instead of storing everything in component state.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library** to verify DOM interactions.
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import InputFocus from "./InputFocus";
+
+test("renders input", () => {
+  render(<InputFocus />);
+  expect(screen.getByPlaceholderText("Type here")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+For end-to-end focus behavior, Playwright is a good choice.
+
+---
+
+# Ops & Deployment
+
+- Use refs sparingly; prefer React's declarative state model whenever possible.
+- Wrap class component trees in Error Boundaries for graceful error handling.
+- Be cautious when measuring the DOM during SSR—DOM APIs are only available on the client.
+- Remove any event listeners or third-party instances in `componentWillUnmount()`.
+- Keep bundle size small using tree shaking and dynamic imports.
+
+---
+
+# Pitfalls
+
+- Accessing `this.ref.current` before `componentDidMount()` (it may be `null`).
+- Using refs for state management instead of React state.
+- Forgetting to clean up DOM-related resources or third-party integrations in `componentWillUnmount()`.
+
 ## Question 3. What is the difference between ReactDOM.render and ReactDOM.createRoot?
 
 ## Question 4. How do you prevent a component from rendering?
