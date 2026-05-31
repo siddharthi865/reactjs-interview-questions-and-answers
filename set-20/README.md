@@ -381,6 +381,344 @@ For offline testing:
 
 ## Question 2. How do you implement analytics tracking (Google Analytics, Segment) in React?
 
+# How do you implement analytics tracking (Google Analytics, Segment) in React?
+
+## Short answer
+
+Analytics in React should be implemented using a **centralized analytics service** instead of calling Google Analytics or Segment directly from components. Track **page views**, **user events**, and **user properties** through a reusable abstraction. In React Router, page views are typically tracked using `useLocation`, while user interactions are tracked via a shared analytics utility. This approach makes it easy to switch providers (e.g., Google Analytics, Segment, Mixpanel, Amplitude) without changing application code.
+
+---
+
+# Explanation
+
+A common mistake is sprinkling analytics calls throughout components:
+
+```tsx
+// ❌ Avoid
+<button onClick={() => {
+  gtag("event", "purchase");
+}}>
+```
+
+Instead, create an analytics layer:
+
+```text
+React Components
+        │
+        ▼
+Analytics Service
+        │
+        ▼
+Google Analytics
+Segment
+Mixpanel
+Amplitude
+```
+
+Benefits:
+
+- Single source of truth
+- Easier testing
+- Vendor independence
+- Consistent event naming
+- Easier debugging
+
+---
+
+## Types of analytics
+
+### 1. Page Views
+
+Automatically track route changes.
+
+Examples:
+
+- Home
+- Dashboard
+- Product
+- Checkout
+
+---
+
+### 2. User Events
+
+Track meaningful interactions.
+
+Examples:
+
+```text
+Button Click
+
+Form Submit
+
+Video Play
+
+Purchase
+
+Search
+
+Login
+
+Logout
+
+Add to Cart
+```
+
+---
+
+### 3. User Properties
+
+Identify users.
+
+Example:
+
+```ts
+{
+  id: "123",
+  role: "admin",
+  plan: "premium"
+}
+```
+
+Useful for segmentation and personalization.
+
+---
+
+### 4. Performance Metrics
+
+Track:
+
+- Core Web Vitals
+- Load time
+- API latency
+- Largest Contentful Paint (LCP)
+- Interaction to Next Paint (INP)
+- Cumulative Layout Shift (CLS)
+
+---
+
+## React Architecture
+
+A scalable structure:
+
+```text
+Pages
+Components
+      │
+      ▼
+analytics.ts
+      │
+      ▼
+Provider SDK
+(GA / Segment)
+```
+
+Never import provider SDKs directly into UI components.
+
+---
+
+## Tracking page views
+
+With React Router:
+
+```text
+Location changes
+
+↓
+
+Track page view
+
+↓
+
+Analytics provider
+```
+
+This ensures every navigation is captured automatically.
+
+---
+
+## Tracking events
+
+Good event names:
+
+```text
+user_login
+
+product_view
+
+checkout_started
+
+checkout_completed
+
+button_clicked
+```
+
+Avoid vague names like:
+
+```text
+click
+
+button
+
+submit
+
+event1
+```
+
+Use descriptive, consistent naming conventions.
+
+---
+
+## React 18 considerations
+
+React 18's automatic batching and concurrent rendering do not change analytics fundamentals, but keep these points in mind:
+
+- Track events in **event handlers** or committed effects (`useEffect`), not during rendering.
+- In development, **Strict Mode** intentionally invokes some lifecycle logic twice to help detect side effects. Guard page-view tracking to avoid duplicate events during development.
+- Lazy-loaded routes can trigger page-view events after the route has finished loading, which generally reflects what the user actually sees.
+
+---
+
+# Example
+
+**Scaffold a modern React app (Vite + TypeScript):**
+
+```bash
+npm create vite@latest analytics-demo -- --template react-ts
+cd analytics-demo
+npm i
+npm i react-router-dom react-ga4
+npm run dev
+```
+
+**analytics.ts**
+
+```tsx
+import ReactGA from "react-ga4";
+
+ReactGA.initialize("G-XXXXXXXXXX");
+
+export const analytics = {
+  pageView(path: string) {
+    ReactGA.send({
+      hitType: "pageview",
+      page: path,
+    });
+  },
+
+  event(name: string, params?: Record<string, unknown>) {
+    ReactGA.event(name, params);
+  },
+};
+```
+
+**RouteTracker.tsx**
+
+```tsx
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { analytics } from "./analytics";
+
+export function RouteTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    analytics.pageView(location.pathname);
+  }, [location]);
+
+  return null;
+}
+```
+
+**App.tsx**
+
+```tsx
+import { analytics } from "./analytics";
+
+export default function App() {
+  return (
+    <button
+      onClick={() =>
+        analytics.event("button_clicked", {
+          button: "Subscribe",
+        })
+      }
+    >
+      Subscribe
+    </button>
+  );
+}
+```
+
+For **Segment**, the implementation is similar—the `analytics` service would delegate to `analytics.track()`, `analytics.page()`, and `analytics.identify()` instead of Google Analytics methods.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + TypeScript** for client-rendered apps due to its fast development experience. For SSR or hybrid rendering, **Next.js App Router** is a strong choice because it provides server rendering, route-based code splitting, and built-in performance optimizations. Avoid **Create React App (CRA)**, as it is deprecated.
+
+- **ESM vs CommonJS**: Modern React projects use **ESM** for native module support and better tree-shaking. CommonJS is mainly used in Node.js environments.
+- **Bundler**: Vite uses esbuild during development and Rollup for production builds, enabling efficient code splitting and optimized bundles.
+- **Configuration**: Store analytics measurement IDs or write keys in environment variables (e.g., `VITE_GA_MEASUREMENT_ID`) rather than hard-coding them.
+
+---
+
+# Performance
+
+- **React Profiler**: Ensure analytics hooks are not causing unnecessary re-renders.
+- **Memoization**: Use `React.memo`, `useMemo`, and `useCallback` where appropriate, though analytics calls themselves generally don't require memoization.
+- **Lazy loading**: Dynamically import analytics SDKs after user consent or after the initial render to reduce initial bundle size.
+- **Batching**: Where supported by the provider, batch events to reduce network overhead.
+- **Sampling**: For high-traffic applications, consider event sampling for non-critical telemetry to control costs.
+
+---
+
+# Testing
+
+Use **Vitest** and **React Testing Library** to verify analytics behavior by mocking the analytics service rather than the provider SDK.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { vi, expect, test } from "vitest";
+import { analytics } from "./analytics";
+
+test("tracks button click", () => {
+  const spy = vi.spyOn(analytics, "event");
+
+  analytics.event("button_clicked");
+
+  expect(spy).toHaveBeenCalledWith("button_clicked");
+});
+```
+
+For end-to-end validation, use **Playwright** and inspect outgoing analytics requests or mock the analytics endpoint.
+
+---
+
+# Ops & Deployment
+
+- Add **Error Boundaries** so analytics failures never impact the user experience.
+- Log analytics initialization failures and monitor them with tools like Sentry or OpenTelemetry.
+- Respect privacy regulations (GDPR, CCPA, etc.) by obtaining user consent before enabling non-essential tracking where required.
+- Use environment-specific measurement IDs (development, staging, production) to avoid polluting production reports.
+- Keep analytics SDKs out of the critical rendering path by loading them asynchronously when possible.
+
+---
+
+# Pitfalls
+
+- **Don't call analytics during rendering**; use event handlers or `useEffect` after the UI has committed.
+- **Avoid duplicate events**, especially in development with React Strict Mode or by tracking the same interaction in multiple places.
+- **Standardize event names and payloads** across the application to make dashboards reliable and easier to analyze.
+
 ## Question 3. How do you handle cross-tab state synchronization using localStorage or IndexedDB?
 
 ## Question 4. How do you implement dynamic forms driven by JSON schema?
