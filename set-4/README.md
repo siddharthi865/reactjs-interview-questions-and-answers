@@ -199,6 +199,345 @@ Note:
 
 ## Question 2. How do you test React components?
 
+# Short answer
+
+React components are typically tested at three levels:
+
+- **Unit tests** – Test an individual component in isolation.
+- **Integration tests** – Test how multiple components work together.
+- **End-to-end (E2E) tests** – Test complete user flows in a real browser.
+
+Modern React applications commonly use:
+
+- **Vitest** (or Jest) as the test runner
+- **React Testing Library (RTL)** for component testing
+- **Playwright** or **Cypress** for E2E testing
+
+The recommended approach is to test **behavior from the user's perspective** rather than implementation details.
+
+---
+
+# Explanation
+
+## React testing philosophy
+
+The React team recommends writing tests that resemble how users interact with your application.
+
+Instead of testing:
+
+- Internal state
+- Hook implementation
+- Private methods
+- Component instance
+
+Test:
+
+- What is rendered
+- User interactions
+- Accessibility
+- API responses
+- Navigation
+- Error states
+
+For example:
+
+❌ Bad test
+
+```tsx
+expect(component.state.count).toBe(1);
+```
+
+✅ Good test
+
+```tsx
+await user.click(button);
+
+expect(screen.getByText("Count: 1")).toBeInTheDocument();
+```
+
+---
+
+## Types of React tests
+
+### 1. Unit Testing
+
+Tests a single component independently.
+
+Example:
+
+- Button renders
+- Input accepts text
+- Modal opens
+- Badge displays correct status
+
+Fast and easy to maintain.
+
+---
+
+### 2. Integration Testing
+
+Tests several components working together.
+
+Example:
+
+```
+Login Form
+      ↓
+Submit Button
+      ↓
+API Call
+      ↓
+Dashboard
+```
+
+This is the most valuable type of testing in React applications.
+
+---
+
+### 3. End-to-End Testing
+
+Runs the application inside a real browser.
+
+Example:
+
+```
+Open website
+↓
+
+Login
+↓
+
+Search product
+↓
+
+Add to cart
+↓
+
+Checkout
+```
+
+Tools:
+
+- Playwright
+- Cypress
+
+---
+
+## React 18 considerations
+
+React 18 introduced:
+
+- Concurrent rendering
+- Automatic batching
+- Suspense improvements
+
+React Testing Library automatically wraps updates in `act()` where appropriate, but asynchronous rendering means you should prefer async queries like `findBy...` or `waitFor` when waiting for UI updates.
+
+Example:
+
+```tsx
+await screen.findByText("Users Loaded");
+```
+
+instead of
+
+```tsx
+screen.getByText("Users Loaded");
+```
+
+---
+
+## Component architecture
+
+Well-tested React applications usually separate:
+
+```
+UI Components
+      ↓
+Hooks
+      ↓
+Services/API
+```
+
+Example:
+
+```
+UserCard
+      ↓
+useUsers()
+      ↓
+fetchUsers()
+```
+
+Test independently:
+
+- UI rendering
+- Hook behavior
+- API mocking
+
+This makes tests easier to write and maintain.
+
+---
+
+# Example (React + TypeScript)
+
+## Create project (Vite)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+```
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/user-event @testing-library/jest-dom jsdom
+```
+
+**Counter.tsx**
+
+```tsx
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <>
+      <p>Count: {count}</p>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </>
+  );
+}
+```
+
+**Counter.test.tsx**
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import Counter from "./Counter";
+
+describe("Counter", () => {
+  it("increments count", async () => {
+    render(<Counter />);
+
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /increment/i }));
+
+    expect(screen.getByText("Count: 1")).toBeInTheDocument();
+  });
+});
+```
+
+Run tests:
+
+```bash
+npx vitest
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack**
+
+- **Vite** for fast development and native ESM support.
+- **Vitest** integrates naturally with Vite and offers excellent performance.
+- **React Testing Library** for behavior-focused component testing.
+- **Playwright** for reliable cross-browser E2E testing.
+
+**Avoid**
+
+- **Create React App (CRA)**, as it is deprecated.
+
+**ESM vs CommonJS**
+
+- Vite and Vitest use **ES Modules (ESM)** by default, enabling faster startup and better tree-shaking.
+- CommonJS is primarily used in older Node.js ecosystems and is less common in modern React projects.
+
+---
+
+# Performance
+
+Testing itself doesn't optimize runtime performance, but it helps prevent regressions.
+
+Performance practices:
+
+- Profile with **React DevTools Profiler**
+- Test memoized components (`React.memo`)
+- Verify expensive calculations using `useMemo`
+- Ensure callbacks passed to memoized children use `useCallback` when beneficial
+- Test lazy-loaded components
+
+```tsx
+const Dashboard = React.lazy(() => import("./Dashboard"));
+```
+
+Mock slow APIs to keep tests deterministic and fast.
+
+---
+
+# Testing
+
+Recommended testing pyramid:
+
+```
+        E2E
+         ▲
+ Integration
+         ▲
+     Unit Tests
+```
+
+Common commands:
+
+```bash
+npm run test
+```
+
+```bash
+npx vitest
+```
+
+Playwright:
+
+```bash
+npx playwright test
+```
+
+Best practices:
+
+- Prefer `screen.getByRole()` over CSS selectors.
+- Use `userEvent` instead of `fireEvent` to better simulate real user interactions.
+- Mock network requests with tools like Mock Service Worker (MSW) for integration tests.
+- Test accessibility by querying elements the way assistive technologies do.
+
+---
+
+# Ops & Deployment
+
+For production-ready applications:
+
+- Run unit and integration tests in CI/CD pipelines.
+- Execute Playwright E2E tests before deployment.
+- Use **Error Boundaries** to gracefully handle rendering errors.
+- Validate both **SSR** and **CSR** behavior if using frameworks like Next.js.
+- Keep bundles small with code splitting and lazy loading.
+- Deploy static assets through a CDN and monitor errors using services like Sentry.
+
+---
+
+# Pitfalls
+
+- Testing implementation details (state, hooks, private methods) instead of user-visible behavior.
+- Overusing snapshots, which can become brittle and difficult to maintain.
+- Forgetting to `await` asynchronous updates, leading to flaky tests.
+
 ## Question 3. Difference between shallow rendering and full rendering in testing
 
 ## Question 4. How do you handle async operations in React?
