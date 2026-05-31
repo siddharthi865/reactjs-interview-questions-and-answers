@@ -298,6 +298,302 @@ For end-to-end testing, use **Playwright**.
 
 ## Question 2. How do you create a reusable modal component with context?
 
+# How do you create a reusable modal component with context?
+
+## Short answer
+
+Create a **Modal Context** that exposes methods like `open()`, `close()`, and optionally `toggle()`. Wrap your application in a **ModalProvider**, render a single reusable `Modal` component near the root, and allow any descendant component to control the modal through a custom hook (e.g., `useModal`). This avoids prop drilling and centralizes modal state and behavior.
+
+---
+
+# Explanation
+
+A reusable modal should separate **state management** from **presentation**.
+
+Typical architecture:
+
+```text
+App
+└── ModalProvider
+    ├── Navbar
+    ├── Dashboard
+    ├── Products
+    ├── Settings
+    └── Global Modal
+```
+
+The provider owns the modal state:
+
+- `isOpen`
+- `content`
+- `title` (optional)
+- `open()`
+- `close()`
+
+Any component can do:
+
+```tsx
+const { open } = useModal();
+
+open(<UserDetails user={user} />);
+```
+
+The provider renders the modal once, making it reusable across the entire application.
+
+### Why Context?
+
+Without Context:
+
+```text
+App
+ ├── Dashboard
+ │    └── Button
+ └── Modal
+```
+
+You'd have to pass:
+
+```text
+openModal
+closeModal
+isOpen
+content
+```
+
+through multiple levels (prop drilling).
+
+With Context:
+
+```text
+Button
+   ↓
+useModal()
+   ↓
+ModalProvider
+```
+
+Any component can open or close the modal directly.
+
+---
+
+## React 18 Rendering Behavior
+
+When `open()` is called:
+
+1. State updates inside `ModalProvider`.
+2. React 18 automatically batches updates occurring in the same event or async context.
+3. Only the provider and components consuming the changed context re-render.
+4. The modal appears with the new content.
+
+For performance:
+
+- Memoize context values with `useMemo`.
+- Memoize callbacks with `useCallback`.
+- Split contexts if unrelated state changes frequently.
+
+---
+
+## Component Architecture
+
+A scalable folder structure:
+
+```text
+src/
+ ├── context/
+ │     ModalContext.tsx
+ ├── hooks/
+ │     useModal.ts
+ ├── components/
+ │     Modal.tsx
+ ├── App.tsx
+```
+
+Responsibilities:
+
+- **ModalProvider** → state management
+- **Modal** → UI only
+- **useModal()** → developer-friendly API
+
+This keeps the modal reusable and maintainable.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### `ModalContext.tsx`
+
+```tsx
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useCallback,
+  ReactNode,
+} from "react";
+
+type ModalContextType = {
+  open: (content: ReactNode) => void;
+  close: () => void;
+};
+
+const ModalContext = createContext<ModalContextType | null>(null);
+
+export function ModalProvider({ children }: { children: ReactNode }) {
+  const [content, setContent] = useState<ReactNode>(null);
+
+  const open = useCallback((node: ReactNode) => {
+    setContent(node);
+  }, []);
+
+  const close = useCallback(() => {
+    setContent(null);
+  }, []);
+
+  const value = useMemo(() => ({ open, close }), [open, close]);
+
+  return (
+    <ModalContext.Provider value={value}>
+      {children}
+
+      {content && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.4)",
+            display: "grid",
+            placeItems: "center",
+          }}
+          onClick={close}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "1rem",
+              borderRadius: 8,
+              minWidth: 300,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {content}
+            <button onClick={close}>Close</button>
+          </div>
+        </div>
+      )}
+    </ModalContext.Provider>
+  );
+}
+
+export function useModal() {
+  const ctx = useContext(ModalContext);
+
+  if (!ctx) {
+    throw new Error("useModal must be used inside ModalProvider");
+  }
+
+  return ctx;
+}
+```
+
+### `App.tsx`
+
+```tsx
+import { ModalProvider, useModal } from "./ModalContext";
+
+function Home() {
+  const { open } = useModal();
+
+  return (
+    <button onClick={() => open(<h2>Hello from a reusable modal!</h2>)}>
+      Open Modal
+    </button>
+  );
+}
+
+export default function App() {
+  return (
+    <ModalProvider>
+      <Home />
+    </ModalProvider>
+  );
+}
+```
+
+This pattern is reusable because:
+
+- The modal is rendered only once.
+- Any component can open it.
+- No prop drilling is required.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Use **Vite** for fast development, native ESM support, and optimized production builds.
+- Use **Next.js App Router** if your application needs SSR, streaming, or React Server Components. The modal provider should be placed in a Client Component (e.g., a top-level layout marked with `"use client"`).
+- Prefer **ES Modules (ESM)** over CommonJS for better tree-shaking and modern tooling compatibility.
+
+---
+
+# Performance
+
+- Memoize the context value with `useMemo` to avoid unnecessary re-renders of consumers.
+- Memoize `open` and `close` with `useCallback` so their references remain stable.
+- Use `React.memo` for modal content components if they receive stable props.
+- Lazy-load heavy modal content with `React.lazy` and `Suspense`.
+- Profile modal open/close interactions with the **React DevTools Profiler**.
+- Keep server state (API data) in libraries like TanStack Query instead of copying it into modal context.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test ideas:
+
+- Verify `open()` displays the modal.
+- Verify `close()` hides it.
+- Ensure clicking the backdrop closes the modal while clicking inside does not.
+- Test keyboard interactions such as closing with the **Escape** key if implemented.
+
+For end-to-end testing, use **Playwright** to validate modal behavior in the browser.
+
+---
+
+# Ops & Deployment
+
+- Add an **Error Boundary** around complex modal content so failures don't crash the entire application.
+- For accessibility, use `role="dialog"`, `aria-modal="true"`, associate labels with `aria-labelledby`, trap keyboard focus, restore focus on close, and support the **Escape** key.
+- Render the modal using **React Portals** (`createPortal`) into `document.body` to avoid stacking and overflow issues.
+- Code-split infrequently used modal content to reduce the initial bundle size.
+- In SSR frameworks (e.g., Next.js), ensure portal targets exist only on the client.
+
+---
+
+# Pitfalls
+
+- **Creating a new context value object on every render**, causing all consumers to re-render. Memoize it.
+- **Storing unrelated global state** in the modal context, making updates more expensive.
+- **Ignoring accessibility**, such as missing focus management, ARIA attributes, or keyboard support.
+
 ## Question 3. How do you implement tab-based navigation with state?
 
 ## Question 4. How do you optimize component rendering with `React.memo`?
