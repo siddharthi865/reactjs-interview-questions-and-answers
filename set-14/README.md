@@ -249,6 +249,286 @@ For end-to-end verification of real layout and positioning, use **Playwright** i
 
 ## Question 2. How do you implement infinite scroll with pagination?
 
+# How do you implement infinite scroll with pagination?
+
+## Short answer
+
+Implement infinite scroll by combining **server-side pagination** with the **Intersection Observer API**. Fetch data page by page, append new items to existing state, and trigger the next page request when a sentinel element at the bottom of the list becomes visible. Prevent duplicate requests with loading flags, stop when there are no more pages, and consider virtualization for very large lists.
+
+---
+
+# Explanation
+
+Infinite scrolling is essentially **pagination without visible page controls**.
+
+The typical flow is:
+
+```text
+Initial Load (Page 1)
+        │
+        ▼
+Render items
+        │
+        ▼
+Observer watches bottom sentinel
+        │
+        ▼
+Sentinel becomes visible
+        │
+        ▼
+Fetch Page 2
+        │
+        ▼
+Append items
+        │
+        ▼
+Observe again
+        │
+        ▼
+Repeat until hasMore = false
+```
+
+### Core architecture
+
+A production-ready implementation typically maintains:
+
+- **`items`** → accumulated list
+- **`page`** → current page number or cursor
+- **`loading`** → prevents duplicate requests
+- **`hasMore`** → indicates whether additional data exists
+- **`error`** → handles API failures
+
+Example API response:
+
+```json
+{
+  "data": [...],
+  "page": 3,
+  "totalPages": 8,
+  "hasMore": true
+}
+```
+
+Cursor-based pagination (`nextCursor`) is often preferred over page numbers because it is more stable when data changes frequently.
+
+### React 18 considerations
+
+- **Automatic batching** groups state updates (`setItems`, `setPage`, `setLoading`) to reduce re-renders.
+- Keep the observer callback lightweight and avoid expensive synchronous work.
+- Separate fetching logic from rendering for easier testing and reuse (e.g., a custom `useInfiniteScroll` hook).
+
+---
+
+# Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Infinite scroll component
+
+```tsx
+import { useCallback, useEffect, useRef, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function App() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+
+  const lastElementRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      if (loading) return;
+
+      observer.current?.disconnect();
+
+      observer.current = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting && hasMore) {
+          setPage((p) => p + 1);
+        }
+      });
+
+      if (node) observer.current.observe(node);
+    },
+    [loading, hasMore],
+  );
+
+  useEffect(() => {
+    async function fetchUsers() {
+      setLoading(true);
+
+      const res = await fetch(
+        `https://jsonplaceholder.typicode.com/users?_page=${page}&_limit=3`,
+      );
+
+      const data: User[] = await res.json();
+
+      setUsers((prev) => [...prev, ...data]);
+
+      if (data.length < 3) {
+        setHasMore(false);
+      }
+
+      setLoading(false);
+    }
+
+    fetchUsers();
+  }, [page]);
+
+  return (
+    <>
+      <ul>
+        {users.map((user, index) => {
+          if (index === users.length - 1) {
+            return (
+              <li key={user.id} ref={lastElementRef}>
+                {user.name}
+              </li>
+            );
+          }
+
+          return <li key={user.id}>{user.name}</li>;
+        })}
+      </ul>
+
+      {loading && <p>Loading...</p>}
+      {!hasMore && <p>No more users.</p>}
+    </>
+  );
+}
+```
+
+### Why this works
+
+- Page 1 loads initially.
+- The last list item is observed.
+- When it enters the viewport, the observer increments the page.
+- New items are appended rather than replacing existing ones.
+- Fetching stops when `hasMore` becomes `false`.
+
+---
+
+# Tooling & Setup
+
+- **Prefer Vite** for modern React applications. Avoid Create React App because it is deprecated.
+- **Next.js App Router** is a strong choice when SSR, SEO, or streaming is required. Infinite scrolling is often implemented in Client Components, while initial data can be fetched on the server.
+- Vite uses **ES Modules (ESM)** during development for fast startup and Hot Module Replacement (HMR). Production builds are optimized with Rollup. CommonJS is mainly relevant for legacy Node.js packages.
+
+---
+
+# Performance
+
+### 1. Use `IntersectionObserver`
+
+Avoid listening to the `scroll` event on every frame.
+
+```ts
+new IntersectionObserver(callback);
+```
+
+It is more efficient because the browser optimizes visibility detection.
+
+### 2. Virtualize large lists
+
+Thousands of DOM nodes hurt performance. Use libraries such as:
+
+- **react-window**
+- **react-virtualized**
+- **@tanstack/react-virtual**
+
+Only visible rows are rendered.
+
+### 3. Memoize expensive rows
+
+```tsx
+const UserRow = React.memo(UserItem);
+```
+
+Avoid re-rendering unchanged items.
+
+### 4. Stable callbacks
+
+```tsx
+const loadMore = useCallback(() => {
+  // fetch next page
+}, []);
+```
+
+Prevents unnecessary observer recreation when possible.
+
+### 5. Cache fetched pages
+
+Libraries like **TanStack Query** or **SWR** provide:
+
+- request deduplication
+- caching
+- background refetching
+- retry logic
+- stale-while-revalidate behavior
+- built-in support for infinite queries
+
+### 6. Profile rendering
+
+Use the React DevTools **Profiler** to identify:
+
+- unnecessary list re-renders
+- expensive row components
+- repeated observer setup
+- excessive fetches
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Typical tests include:
+
+- initial page loads
+- observer callback triggers next fetch
+- new items append correctly
+- loading indicator appears during fetch
+- `hasMore` stops additional requests
+- API errors display fallback UI
+
+For end-to-end validation, use **Playwright** to simulate scrolling and verify pagination behavior in a real browser.
+
+---
+
+# Ops & Deployment
+
+- Use an **Error Boundary** to isolate rendering failures (API errors should still be handled within the fetching logic).
+- Cancel in-flight requests on unmount using `AbortController` to avoid updating state after a component is removed.
+- Debounce or guard against rapid repeated triggers from the observer if your API is slow.
+- Support SSR when appropriate by rendering the first page on the server and hydrating the client to continue loading additional pages.
+- Minimize bundle size with route-level code splitting and lazy loading, and serve production assets through a CDN or edge network.
+
+---
+
+# Pitfalls
+
+- **Don't fetch the same page multiple times.** Use `loading` and `hasMore` guards or a request cache.
+- **Don't use array indexes as keys.** Use stable IDs so React can reconcile items correctly.
+- **Don't render thousands of DOM nodes.** Combine infinite scrolling with virtualization for large datasets.
+
 ## Question 3. How do you handle conditional rendering based on API response?
 
 ## Question 4. How do you implement a toast notification system?
