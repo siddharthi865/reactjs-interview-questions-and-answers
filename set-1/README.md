@@ -205,6 +205,367 @@ test("renders counter", () => {
 
 ## Question 2. What are the key features of React?
 
+# Key Features of React
+
+## Short answer
+
+React's key features include **component-based architecture, declarative UI, Virtual DOM, JSX, one-way data binding, Hooks, efficient reconciliation, React 18 concurrent rendering, and a rich ecosystem**. These features make React scalable, performant, and maintainable for modern web applications.
+
+---
+
+# Explanation
+
+## 1. Component-Based Architecture
+
+React applications are built using **reusable, independent components**.
+
+Each component encapsulates:
+
+- UI
+- State
+- Business logic
+- Styling (optional)
+
+Example hierarchy:
+
+```
+App
+├── Header
+├── Sidebar
+├── ProductList
+│     ├── ProductCard
+│     ├── ProductCard
+│     └── ProductCard
+└── Footer
+```
+
+### Benefits
+
+- Reusability
+- Easier maintenance
+- Better testing
+- Separation of concerns
+
+---
+
+## 2. Declarative UI
+
+Instead of manually manipulating the DOM, React lets you describe **what the UI should look like** based on the current state.
+
+Instead of:
+
+```javascript
+document.getElementById("count").innerText = count;
+```
+
+React:
+
+```tsx
+<h1>{count}</h1>
+```
+
+When `count` changes, React updates the UI automatically.
+
+---
+
+## 3. Virtual DOM
+
+React maintains an **in-memory representation** of the DOM called the **Virtual DOM**.
+
+Workflow:
+
+```
+State changes
+      ↓
+Virtual DOM updated
+      ↓
+Diff (Reconciliation)
+      ↓
+Only changed nodes updated
+      ↓
+Real DOM
+```
+
+Benefits:
+
+- Faster updates
+- Less DOM manipulation
+- Better performance
+
+---
+
+## 4. JSX
+
+JSX allows writing HTML-like syntax inside JavaScript/TypeScript.
+
+Example:
+
+```tsx
+function Welcome() {
+  return <h1>Hello React</h1>;
+}
+```
+
+JSX is compiled into:
+
+```tsx
+React.createElement(...)
+```
+
+Advantages:
+
+- Readable
+- Easier UI development
+- JavaScript expressions inside markup
+
+---
+
+## 5. One-Way Data Flow
+
+React follows **unidirectional data flow**.
+
+```
+Parent
+   │
+ props
+   │
+Child
+```
+
+Benefits:
+
+- Predictable updates
+- Easier debugging
+- Better state management
+
+---
+
+## 6. Hooks
+
+Hooks allow functional components to use React features such as state and lifecycle behavior.
+
+Common Hooks:
+
+- `useState`
+- `useEffect`
+- `useMemo`
+- `useCallback`
+- `useRef`
+- `useContext`
+- `useReducer`
+
+Benefits:
+
+- Less boilerplate
+- Reusable logic through custom Hooks
+- Cleaner code than class components
+
+---
+
+## 7. Efficient Reconciliation
+
+React compares the previous and new Virtual DOM trees to determine the minimal changes needed.
+
+React uses:
+
+- Keys for list reconciliation
+- Component identity
+- Fiber architecture
+
+This avoids unnecessary DOM updates.
+
+---
+
+## 8. React 18 Concurrent Rendering
+
+React 18 introduced concurrent rendering capabilities that allow rendering work to be interrupted and prioritized, helping keep applications responsive.
+
+Features include:
+
+- Automatic batching
+- `startTransition`
+- `useTransition`
+- `useDeferredValue`
+
+Example:
+
+```tsx
+startTransition(() => {
+  setSearchResults(data);
+});
+```
+
+This improves perceived performance for large updates.
+
+---
+
+## 9. Automatic Batching
+
+React 18 batches multiple state updates—even across asynchronous boundaries like promises and timeouts—into a single render where appropriate.
+
+Instead of:
+
+```
+Render
+Render
+Render
+```
+
+React performs:
+
+```
+Multiple updates
+      ↓
+Single render
+```
+
+This reduces unnecessary re-renders.
+
+---
+
+## 10. Rich Ecosystem
+
+React integrates well with modern tools and libraries.
+
+Examples:
+
+- Routing → React Router
+- State → Redux Toolkit, Zustand
+- Server state → TanStack Query
+- Forms → React Hook Form
+- SSR → Next.js
+- Full-stack → Remix
+
+---
+
+## Example
+
+### Setup (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest react-features -- --template react-ts
+cd react-features
+npm install
+npm run dev
+```
+
+**`App.tsx`**
+
+```tsx
+import { useState, useMemo } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const doubled = useMemo(() => count * 2, [count]);
+
+  return (
+    <main>
+      <h1>Count: {count}</h1>
+      <p>Doubled: {doubled}</p>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </main>
+  );
+}
+```
+
+This example demonstrates:
+
+- Functional component
+- JSX
+- `useState`
+- Declarative rendering
+- `useMemo` for memoization
+- Automatic UI updates
+
+---
+
+# Tooling & Setup
+
+**Recommended:** Vite + React + TypeScript
+
+```bash
+npm create vite@latest react-features -- --template react-ts
+```
+
+Why Vite?
+
+- Extremely fast dev server
+- Native ESM during development
+- Excellent Hot Module Replacement (HMR)
+- Smaller configuration surface
+
+Framework choices:
+
+- **Vite**: Client-side React apps
+- **Next.js**: SSR, SSG, App Router, Server Components
+- **Remix**: Server-first routing and data loading
+
+**ESM vs CommonJS**
+
+- Prefer **ES Modules (ESM)** (`import`/`export`) for modern React projects.
+- Bundlers like Vite use ESM natively in development, improving startup time and tree shaking.
+
+Avoid Create React App (CRA), as it is deprecated in favor of modern tooling.
+
+---
+
+# Performance
+
+- Use **React DevTools Profiler** to identify expensive renders.
+- Memoize expensive calculations with `useMemo`.
+- Memoize callbacks with `useCallback` when passing them to memoized children.
+- Prevent unnecessary re-renders with `React.memo`.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Cache server data with libraries like TanStack Query to reduce duplicate network requests.
+- Virtualize long lists with libraries such as `react-window` or `react-virtualized`.
+
+---
+
+# Testing
+
+Recommended tools:
+
+- **Vitest** + React Testing Library for unit/integration tests
+- **Playwright** for end-to-end testing
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders count", () => {
+  render(<App />);
+  expect(screen.getByText(/Count:/)).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to gracefully handle rendering errors.
+- Add structured logging and monitoring (e.g., Sentry) for production issues.
+- Choose **CSR** (Vite) for highly interactive apps and **SSR/SSG** (Next.js) for SEO and faster first paint.
+- Analyze bundle size with tools like `rollup-plugin-visualizer` or `vite-bundle-analyzer`.
+- Deploy static assets behind a CDN (e.g., Vercel, Netlify, Cloudflare) for low-latency delivery.
+
+---
+
+# Pitfalls
+
+- **Overusing memoization:** `useMemo` and `useCallback` add complexity; use them only when profiling shows a benefit.
+- **Mutating state directly:** Always create new objects/arrays so React can detect changes.
+- **Missing or unstable keys in lists:** Avoid using array indexes as keys when items can be reordered or removed.
+
 ## Question 3. What is JSX? Why do we use it?
 
 ## Question 4. Explain the Virtual DOM. How is it different from the real DOM?
