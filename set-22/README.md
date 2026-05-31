@@ -206,6 +206,210 @@ test("shows empty message", () => {
 
 ## Question 2. How do you use Fragment shorthand syntax?
 
+# Short answer
+
+Use the **Fragment shorthand syntax** (`<>...</>`) to group multiple JSX elements **without adding an extra DOM node**.
+
+```tsx
+<>
+  <h1>Title</h1>
+  <p>Description</p>
+</>
+```
+
+It behaves like `<React.Fragment>`, but with a shorter syntax.
+
+---
+
+# Explanation
+
+React components must return **a single parent element**. If you don't want to wrap elements in an unnecessary `<div>`, use a **Fragment**.
+
+There are two ways to write a Fragment:
+
+### 1. Shorthand syntax (most common)
+
+```tsx
+<>
+  <Header />
+  <Main />
+  <Footer />
+</>
+```
+
+### 2. Explicit syntax
+
+```tsx
+import { Fragment } from "react";
+
+<Fragment>
+  <Header />
+  <Main />
+  <Footer />
+</Fragment>;
+```
+
+Both produce the same rendered output:
+
+```html
+<h1>...</h1>
+<main>...</main>
+<footer>...</footer>
+```
+
+No extra wrapper element is added to the DOM.
+
+### When to use Fragment
+
+- Returning multiple sibling elements from a component.
+- Avoiding unnecessary `<div>` wrappers.
+- Keeping HTML semantic (e.g., inside tables, lists, or flex/grid layouts).
+- Reducing DOM size and avoiding layout issues caused by extra wrapper elements.
+
+### Limitation of shorthand syntax
+
+The shorthand syntax (`<>...</>`) **cannot accept props or a `key`**.
+
+If you need a `key`, use the explicit syntax:
+
+```tsx
+import { Fragment } from "react";
+
+items.map((item) => (
+  <Fragment key={item.id}>
+    <dt>{item.title}</dt>
+    <dd>{item.description}</dd>
+  </Fragment>
+));
+```
+
+React 18's concurrent rendering and automatic batching do not change how Fragments work—they are a rendering convenience and do not create DOM nodes.
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+export default function App() {
+  return (
+    <>
+      <h1>React Fragment</h1>
+      <p>No unnecessary wrapper div.</p>
+      <button>Click Me</button>
+    </>
+  );
+}
+```
+
+### Using a keyed Fragment
+
+```tsx
+import { Fragment } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+const users: User[] = [
+  { id: 1, name: "Alice" },
+  { id: 2, name: "Bob" },
+];
+
+export default function App() {
+  return (
+    <dl>
+      {users.map((user) => (
+        <Fragment key={user.id}>
+          <dt>ID</dt>
+          <dd>{user.id}</dd>
+
+          <dt>Name</dt>
+          <dd>{user.name}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for modern React development; avoid Create React App (CRA), which is deprecated.
+- Use **TypeScript** for type safety and better IDE support.
+- Vite uses **ES Modules (ESM)** during development for fast startup and Hot Module Replacement (HMR).
+- Use **Next.js App Router** when you need SSR, Server Components, or SEO; use Vite for client-rendered SPAs.
+
+---
+
+# Performance
+
+Fragments have virtually **no runtime cost** because they don't create additional DOM nodes.
+
+For production applications:
+
+- Use **React Profiler** to identify unnecessary re-renders.
+- Use `React.memo` for expensive child components.
+- Use `useMemo` and `useCallback` only when profiling indicates they improve performance.
+- Use `React.lazy()` and `Suspense` for route- or component-level code splitting.
+- Cache server data with libraries like **TanStack Query** or **SWR** to minimize redundant requests.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders fragment content", () => {
+  render(<App />);
+  expect(screen.getByText("React Fragment")).toBeInTheDocument();
+  expect(screen.getByRole("button")).toHaveTextContent("Click Me");
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Fragments help keep the DOM clean, which can simplify styling and improve maintainability.
+- Use Error Boundaries to isolate rendering failures.
+- Consider SSR with Next.js for SEO-sensitive pages and CSR with Vite for interactive dashboards.
+- Minimize bundle size through lazy loading and route-based code splitting.
+- Deploy static Vite applications to a CDN for fast global delivery.
+
+---
+
+# Pitfalls
+
+- **Don't use Fragment shorthand when you need a `key`.** Use `<Fragment key={...}>` instead.
+- **Don't wrap elements in unnecessary `<div>` tags** if a Fragment is sufficient.
+- **Remember that Fragments don't render DOM elements**, so you cannot attach attributes like `className`, `style`, or event handlers to them.
+
 ## Question 3. How do you handle onClick events for dynamically generated buttons?
 
 ## Question 4. How do you implement a “toggle visibility” component?
