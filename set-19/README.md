@@ -342,6 +342,255 @@ Use **Playwright** for end-to-end testing of scrolling behavior and infinite loa
 
 ## Question 2. How do you handle dynamic tabs with add/remove functionality?
 
+# Short answer
+
+Dynamic tabs are implemented by storing the tabs in React state (typically an array of objects), tracking the active tab by a stable identifier, and updating the state when tabs are added, removed, or reordered. Use unique IDs instead of array indexes, preserve component state where appropriate, and render only the active tab's content for better performance.
+
+---
+
+# Explanation
+
+A dynamic tab system typically maintains two pieces of state:
+
+- **tabs** – Array containing each tab's metadata (id, title, content).
+- **activeTabId** – ID of the currently selected tab.
+
+Example:
+
+```text
+tabs
+[
+  { id: "1", title: "Home" },
+  { id: "2", title: "Users" },
+  { id: "3", title: "Settings" }
+]
+
+activeTabId = "2"
+```
+
+When a user clicks **Add Tab**:
+
+1. Generate a unique ID.
+2. Append a new tab.
+3. Make the new tab active.
+
+When removing a tab:
+
+- Remove it from the array.
+- If the removed tab was active:
+  - Activate the previous tab if available.
+  - Otherwise activate the next tab.
+  - If no tabs remain, set the active tab to `null`.
+
+Example:
+
+```text
+Before
+
+Home | Users | Settings
+         ↑ Active
+
+Delete Users
+
+↓
+
+Home | Settings
+        ↑ Active
+```
+
+---
+
+### Why use IDs instead of indexes?
+
+Bad:
+
+```tsx
+key = { index };
+```
+
+Good:
+
+```tsx
+key={tab.id}
+```
+
+Stable IDs help React preserve component identity during reconciliation. Using indexes can lead to incorrect state retention when tabs are added, removed, or reordered.
+
+---
+
+### React 18 considerations
+
+React 18's automatic batching combines multiple state updates (such as adding a tab and setting it active) into a single render, reducing unnecessary work.
+
+For expensive tab content:
+
+- Use `React.lazy()` for code splitting.
+- Wrap inactive heavy components in lazy-loaded boundaries.
+- Memoize tab content if props rarely change.
+
+For applications with many open tabs (e.g., IDEs), consider keeping inactive tabs mounted to preserve local state, or persist state externally if you unmount inactive tabs.
+
+---
+
+### State management trade-offs
+
+- **Local state (`useState`)**: Best for isolated tab components.
+- **Context**: Useful when multiple components need access to the active tab.
+- **Redux/Zustand**: Appropriate if tabs represent global application state (e.g., browser-like workspaces).
+
+---
+
+# Example
+
+Using **Vite + React + TypeScript**.
+
+## Scaffold
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+type Tab = {
+  id: string;
+  title: string;
+  content: string;
+};
+
+export default function DynamicTabs() {
+  const [tabs, setTabs] = useState<Tab[]>([
+    { id: crypto.randomUUID(), title: "Home", content: "Home Content" },
+  ]);
+
+  const [activeId, setActiveId] = useState(tabs[0].id);
+
+  const addTab = () => {
+    const id = crypto.randomUUID();
+
+    setTabs((prev) => [
+      ...prev,
+      {
+        id,
+        title: `Tab ${prev.length + 1}`,
+        content: `Content ${prev.length + 1}`,
+      },
+    ]);
+
+    setActiveId(id);
+  };
+
+  const removeTab = (id: string) => {
+    setTabs((prev) => {
+      const updated = prev.filter((tab) => tab.id !== id);
+
+      if (activeId === id) {
+        setActiveId(updated[updated.length - 1]?.id ?? "");
+      }
+
+      return updated;
+    });
+  };
+
+  const activeTab = tabs.find((tab) => tab.id === activeId);
+
+  return (
+    <div>
+      <button onClick={addTab}>Add Tab</button>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {tabs.map((tab) => (
+          <div key={tab.id}>
+            <button onClick={() => setActiveId(tab.id)}>{tab.title}</button>
+
+            <button onClick={() => removeTab(tab.id)}>×</button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        {activeTab?.content ?? "No tabs open"}
+      </div>
+    </div>
+  );
+}
+```
+
+This implementation:
+
+- Uses stable IDs.
+- Supports add/remove functionality.
+- Automatically selects a valid active tab after deletion.
+- Minimizes unnecessary re-renders through React's state batching.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** Vite + React + TypeScript.
+
+Avoid **Create React App (CRA)**, as it is deprecated.
+
+- **Bundler:** Vite (fast HMR, Rollup for production builds).
+- **Module system:** Use **ES Modules (ESM)**. CommonJS is primarily for legacy Node.js environments.
+- **Framework alternatives:** Next.js (SSR, Server Components, App Router), Remix (nested routing and data loading), or Turbopack (Next.js development).
+
+If your application requires accessible, production-ready tabs, consider headless component libraries (e.g., Radix UI or Headless UI) and style them according to your design system.
+
+---
+
+# Performance
+
+- Wrap heavy tab panels with `React.memo` when props are stable.
+- Use `useMemo` for expensive derived values (e.g., filtered tab lists).
+- Use `useCallback` for handlers passed to memoized children.
+- Lazy-load expensive tab content with `React.lazy()` and `Suspense`.
+- Profile tab switching using the React DevTools **Profiler**.
+- For dozens or hundreds of tabs, virtualize the tab header list and cache inactive tab data if reopening should be instant.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example tests should verify:
+
+- Adding a tab updates the UI and activates the new tab.
+- Removing the active tab selects the correct fallback tab.
+- Removing the last tab displays the empty state.
+- Clicking tab headers changes the active content.
+
+For end-to-end testing, use **Playwright** to validate complete user interactions such as opening, closing, and switching between tabs.
+
+---
+
+# Ops & Deployment
+
+- Wrap tab panels with an **Error Boundary** if they render independently loaded modules.
+- Log tab-related errors and unexpected state transitions using tools like Sentry.
+- Consider **SSR** (e.g., Next.js) for initial page load, while handling dynamic tab interactions on the client.
+- Keep bundles small by code-splitting rarely visited tab content.
+- Serve static assets via a CDN and monitor bundle size with tools such as `rollup-plugin-visualizer`.
+
+---
+
+# Pitfalls
+
+- **Don't use array indexes as React keys** for dynamic tabs; use stable unique IDs.
+- **Always update the active tab after removal** to avoid referencing a deleted tab.
+- **Avoid mutating the tabs array directly**; always create a new array to preserve React's immutable update pattern.
+
 ## Question 3. How do you implement a toast notification system globally?
 
 ## Question 4. How do you implement a live search component that fetches results dynamically?
