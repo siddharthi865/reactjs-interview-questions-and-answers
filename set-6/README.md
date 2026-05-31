@@ -267,6 +267,317 @@ Other concerns:
 
 ## Question 2. What are the differences between React and Vue.js?
 
+## Short answer
+
+React is a **UI library** focused on building user interfaces with JavaScript/TypeScript and JSX, while Vue.js is a **progressive framework** that provides more built-in features (such as templating, reactivity, transitions, and official routing/state libraries). React offers greater flexibility, whereas Vue generally provides a smoother learning curve and more opinionated conventions.
+
+---
+
+# Explanation
+
+## 1. Core philosophy
+
+### React
+
+- UI library maintained by Meta.
+- Uses a component-based architecture with JSX.
+- Minimal core; routing, state management, and data fetching are chosen separately.
+- Highly flexible for projects of any size.
+
+### Vue.js
+
+- Progressive framework maintained by the open-source community.
+- Supports both small incremental adoption and large applications.
+- Official ecosystem includes Vue Router, Pinia, and build tooling.
+- More convention-driven than React.
+
+---
+
+## 2. Syntax
+
+### React
+
+Uses **JSX**, where HTML-like syntax is written directly inside JavaScript/TypeScript.
+
+```tsx
+function Welcome() {
+  return <h1>Hello React</h1>;
+}
+```
+
+### Vue
+
+Uses **Single File Components (SFCs)**.
+
+```vue
+<template>
+  <h1>Hello Vue</h1>
+</template>
+
+<script setup lang="ts"></script>
+```
+
+Vue separates template, logic, and styles while keeping them in one file.
+
+---
+
+## 3. Rendering
+
+### React
+
+- Virtual DOM
+- Reconciliation algorithm
+- React 18 concurrent rendering
+- Automatic batching
+- Server Components (framework-dependent, e.g., Next.js)
+
+### Vue
+
+- Virtual DOM
+- Fine-grained reactive dependency tracking
+- Efficient updates because Vue knows exactly which reactive values changed
+
+Both are highly performant for most applications.
+
+---
+
+## 4. State management
+
+### React
+
+No built-in global state.
+
+Popular choices include:
+
+- Context API
+- Redux Toolkit
+- Zustand
+- Jotai
+- TanStack Query (server state)
+
+### Vue
+
+Official ecosystem:
+
+- Pinia
+- Vue Router
+- VueUse
+- Composables
+
+State management tends to feel more integrated.
+
+---
+
+## 5. Reactivity
+
+### React
+
+Updates happen through state setters.
+
+```tsx
+setCount(count + 1);
+```
+
+### Vue
+
+Reactive variables update automatically.
+
+```ts
+count.value++;
+```
+
+Vue's reactivity system tracks dependencies automatically.
+
+---
+
+## 6. Learning curve
+
+### React
+
+- Easier to learn initially
+- More architectural decisions for larger applications
+- Requires understanding hooks and JSX
+
+### Vue
+
+- Very beginner friendly
+- HTML templates feel familiar
+- Less boilerplate for common patterns
+
+---
+
+## 7. Ecosystem
+
+### React
+
+- Largest ecosystem
+- Next.js
+- Remix
+- Expo (React Native)
+- React Query
+- Redux Toolkit
+
+### Vue
+
+- Nuxt
+- Pinia
+- Vue Router
+- VueUse
+
+---
+
+## 8. TypeScript support
+
+Both support TypeScript well.
+
+- React works naturally with TypeScript because components are plain functions.
+- Vue 3 significantly improved TypeScript support with the Composition API and `<script setup>`.
+
+---
+
+## 9. Performance
+
+Both frameworks are extremely fast.
+
+### React optimization
+
+- React.memo
+- useMemo
+- useCallback
+- React.lazy
+- Suspense
+- Concurrent rendering
+
+### Vue optimization
+
+- Computed properties
+- watch/watchEffect
+- Lazy-loaded routes
+- KeepAlive
+- Fine-grained reactivity
+
+---
+
+## Example
+
+### React (Vite + TypeScript)
+
+**Scaffold:**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+
+  return <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>;
+}
+```
+
+### Vue 3 (Vite + TypeScript)
+
+```bash
+npm create vite@latest my-vue-app -- --template vue-ts
+cd my-vue-app
+npm install
+npm run dev
+```
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+
+const count = ref(0);
+</script>
+
+<template>
+  <button @click="count++">Count: {{ count }}</button>
+</template>
+```
+
+---
+
+# Tooling & Setup
+
+### React
+
+- Prefer **Vite** for client-side applications.
+- **Next.js** for SSR, Server Components, and full-stack features.
+- Uses ESM by default and benefits from fast HMR.
+
+### Vue
+
+- Prefer **Vite** with Vue 3.
+- **Nuxt** for SSR, static generation, and full-stack capabilities.
+- Also uses ESM and provides excellent developer experience.
+
+**Avoid Create React App (CRA)** because it is deprecated. Vite offers significantly faster startup, hot module replacement, and optimized builds.
+
+---
+
+# Performance
+
+For both React and Vue:
+
+- Use browser DevTools and framework profilers to identify rendering bottlenecks.
+- Memoize expensive computations (`useMemo` in React, `computed` in Vue).
+- Lazy-load routes and large components.
+- Split bundles using dynamic imports.
+- Cache server data with libraries such as TanStack Query (React) or Vue Query.
+
+---
+
+# Testing
+
+### React
+
+Unit/Integration:
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+### Vue
+
+Unit/Integration:
+
+```bash
+npm install -D vitest @vue/test-utils jsdom
+```
+
+For end-to-end testing, **Playwright** is an excellent choice for both ecosystems.
+
+---
+
+# Ops & Deployment
+
+- Deploy static builds to a CDN for fast global delivery.
+- Use Next.js (React) or Nuxt (Vue) when SSR or SEO is required.
+- Implement centralized logging (e.g., Sentry).
+- Use error boundaries in React; in Vue, use `errorCaptured` or global error handlers.
+- Analyze bundle size regularly and remove unused dependencies.
+
+---
+
+# Pitfalls
+
+- **React**
+  - Choosing too many third-party libraries without clear standards can lead to inconsistent architecture.
+  - Overusing `useMemo` and `useCallback` without measuring performance.
+  - Mutating state instead of treating it as immutable.
+
+- **Vue**
+  - Mixing the Options API and Composition API inconsistently within a codebase.
+  - Overusing watchers where computed properties are more appropriate.
+  - Forgetting that refs require `.value` in JavaScript/TypeScript (outside templates).
+
 ## Question 3. How does React handle DOM updates?
 
 ## Question 4. What is the purpose of React.createElement?
