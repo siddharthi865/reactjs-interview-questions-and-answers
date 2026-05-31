@@ -271,6 +271,332 @@ npm install -D vitest @testing-library/react jsdom
 
 ## Question 2. How do you structure a large React project?
 
+# Short answer
+
+A large React project should be structured **by feature/domain rather than by file type**, with clear separation of UI, business logic, state management, API layer, shared utilities, and tests. Modern React projects typically use **Vite or Next.js**, **TypeScript**, **Redux Toolkit/Zustand/Context** (as appropriate), and colocate components, hooks, tests, and styles within each feature.
+
+---
+
+# Explanation
+
+As applications grow, organizing everything under folders like `components`, `pages`, and `utils` quickly becomes difficult to maintain. A **feature-based architecture** scales better because everything related to a business domain lives together.
+
+Example domains:
+
+- Authentication
+- Dashboard
+- Users
+- Products
+- Orders
+- Settings
+
+Each feature owns:
+
+- Components
+- Hooks
+- API calls
+- Types
+- State
+- Tests
+
+This reduces coupling and makes features easier to develop, test, and remove.
+
+A common scalable structure is:
+
+```text
+src/
+│
+├── app/                    # App bootstrap
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── routes.tsx
+│   └── store.ts
+│
+├── features/
+│   ├── auth/
+│   │   ├── api/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   ├── types.ts
+│   │   ├── authSlice.ts
+│   │   └── index.ts
+│   │
+│   ├── users/
+│   └── products/
+│
+├── components/             # Shared reusable UI
+│   ├── Button/
+│   ├── Modal/
+│   ├── Input/
+│   └── Loader/
+│
+├── hooks/
+│   ├── useDebounce.ts
+│   ├── useLocalStorage.ts
+│   └── useWindowSize.ts
+│
+├── services/
+│   ├── api.ts
+│   ├── axios.ts
+│   └── auth.ts
+│
+├── lib/
+│   ├── formatDate.ts
+│   ├── logger.ts
+│   └── constants.ts
+│
+├── types/
+├── assets/
+├── styles/
+└── tests/
+```
+
+---
+
+## Layered Architecture
+
+A large application generally has these layers:
+
+```text
+UI Components
+      │
+      ▼
+Custom Hooks
+      │
+      ▼
+Business Logic
+      │
+      ▼
+API Layer
+      │
+      ▼
+Backend
+```
+
+Keeping these responsibilities separate improves maintainability and testing.
+
+---
+
+## Component Organization
+
+A reusable component should own everything it needs.
+
+```text
+Button/
+├── Button.tsx
+├── Button.module.css
+├── Button.test.tsx
+├── Button.stories.tsx
+└── index.ts
+```
+
+Benefits:
+
+- Easier refactoring
+- Easier Storybook integration
+- Better code ownership
+
+---
+
+## State Management
+
+Choose state based on scope:
+
+| State                  | Recommended Solution        |
+| ---------------------- | --------------------------- |
+| Local UI state         | `useState`                  |
+| Shared component state | Context API                 |
+| Complex global state   | Redux Toolkit or Zustand    |
+| Server state           | RTK Query or TanStack Query |
+
+Avoid putting all state into Redux. Server state and UI state have different lifecycles and should generally be managed separately.
+
+---
+
+## Routing Structure
+
+For larger applications:
+
+```text
+routes/
+├── public.tsx
+├── private.tsx
+├── admin.tsx
+└── index.tsx
+```
+
+Lazy-load route modules:
+
+```tsx
+const Dashboard = React.lazy(() => import("./Dashboard"));
+```
+
+This reduces the initial bundle size.
+
+---
+
+## API Layer
+
+Avoid calling `fetch()` directly inside components.
+
+Instead:
+
+```text
+services/
+    users.ts
+    auth.ts
+    orders.ts
+```
+
+```ts
+export async function getUsers() {
+  return api.get("/users");
+}
+```
+
+Components remain focused on rendering while services encapsulate networking concerns.
+
+---
+
+## Rendering Behavior (React 18)
+
+React 18 introduced:
+
+- Automatic batching of state updates
+- Concurrent rendering capabilities
+- `startTransition()` for non-urgent updates
+- `Suspense` improvements
+
+Large projects should take advantage of these features:
+
+- Lazy-load feature routes
+- Use `Suspense` boundaries
+- Wrap expensive state updates in `startTransition`
+- Keep components pure to allow React's scheduler to optimize rendering
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Feature structure
+
+```tsx
+// src/features/users/components/UserList.tsx
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function UserList() {
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    fetch("https://jsonplaceholder.typicode.com/users")
+      .then((r) => r.json())
+      .then(setUsers);
+  }, []);
+
+  return (
+    <ul>
+      {users.map((u) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack**
+
+- **Vite + React + TypeScript** for fast development and ESM-first tooling.
+- **Next.js App Router** when SSR, streaming, SEO, or React Server Components are required.
+- **Remix** is another strong option for data-driven applications.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+**Bundler notes**
+
+- **ESM** (used by Vite) enables faster dependency analysis and native module support.
+- **Vite** uses native ES modules in development and Rollup for production builds.
+- **Next.js** uses Turbopack (development) or Webpack depending on configuration.
+
+---
+
+# Performance
+
+For large projects:
+
+- Split code by routes using `React.lazy()` and `Suspense`.
+- Use `React.memo` for expensive presentational components.
+- Use `useMemo` for costly derived values.
+- Use `useCallback` for stable callback references passed to memoized children.
+- Use virtualization (e.g., `react-window`) for very large lists.
+- Profile with the React DevTools Profiler before optimizing.
+- Cache server data with RTK Query or TanStack Query instead of manual fetching.
+
+---
+
+# Testing
+
+Recommended tools:
+
+- **Vitest** for unit tests.
+- **React Testing Library** for component and integration tests.
+- **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import UserList from "./UserList";
+
+test("renders users list", () => {
+  render(<UserList />);
+  expect(screen.getByRole("list")).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Centralize logging with tools such as Sentry or Datadog.
+- Configure path aliases (e.g., `@/features`) to avoid deep relative imports.
+- Analyze bundle size with tools like `rollup-plugin-visualizer` or `webpack-bundle-analyzer`.
+- Deploy static Vite builds behind a CDN, or use Next.js with edge/server rendering where appropriate.
+- Apply tree-shaking and dynamic imports to minimize JavaScript shipped to users.
+
+---
+
+# Pitfalls
+
+- Organizing folders only by file type (`components`, `hooks`, `utils`) instead of by feature.
+- Allowing business logic and API calls to accumulate inside UI components.
+- Storing all application state in Redux or Context, including server state that is better handled by a dedicated data-fetching library.
+
 ## Question 3. How do you implement authentication in React?
 
 ## Question 4. Explain JWT-based authentication in React apps
