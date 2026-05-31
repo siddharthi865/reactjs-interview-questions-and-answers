@@ -302,6 +302,240 @@ Focus tests on user-visible behavior rather than implementation details.
 
 ## Question 2. What is the difference between React elements and React components?
 
+# Short answer
+
+A **React element** is a **plain JavaScript object** that describes what should appear on the screen. It is **immutable** and created using JSX or `React.createElement()`.
+
+A **React component** is a **function (or class, though functional components are the modern standard)** that returns React elements. Components encapsulate UI, logic, and state, making them reusable building blocks.
+
+In simple terms:
+
+- **Element = What to render**
+- **Component = Function that creates elements**
+
+---
+
+# Explanation
+
+Think of building a house:
+
+- **Blueprint** → React Component
+- **Finished room** → React Element
+
+The component contains the instructions for building the UI, while the element is the description of the UI produced by those instructions.
+
+## React Element
+
+A React element is an object created by JSX.
+
+Example:
+
+```tsx
+const element = <h1>Hello, React!</h1>;
+```
+
+JSX is compiled into:
+
+```tsx
+const element = React.createElement("h1", null, "Hello, React!");
+```
+
+Conceptually, the resulting object looks like:
+
+```ts
+{
+  type: "h1",
+  props: {
+    children: "Hello, React!"
+  }
+}
+```
+
+Characteristics:
+
+- Immutable
+- Lightweight JavaScript object
+- Describes UI
+- Not an actual DOM node
+- Used by React during reconciliation to determine what should be rendered
+
+---
+
+## React Component
+
+A component is a JavaScript/TypeScript function that returns React elements.
+
+```tsx
+function Welcome() {
+  return <h1>Hello!</h1>;
+}
+```
+
+Using the component:
+
+```tsx
+<Welcome />
+```
+
+Execution flow:
+
+```text
+<App />
+      ↓
+React calls App()
+      ↓
+App returns React elements
+      ↓
+React compares them with the previous render
+      ↓
+Updates the DOM
+```
+
+Components can:
+
+- Receive props
+- Manage state
+- Use Hooks
+- Handle events
+- Fetch data
+- Compose other components
+
+Elements cannot do these things—they are simply descriptions of UI.
+
+---
+
+## Key Differences
+
+| Feature           | React Element        | React Component                                         |
+| ----------------- | -------------------- | ------------------------------------------------------- |
+| Definition        | Object describing UI | Function (or class) returning elements                  |
+| Mutable           | No (immutable)       | Function logic can produce different elements over time |
+| Contains logic    | No                   | Yes                                                     |
+| Can use Hooks     | No                   | Yes (functional components)                             |
+| Receives props    | Stored as data       | Accepts props as parameters                             |
+| Reusable          | Not by itself        | Yes                                                     |
+| Rendered by React | Yes                  | Invoked by React to produce elements                    |
+
+---
+
+## Rendering Behavior (React 18)
+
+In React 18:
+
+- When state or props change, React re-executes affected **components** to produce a new tree of **elements**.
+- React compares the new element tree with the previous one (reconciliation) and updates only the necessary DOM nodes.
+- **Automatic batching** groups multiple state updates into a single render, reducing unnecessary work.
+- **Concurrent rendering** lets React prioritize urgent updates (like typing) while deferring less urgent work, improving responsiveness.
+
+The distinction is important: **components execute**, while **elements are compared**.
+
+---
+
+# Example
+
+**Modern setup (Vite + React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`src/App.tsx`**
+
+```tsx
+type WelcomeProps = {
+  name: string;
+};
+
+function Welcome({ name }: WelcomeProps) {
+  return <h2>Hello, {name}!</h2>;
+}
+
+export default function App() {
+  const heading = <h1>React Elements vs Components</h1>; // React element
+
+  return (
+    <main>
+      {heading}
+      <Welcome name="Alice" /> {/* React component */}
+      <Welcome name="Bob" />
+    </main>
+  );
+}
+```
+
+Here:
+
+- `heading` is a **React element**.
+- `Welcome` is a **React component**.
+- Each `<Welcome />` invocation creates a new tree of React elements during rendering.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA):** It is deprecated.
+- **Prefer Vite** for client-side React applications because of its fast dev server, native ESM support, and efficient Hot Module Replacement (HMR).
+- Choose **Next.js** if you need SSR, SSG, or React Server Components.
+- **Remix** is another production-ready option for route-based data loading.
+- Modern React tooling is ESM-first; CommonJS is mainly encountered in older Node.js environments.
+
+---
+
+# Performance
+
+- Use the **React DevTools Profiler** to identify unnecessary component re-renders.
+- Use `React.memo` for components with stable props.
+- Use `useMemo` for expensive computations.
+- Use `useCallback` when passing callbacks to memoized child components.
+- Split large bundles with `React.lazy` and `Suspense`.
+- Use data-fetching caches (e.g., TanStack Query) to avoid redundant network requests.
+- Keep state localized to reduce the number of components that re-render.
+
+---
+
+# Testing
+
+Use:
+
+- **Vitest** for unit testing.
+- **React Testing Library** for testing component behavior.
+- **Playwright** for end-to-end testing.
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test command:
+
+```bash
+npm run test
+```
+
+Test rendered output and user interactions rather than implementation details.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors in component trees.
+- Add production logging and monitoring (e.g., Sentry, OpenTelemetry).
+- Choose **CSR** for highly interactive apps and **SSR/SSG** (Next.js) for SEO and faster initial loads.
+- Monitor bundle size with build analyzers and apply code splitting where appropriate.
+- Deploy Vite builds as static assets behind a CDN, or deploy SSR apps to server/edge platforms.
+
+---
+
+# Pitfalls
+
+- **Don't confuse JSX tags with elements.** `<Button />` is JSX that React uses to invoke the `Button` component and produce elements.
+- **Don't mutate React elements.** They are immutable descriptions of the UI.
+- **Avoid defining components inside other components** unless necessary, as it creates a new component function on every render and can affect performance and state preservation.
+
 ## Question 3. What are the rules of hooks in React?
 
 ## Question 4. How do you handle events with parameters in functional components?
