@@ -324,6 +324,311 @@ For end-to-end behavior (scrolling and clicking), tools like Playwright are well
 
 ## Question 2. How do you implement a global error handling system with context?
 
+# How do you implement a global error handling system with Context?
+
+## Short answer
+
+A **global error handling system** in React is typically implemented using the **Context API** to expose error state and helper functions (e.g., `showError`, `clearError`) throughout the application. Combine it with an **Error Boundary** for render-time errors and centralized API/network error handling (e.g., Axios interceptors or `fetch` wrappers) to provide consistent user feedback and logging.
+
+---
+
+# Explanation
+
+A production-ready global error handling system has multiple layers because different types of errors originate from different places:
+
+| Error Type                 | Best Handling Mechanism                      |
+| -------------------------- | -------------------------------------------- |
+| Component rendering errors | Error Boundary                               |
+| Event handler errors       | try/catch + Context                          |
+| API errors                 | Axios interceptors / fetch wrapper + Context |
+| Async errors               | try/catch + Context                          |
+| Global JS errors           | `window.onerror`, `unhandledrejection`       |
+| Server errors              | Backend logging + monitoring                 |
+
+A common architecture looks like this:
+
+```text
+             API Request
+                  │
+                  ▼
+        Axios/Fetch Wrapper
+                  │
+          Error Interceptor
+                  │
+                  ▼
+        ErrorContext.showError()
+                  │
+                  ▼
+         Global Error State
+                  │
+      ┌───────────┴───────────┐
+      ▼                       ▼
+ Error Toast             Error Modal
+      │
+      ▼
+ User dismisses → clearError()
+
+Render Errors
+      │
+      ▼
+ Error Boundary
+      │
+      ▼
+ ErrorContext / Logging Service
+```
+
+### Why Context?
+
+Instead of each component maintaining its own error state:
+
+```tsx
+const [error, setError] = useState(null);
+```
+
+you centralize error management:
+
+- One source of truth
+- Consistent UI
+- Easier logging
+- Cleaner components
+- Easier testing
+
+---
+
+# Example (React + TypeScript + Vite)
+
+### Create project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+
+cd my-app
+
+npm install
+
+npm run dev
+```
+
+### `ErrorContext.tsx`
+
+```tsx
+import { createContext, useContext, useState, ReactNode } from "react";
+
+type ErrorContextType = {
+  error: string | null;
+  showError: (message: string) => void;
+  clearError: () => void;
+};
+
+const ErrorContext = createContext<ErrorContextType | undefined>(undefined);
+
+export function ErrorProvider({ children }: { children: ReactNode }) {
+  const [error, setError] = useState<string | null>(null);
+
+  const showError = (message: string) => {
+    setError(message);
+  };
+
+  const clearError = () => {
+    setError(null);
+  };
+
+  return (
+    <ErrorContext.Provider
+      value={{
+        error,
+        showError,
+        clearError,
+      }}
+    >
+      {children}
+
+      {error && (
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            background: "crimson",
+            color: "white",
+            padding: 12,
+          }}
+        >
+          {error}
+          <button onClick={clearError} style={{ marginLeft: 10 }}>
+            ×
+          </button>
+        </div>
+      )}
+    </ErrorContext.Provider>
+  );
+}
+
+export function useError() {
+  const context = useContext(ErrorContext);
+
+  if (!context) {
+    throw new Error("useError must be used inside ErrorProvider");
+  }
+
+  return context;
+}
+```
+
+### Using it in a component
+
+```tsx
+import { useError } from "./ErrorContext";
+
+export default function UserList() {
+  const { showError } = useError();
+
+  async function loadUsers() {
+    try {
+      throw new Error("Failed to fetch users");
+    } catch (err) {
+      showError((err as Error).message);
+    }
+  }
+
+  return <button onClick={loadUsers}>Load Users</button>;
+}
+```
+
+### `main.tsx`
+
+```tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import { ErrorProvider } from "./ErrorContext";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <ErrorProvider>
+      <App />
+    </ErrorProvider>
+  </React.StrictMode>,
+);
+```
+
+---
+
+# Tooling & Setup
+
+**Recommended stack:**
+
+- **Vite + React + TypeScript** for fast development with native ESM, excellent HMR, and minimal configuration.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- For SSR or hybrid rendering, use **Next.js App Router**. Place the `ErrorProvider` in a client component (e.g., the root layout) and use Next.js `error.tsx` files for route-level error boundaries.
+- **Remix** is another good option when leveraging nested routing and data APIs.
+
+**ESM vs CommonJS**
+
+- Vite uses **ES Modules (ESM)** in development, resulting in faster startup and on-demand module loading.
+- CommonJS remains common in older Node.js projects, but modern React applications should favor ESM.
+
+---
+
+# Performance
+
+A global error system should not become a source of unnecessary re-renders.
+
+### 1. Memoize context value
+
+```tsx
+const value = useMemo(
+  () => ({
+    error,
+    showError,
+    clearError,
+  }),
+  [error],
+);
+```
+
+This prevents a new context object from being created on every render.
+
+### 2. Memoize callbacks
+
+```tsx
+const showError = useCallback((message: string) => {
+  setError(message);
+}, []);
+
+const clearError = useCallback(() => {
+  setError(null);
+}, []);
+```
+
+### 3. Automatic batching
+
+React 18 automatically batches state updates, reducing unnecessary renders when multiple updates occur in the same event or async task.
+
+### 4. React Profiler
+
+Use the React DevTools Profiler to verify that only components consuming the error context re-render when the error state changes.
+
+### 5. Code splitting
+
+Lazy-load heavy error UI (e.g., detailed error dialogs or reporting forms) with `React.lazy` and `Suspense` to keep the initial bundle small.
+
+### 6. Caching and retries
+
+If using libraries like **TanStack Query**, configure retry logic and use global query/mutation error handlers to surface failures through the context instead of duplicating error handling in every component.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import { ErrorProvider } from "./ErrorContext";
+import UserList from "./UserList";
+
+test("shows global error message", async () => {
+  render(
+    <ErrorProvider>
+      <UserList />
+    </ErrorProvider>,
+  );
+
+  fireEvent.click(screen.getByText("Load Users"));
+
+  expect(await screen.findByText("Failed to fetch users")).toBeInTheDocument();
+});
+```
+
+For integration tests, mock API failures with **MSW (Mock Service Worker)**. For end-to-end verification of error flows, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- **Error Boundaries:** Wrap major UI sections in Error Boundaries to catch rendering errors. They do not catch errors in event handlers, async code, or server-side rendering.
+- **Centralized logging:** Forward errors to services such as Sentry, Datadog, or New Relic with metadata like user ID (if appropriate), route, browser, and stack trace.
+- **SSR/CSR considerations:** In frameworks like Next.js, access browser APIs (`window`, `document`) only in client components or effects. Use route-level error boundaries (`error.tsx`) for server-rendered routes.
+- **Bundle size:** Keep the context lightweight. Dynamically import advanced reporting or diagnostics UI if needed.
+- **Deployment:** Serve static assets through a CDN and generate source maps (uploaded securely to your monitoring platform) to improve production debugging.
+
+---
+
+# Pitfalls
+
+- **Using Context as the only error mechanism.** Context does not catch render errors—combine it with Error Boundaries.
+- **Storing every transient error globally.** Reserve global state for application-wide notifications; keep local validation errors within their components.
+- **Triggering unnecessary re-renders.** Memoize context values and callbacks, and avoid recreating provider values on every render.
+
 ## Question 3. How do you implement a multi-select dropdown with search functionality?
 
 ## Question 4. How do you implement a sortable table with dynamic columns?
