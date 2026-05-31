@@ -352,6 +352,228 @@ For end-to-end testing, use **Playwright** to verify sorting and filtering flows
 
 ## Question 2. How do you implement a search input with debounce in a functional component?
 
+# How do you implement a search input with debounce in a functional component?
+
+## Short answer
+
+A debounced search delays executing the search logic until the user stops typing for a specified time (e.g., 300–500ms). In React functional components, the common approach is to:
+
+- Store the immediate input value in state.
+- Use `useEffect` with `setTimeout` and `clearTimeout` to update a debounced value.
+- Trigger API calls or expensive filtering when the **debounced value** changes instead of on every keystroke.
+
+This reduces unnecessary renders, API requests, and improves user experience.
+
+---
+
+# Explanation
+
+Without debouncing:
+
+```text
+User types: React
+
+R → API Call
+Re → API Call
+Rea → API Call
+Reac → API Call
+React → API Call
+```
+
+With a **300ms debounce**:
+
+```text
+User types: React
+
+R
+Re
+Rea
+Reac
+React
+      ↓ 300ms pause
+   Single API Call
+```
+
+### How it works
+
+There are two pieces of state:
+
+```tsx
+const [search, setSearch] = useState("");
+const [debouncedSearch, setDebouncedSearch] = useState("");
+```
+
+Flow:
+
+```text
+Input Change
+      │
+      ▼
+setSearch()
+      │
+      ▼
+Start Timer (300ms)
+      │
+      ▼
+User types again?
+      │
+ Yes ─────────► Cancel previous timer
+      │
+ No
+      ▼
+setDebouncedSearch()
+      │
+      ▼
+API Call / Filtering
+```
+
+The cleanup function inside `useEffect` clears the previous timeout, ensuring only the latest input triggers the update.
+
+### Why use debounce?
+
+- Prevents excessive API requests.
+- Reduces expensive filtering or computations.
+- Improves responsiveness on slower networks.
+- Provides a smoother typing experience.
+
+### React 18 considerations
+
+React 18 introduced features that complement (but do not replace) debouncing:
+
+- **Automatic batching** reduces unnecessary re-renders when multiple state updates occur together.
+- **`useDeferredValue`** keeps the UI responsive while rendering expensive filtered results, but it **does not prevent network requests**.
+- **`useTransition`** marks expensive UI updates as non-urgent.
+
+For API searches, **debounce is still the preferred solution**. You can combine it with `useTransition` or `useDeferredValue` for even smoother rendering.
+
+---
+
+# Example
+
+### Scaffold with Vite (React + TypeScript)
+
+```bash
+npm create vite@latest debounce-search -- --template react-ts
+cd debounce-search
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Simulate API call
+  useEffect(() => {
+    if (!debouncedSearch) return;
+
+    console.log("Searching:", debouncedSearch);
+
+    // Example:
+    // fetch(`/api/search?q=${encodeURIComponent(debouncedSearch)}`)
+    //   .then(res => res.json())
+    //   .then(data => console.log(data));
+  }, [debouncedSearch]);
+
+  return (
+    <div style={{ padding: 20 }}>
+      <input
+        type="text"
+        placeholder="Search..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
+      <p>Typing: {search}</p>
+      <p>Debounced: {debouncedSearch}</p>
+    </div>
+  );
+}
+```
+
+This example demonstrates:
+
+- Functional component with Hooks.
+- Debouncing using `useEffect`.
+- Proper timeout cleanup.
+- Triggering side effects only after the debounce interval.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** since it is deprecated.
+- Prefer **Vite** for React applications because of its fast startup, HMR, and ESM-first architecture.
+- Use **Next.js App Router** when building SSR/SEO-focused applications or when leveraging React Server Components.
+- **ESM vs CommonJS:** Modern React tooling uses **ES Modules (ESM)** for efficient tree-shaking and faster builds. Vite natively supports ESM.
+- For larger applications, organize debounce logic into a reusable custom hook such as `useDebounce`.
+
+---
+
+# Performance
+
+- Debounce API calls (typically 300–500ms).
+- Use `useMemo` for expensive client-side filtering.
+- Memoize callbacks with `useCallback` if passing them to memoized children.
+- Wrap expensive result lists with `React.memo` to minimize unnecessary re-renders.
+- Use **`useDeferredValue`** to keep rendering responsive while filtering large datasets.
+- For long result lists, combine debounce with virtualization (`react-window` or `@tanstack/react-virtual`).
+- Use the **React DevTools Profiler** to identify render bottlenecks.
+- Cache search results using **TanStack Query** or **SWR** to avoid repeated requests for the same query.
+
+---
+
+# Testing
+
+Use **Vitest** and **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test ideas:
+
+- Verify no search executes immediately while typing.
+- Advance fake timers and confirm the search runs once after the debounce interval.
+- Ensure rapid typing cancels previous timers.
+- Mock API calls and verify only the final query is requested.
+
+For end-to-end testing, use **Playwright** to validate real user typing behavior and network interactions.
+
+---
+
+# Ops & Deployment
+
+- Cancel in-flight requests with `AbortController` when a newer search starts to avoid race conditions.
+- Log slow search responses and API failures for observability.
+- Use an **Error Boundary** for rendering search results, while handling fetch errors locally in the component or data layer.
+- If using SSR, debounce only on the client; server-render the initial page if needed for SEO.
+- Serve static assets via a CDN and cache API responses where appropriate.
+
+---
+
+# Pitfalls
+
+- **Forgetting to clear the timeout**, causing multiple delayed executions.
+- **Debouncing the input state itself** instead of debouncing the side effect, making the input feel laggy.
+- **Ignoring stale responses** from older API requests; cancel them or ignore outdated results.
+
 ## Question 3. How do you implement a reusable modal component with animations?
 
 ## Question 4. How do you implement a multi-step wizard form with progress tracking?
