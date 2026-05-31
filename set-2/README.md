@@ -176,6 +176,217 @@ npm run test
 
 ## Question 2. What are synthetic events in React?
 
+## Short answer
+
+**Synthetic Events** are React's cross-browser wrapper around native browser events. They provide a consistent API across different browsers, normalize event behavior, and integrate with React's event delegation and rendering system.
+
+---
+
+# Explanation
+
+A **SyntheticEvent** is an object that React creates whenever an event (like `click`, `change`, or `submit`) occurs.
+
+Instead of attaching event listeners to every DOM element, React uses **event delegation** by attaching a small number of listeners to the root of the React application and dispatching `SyntheticEvent` objects to your components.
+
+### Why React uses Synthetic Events
+
+- Provides a consistent API across browsers.
+- Normalizes browser inconsistencies.
+- Improves performance through event delegation.
+- Integrates cleanly with React's rendering lifecycle.
+
+Example:
+
+```tsx
+function Button() {
+  function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+    console.log(event.type); // "click"
+    console.log(event.currentTarget);
+  }
+
+  return <button onClick={handleClick}>Click me</button>;
+}
+```
+
+Here, `event` is a **SyntheticEvent**, not the raw browser event.
+
+---
+
+## React 18 rendering behavior
+
+When an event handler runs:
+
+1. React receives the browser event.
+2. Creates a `SyntheticEvent`.
+3. Executes your event handler.
+4. Batches all state updates made during the handler.
+5. Performs reconciliation.
+6. Updates the DOM once during the commit phase.
+
+Example:
+
+```tsx
+const handleClick = () => {
+  setCount((c) => c + 1);
+  setVisible(true);
+};
+```
+
+Both updates are **automatically batched** in React 18, resulting in a single re-render.
+
+---
+
+## Event Pooling (Important Interview Question)
+
+### React 16 and earlier
+
+Synthetic events were **pooled** for performance.
+
+```tsx
+function handleClick(e) {
+  setTimeout(() => {
+    console.log(e.target); // ❌ null (event released)
+  }, 100);
+}
+```
+
+Developers had to call:
+
+```tsx
+e.persist();
+```
+
+to retain the event.
+
+---
+
+### React 17+
+
+**Event pooling was removed.**
+
+Now this works:
+
+```tsx
+function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+  setTimeout(() => {
+    console.log(e.target);
+  }, 100);
+}
+```
+
+No need for `event.persist()` anymore.
+
+---
+
+# Example
+
+### Scaffold with Vite (React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [message, setMessage] = useState("Not clicked");
+
+  function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+    console.log("Synthetic Event:", event.type);
+    console.log("Native Event:", event.nativeEvent);
+
+    setMessage("Button clicked!");
+  }
+
+  return (
+    <div>
+      <h2>{message}</h2>
+
+      <button onClick={handleClick}>Click Me</button>
+    </div>
+  );
+}
+```
+
+Notice:
+
+- `event.type` → from the SyntheticEvent API
+- `event.nativeEvent` → underlying browser event if you need it
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for new React projects. It provides fast startup, hot module replacement (HMR), and native ESM support.
+- Avoid **Create React App (CRA)**, as it is deprecated.
+- Choose:
+  - **Vite** for client-rendered SPAs.
+  - **Next.js** when SSR, SSG, or React Server Components are required.
+
+- Vite uses modern ESM during development and a fast bundler (esbuild/SWC for transforms, Rollup for production builds).
+
+---
+
+# Performance
+
+React's event system already optimizes event handling through delegation, but you should still consider:
+
+- Use `React.memo` to prevent unnecessary child re-renders caused by parent state changes.
+- Use `useCallback` when passing event handlers to memoized children.
+- Use `useMemo` for expensive derived values used during rendering.
+- Lazy-load route-level components with `React.lazy` and `Suspense`.
+- Use the React DevTools **Profiler** to identify expensive renders triggered by event handlers.
+
+---
+
+# Testing
+
+Use **Vitest** with React Testing Library to verify event handling:
+
+```tsx
+import { fireEvent, render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("updates message on click", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button"));
+
+  expect(screen.getByText("Button clicked!")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+For end-to-end interaction testing, use Playwright.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors (not errors thrown inside event handlers, which should be handled explicitly with `try/catch` or error reporting).
+- Log unexpected event handler failures to monitoring tools such as Sentry.
+- In SSR applications (e.g., Next.js), event handlers are attached during hydration; ensure the server and client render consistent markup.
+- Reduce bundle size with route-based code splitting and lazy loading, and serve assets via a CDN or edge network.
+
+---
+
+# Pitfalls
+
+- **Confusing `event.target` with `event.currentTarget`**—`target` is the element that initiated the event, while `currentTarget` is the element whose handler is executing.
+- **Assuming event pooling still exists**—since React 17, `SyntheticEvent` objects are no longer pooled, so `event.persist()` is unnecessary.
+- **Using `nativeEvent` without a need**—prefer the normalized `SyntheticEvent` API unless you specifically require browser-specific event details.
+
 ## Question 3. How do you conditionally apply CSS classes?
 
 ## Question 4. Explain the role of key prop in React lists
