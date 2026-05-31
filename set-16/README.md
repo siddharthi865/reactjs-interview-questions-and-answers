@@ -274,6 +274,253 @@ npm install -D @playwright/test
 
 ## Question 2. How do you create a React project without using Create React App?
 
+# Short answer
+
+Since **Create React App (CRA) is deprecated**, the recommended way to create a React project is to use **Vite** for client-side React applications or **Next.js** if you need server-side rendering (SSR), React Server Components, or full-stack capabilities.
+
+The most common interview answer is:
+
+```bash
+npm create vite@latest my-react-app -- --template react-ts
+cd my-react-app
+npm install
+npm run dev
+```
+
+---
+
+# Explanation
+
+React is just a UI library—it doesn't dictate how your project is built. Modern React applications rely on build tools/frameworks that provide:
+
+- Fast development server
+- Hot Module Replacement (HMR)
+- TypeScript support
+- Bundling
+- Code splitting
+- Tree shaking
+- Environment variable handling
+- Optimized production builds
+
+Today, the most popular choices are:
+
+| Tool        | Best For                   | Uses              |
+| ----------- | -------------------------- | ----------------- |
+| **Vite** ⭐ | Most React SPAs            | esbuild + Rollup  |
+| **Next.js** | SSR, SSG, Full-stack React | Turbopack/Webpack |
+| **Remix**   | Server-first applications  | Vite              |
+| **Parcel**  | Zero-config projects       | Parcel Bundler    |
+
+---
+
+## Option 1: Create a React App with Vite (Recommended)
+
+### TypeScript
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+```
+
+### JavaScript
+
+```bash
+npm create vite@latest my-app -- --template react
+```
+
+Then:
+
+```bash
+cd my-app
+npm install
+npm run dev
+```
+
+Development server:
+
+```
+http://localhost:5173
+```
+
+Project structure:
+
+```text
+my-app/
+├── public/
+├── src/
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── assets/
+├── index.html
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
+```
+
+---
+
+## Option 2: Create a Next.js Project
+
+For applications requiring:
+
+- SSR
+- SSG
+- API routes
+- Authentication
+- SEO
+- React Server Components
+
+Run:
+
+```bash
+npx create-next-app@latest my-app
+```
+
+Choose:
+
+- TypeScript ✅
+- ESLint ✅
+- App Router ✅
+- Turbopack ✅
+
+Start:
+
+```bash
+cd my-app
+npm run dev
+```
+
+---
+
+## Option 3: Using Remix
+
+```bash
+npx create-remix@latest
+```
+
+Ideal for:
+
+- Nested routes
+- Server rendering
+- Progressive enhancement
+
+---
+
+# Example
+
+**Scaffold a React + TypeScript project using Vite:**
+
+```bash
+npm create vite@latest my-react-app -- --template react-ts
+cd my-react-app
+npm install
+npm run dev
+```
+
+`src/App.tsx`
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <main>
+      <h1>React + Vite</h1>
+
+      <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>
+    </main>
+  );
+}
+```
+
+Visit:
+
+```
+http://localhost:5173
+```
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**
+
+Why Vite?
+
+- Extremely fast startup using **esbuild** for dependency pre-bundling.
+- Native **ES Modules (ESM)** during development.
+- Fast Hot Module Replacement (HMR).
+- Optimized production builds with **Rollup**.
+- Excellent TypeScript support with minimal configuration.
+
+Avoid **Create React App (CRA)** because it is deprecated and receives minimal maintenance.
+
+**ESM vs CommonJS**
+
+- **ESM (`import`/`export`)** is the standard for modern React projects and browsers.
+- **CommonJS (`require`)** is mainly used in older Node.js codebases. New React projects should prefer ESM.
+
+---
+
+# Performance
+
+Modern tooling helps optimize performance:
+
+- Use `React.lazy()` and `Suspense` for route/component code splitting.
+- Profile rendering with **React DevTools Profiler**.
+- Avoid unnecessary renders using `React.memo`.
+- Memoize expensive calculations with `useMemo`.
+- Memoize event handlers with `useCallback`.
+- Use data-fetching libraries like **TanStack Query** or **SWR** for caching and background refetching.
+- Enable bundle analysis (e.g., `rollup-plugin-visualizer` or `vite-bundle-visualizer`) to identify large dependencies.
+
+---
+
+# Testing
+
+Install **Vitest** with **React Testing Library**:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders heading", () => {
+  render(<App />);
+  expect(screen.getByText("React + Vite")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing:
+
+```bash
+npm install -D @playwright/test
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate UI failures.
+- Log runtime errors with services like Sentry.
+- Keep bundles small through lazy loading and tree shaking.
+- Deploy Vite apps to platforms such as Vercel, Netlify, GitHub Pages, or any CDN-backed static host.
+- Use **Next.js** when SSR, SEO, streaming, or edge rendering are required.
+
+---
+
+# Pitfalls
+
+- **Using CRA for new projects** even though it is deprecated.
+- **Choosing the wrong tool** (e.g., using a plain SPA when SSR/SEO is a key requirement).
+- **Ignoring code splitting**, resulting in unnecessarily large JavaScript bundles and slower initial loads.
+
 ## Question 3. How do you update state based on previous state in functional components?
 
 ## Question 4. What is the difference between setState callback and useEffect?
