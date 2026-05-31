@@ -289,6 +289,267 @@ For end-to-end testing, consider **Playwright**.
 
 ## Question 2. How do you handle multiple input fields with one onChange handler?
 
+# Short answer
+
+Use a **single `onChange` handler** that identifies the input by its `name` attribute and updates the corresponding property in a state object. This is the standard and scalable approach for handling multiple form fields in React.
+
+---
+
+# Explanation
+
+Instead of creating a separate handler for every input:
+
+```tsx
+onFirstNameChange();
+onLastNameChange();
+onEmailChange();
+```
+
+React applications typically maintain the form in a single state object:
+
+```tsx
+{
+  firstName: "",
+  lastName: "",
+  email: ""
+}
+```
+
+A generic handler updates only the changed field.
+
+---
+
+### 1. Using the `name` attribute
+
+Each input has a unique `name`:
+
+```tsx
+<input name="firstName" />
+<input name="lastName" />
+<input name="email" />
+```
+
+The handler reads the field name and value:
+
+```tsx
+const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { name, value } = e.target;
+
+  setForm((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+```
+
+The computed property (`[name]`) updates only the corresponding key while preserving the rest of the state.
+
+---
+
+### 2. Controlled components
+
+Each input's value comes from React state.
+
+```tsx
+<input name="email" value={form.email} onChange={handleChange} />
+```
+
+Benefits:
+
+- Single source of truth
+- Easy validation
+- Easy form submission
+- Predictable UI
+- Simplified testing
+
+---
+
+### 3. Handling different input types
+
+Checkboxes use `checked` instead of `value`.
+
+```tsx
+const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { name, type, value, checked } = e.target;
+
+  setForm((prev) => ({
+    ...prev,
+    [name]: type === "checkbox" ? checked : value,
+  }));
+};
+```
+
+For `<select>` and `<textarea>`, use the appropriate event type or a union type if sharing the same handler.
+
+---
+
+### 4. Rendering behavior (React 18)
+
+Each keystroke triggers an `onChange` event and updates state.
+
+React 18:
+
+- efficiently schedules updates
+- re-renders only affected components
+- automatically batches multiple state updates occurring within the same event
+
+Since typing is a high-priority user interaction, React processes these updates promptly to keep the UI responsive.
+
+---
+
+### 5. Component architecture
+
+For small forms:
+
+- Keep form state local with `useState`.
+
+For larger forms:
+
+- Split into reusable field components.
+- Lift state to the parent or use Context when multiple components share form data.
+- Consider libraries like React Hook Form or Formik for complex validation and performance optimization.
+
+---
+
+# Example
+
+**Scaffold using Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+type FormData = {
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+export default function App() {
+  const [form, setForm] = useState<FormData>({
+    firstName: "",
+    lastName: "",
+    email: "",
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  return (
+    <>
+      <input
+        name="firstName"
+        placeholder="First Name"
+        value={form.firstName}
+        onChange={handleChange}
+      />
+
+      <input
+        name="lastName"
+        placeholder="Last Name"
+        value={form.lastName}
+        onChange={handleChange}
+      />
+
+      <input
+        name="email"
+        type="email"
+        placeholder="Email"
+        value={form.email}
+        onChange={handleChange}
+      />
+
+      <pre>{JSON.stringify(form, null, 2)}</pre>
+    </>
+  );
+}
+```
+
+This example demonstrates:
+
+- one reusable `onChange` handler
+- controlled components
+- immutable state updates
+- scalable form management
+
+---
+
+# Tooling & Setup
+
+- **Preferred stack:** Vite + React + TypeScript for fast development, HMR, and excellent TypeScript support.
+- **Avoid Create React App (CRA):** It is deprecated. Prefer Vite for SPAs, or Next.js/Remix when SSR, routing, or server-side data fetching is required.
+- **ESM vs CommonJS:** Vite uses native **ES Modules (ESM)** during development, enabling faster startup and module loading. CommonJS is primarily used in older Node.js environments.
+- **Bundler:** Vite leverages **esbuild** for dependency pre-bundling and **Rollup** for optimized production builds.
+
+---
+
+# Performance
+
+- Store related form fields in a single object when it simplifies updates, but avoid unnecessary re-renders in very large forms by splitting state or components where appropriate.
+- Use **React DevTools Profiler** to identify expensive re-renders while typing.
+- Memoize reusable field components with `React.memo` and stabilize callbacks with `useCallback` when passing handlers to memoized children.
+- Use `useMemo` for expensive derived values (e.g., filtered options or computed summaries).
+- For large forms, libraries such as React Hook Form minimize re-renders by relying on uncontrolled inputs where appropriate.
+- Lazy-load large form sections with `React.lazy` and `Suspense` if they are not immediately needed.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration testing.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/user-event @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+test("updates first name", async () => {
+  render(<App />);
+
+  await userEvent.type(screen.getByPlaceholderText("First Name"), "John");
+
+  expect(screen.getByText(/John/)).toBeInTheDocument();
+});
+```
+
+For end-to-end form testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Validate user input on both the client and the server; never rely solely on client-side validation.
+- Wrap form sections in **Error Boundaries** to catch rendering errors (note that event handler errors should be handled separately with `try/catch` or error reporting).
+- Log validation failures and submission errors using monitoring tools such as Sentry.
+- Optimize bundle size with route-based code splitting and deploy static assets through a CDN. If SEO or initial load performance is important, consider SSR with Next.js.
+
+---
+
+# Pitfalls
+
+- Forgetting the `name` attribute prevents the generic handler from identifying which field to update.
+- Mutating the state object directly instead of creating a new object can prevent React from detecting changes.
+- Using the wrong property (`value` instead of `checked`) for checkboxes leads to incorrect state updates.
+
 ## Question 3. How do you use `map()` to render components in JSX?
 
 ## Question 4. How do you conditionally render `null` in React?
