@@ -309,6 +309,216 @@ For E2E, use Playwright to verify that scrolling loads additional items without 
 
 ## Question 2. How do you implement a debounce function in React?
 
+# Short answer
+
+A **debounce function** delays executing a function until a specified period has passed since the last invocation. In React, it's commonly used for **search inputs, API requests, validation, filtering, and resize events** to reduce unnecessary work and improve performance.
+
+---
+
+# Explanation
+
+Without debouncing, every keystroke can trigger:
+
+- API requests
+- Expensive filtering
+- Re-rendering
+- Validation
+- Analytics events
+
+For example, typing **"react"** generates six input events:
+
+```
+r
+re
+rea
+reac
+react
+```
+
+Without debounce:
+
+```
+6 API requests
+```
+
+With a **500ms debounce**:
+
+```
+User types...
+(wait 500ms)
+
+1 API request
+```
+
+This significantly reduces network traffic and improves user experience.
+
+## Common implementation approaches
+
+### 1. Debouncing a value (recommended)
+
+Create a reusable `useDebounce` hook that returns a delayed version of a state value. This is the most "React-like" solution because components react to state changes rather than imperative timers.
+
+### 2. Debouncing a callback
+
+Wrap an event handler with a debounce function (or a utility such as Lodash's `debounce`) when you need to delay executing a specific callback.
+
+## React 18 considerations
+
+- **Automatic batching** groups state updates triggered after the debounced callback, reducing unnecessary renders.
+- Always clear pending timers in `useEffect` cleanup to avoid updating state after unmount.
+- For expensive filtering of already-loaded data, consider combining debouncing with `useDeferredValue` or `startTransition` to keep typing responsive.
+
+---
+
+# Example
+
+**Scaffold (Vite + React + TypeScript)**
+
+```bash
+npm create vite@latest debounce-demo -- --template react-ts
+cd debounce-demo
+npm install
+npm run dev
+```
+
+### Reusable `useDebounce` hook
+
+```tsx
+import { useEffect, useState } from "react";
+
+export function useDebounce<T>(value: T, delay = 500): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+```
+
+### Using the hook
+
+```tsx
+import { useEffect, useState } from "react";
+import { useDebounce } from "./useDebounce";
+
+export default function Search() {
+  const [query, setQuery] = useState("");
+
+  const debouncedQuery = useDebounce(query, 500);
+
+  useEffect(() => {
+    if (!debouncedQuery) return;
+
+    console.log("Fetching:", debouncedQuery);
+
+    // fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
+  }, [debouncedQuery]);
+
+  return (
+    <input
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      placeholder="Search..."
+    />
+  );
+}
+```
+
+This implementation:
+
+- Updates the input immediately.
+- Waits 500ms after the user stops typing.
+- Performs only one API call for a burst of keystrokes.
+- Cleans up pending timers to avoid memory leaks.
+
+---
+
+# Tooling & Setup
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+Recommended stacks:
+
+- **Vite** – Fast development server, native ESM support, excellent for SPAs.
+- **Next.js** – Supports SSR, Server Components, and routing for production-grade applications.
+- **Remix** – Great for data loading and nested routing.
+
+### ESM vs CommonJS
+
+Modern React projects use **ES Modules (ESM)**:
+
+```ts
+import { useEffect } from "react";
+```
+
+Benefits include:
+
+- Tree shaking
+- Faster dev server startup
+- Native browser module support
+- Better bundler optimization
+
+---
+
+# Performance
+
+For production applications:
+
+- Debounce **network requests**, not controlled input state, so typing stays responsive.
+- Use `React.memo` to prevent unnecessary child re-renders.
+- Memoize expensive computations with `useMemo`.
+- Memoize callbacks passed to children with `useCallback`.
+- Use `React.lazy` and dynamic imports for code splitting.
+- Profile with the React DevTools Profiler to verify that debouncing reduces unnecessary work.
+- For server-state management, libraries like TanStack Query can complement debouncing with caching, request deduplication, and stale-data management.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit/integration tests and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test idea:
+
+```tsx
+it("calls the search API only once after the debounce delay", async () => {
+  // Use fake timers to advance time and verify
+  // the callback runs only after the configured delay.
+});
+```
+
+Use fake timers (`vi.useFakeTimers()`) to make debounce tests deterministic.
+
+---
+
+# Ops & Deployment
+
+- Log search latency and API errors with observability tools (e.g., Sentry or OpenTelemetry).
+- Cancel stale requests using `AbortController` when a newer debounced search starts.
+- If using SSR (e.g., Next.js), debounce only client-side interactions.
+- Monitor bundle size; if using a utility library, prefer importing only the required function (or implement a small custom hook) to minimize bundle impact.
+- Cache search responses when appropriate to reduce repeated network requests.
+
+---
+
+# Pitfalls
+
+- **Debouncing state updates:** Keep the input state immediate; debounce the side effect (e.g., API call) or derived value instead.
+- **Not clearing timers:** Always clean up `setTimeout` in `useEffect` to prevent memory leaks or updates after unmount.
+- **Ignoring stale requests:** Debouncing limits request frequency but doesn't cancel previous requests—use `AbortController` or a data-fetching library to avoid race conditions.
+
 ## Question 3. How do you memoize a component that receives multiple props?
 
 ## Question 4. How do you implement a multi-select dropdown with checkboxes?
