@@ -25,6 +25,185 @@
 
 ## Question 1. How do you render a default “No data available” message?
 
+# Short answer
+
+Render a fallback UI conditionally when your data is empty.
+
+The most common pattern is:
+
+```tsx
+{
+  items.length === 0 ? (
+    <p>No data available.</p>
+  ) : (
+    items.map((item) => <Item key={item.id} item={item} />)
+  );
+}
+```
+
+---
+
+# Explanation
+
+In React, you typically render a **fallback state** whenever the fetched or computed data is empty. This improves the user experience by clearly communicating that there is currently nothing to display instead of rendering a blank page.
+
+A production-ready component usually handles **four UI states**:
+
+1. **Loading** – Data is being fetched.
+2. **Error** – Request failed.
+3. **Empty** – Request succeeded, but no records exist.
+4. **Success** – Display the data.
+
+Example flow:
+
+```
+Loading → Error? → Empty? → Data
+```
+
+Instead of directly checking `items.length`, always ensure the value exists:
+
+```tsx
+if (loading) return <Spinner />;
+if (error) return <ErrorMessage />;
+if (!items?.length) return <EmptyState />;
+
+return <ItemList items={items} />;
+```
+
+This makes the component easier to maintain and avoids nested conditional rendering.
+
+React 18's automatic batching doesn't change this pattern—it simply makes multiple state updates (e.g., `setLoading(false)` and `setItems(data)`) more efficient.
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function App() {
+  const [users] = useState<User[]>([]);
+
+  return (
+    <div>
+      <h2>Users</h2>
+
+      {users.length === 0 ? (
+        <p>No data available.</p>
+      ) : (
+        <ul>
+          {users.map((user) => (
+            <li key={user.id}>{user.name}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+```
+
+A reusable approach:
+
+```tsx
+function EmptyState() {
+  return <p>No data available.</p>;
+}
+
+function UserList({ users }: { users: User[] }) {
+  if (!users.length) {
+    return <EmptyState />;
+  }
+
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Prefer **Vite** over Create React App (CRA), as CRA is deprecated.
+- For SSR, SEO, or hybrid rendering, use **Next.js App Router**.
+- Vite uses native **ES Modules (ESM)** during development for fast startup and HMR.
+- Modern bundlers like **Vite (Rollup)** and **Turbopack** optimize code splitting and tree shaking automatically.
+
+---
+
+# Performance
+
+Even though rendering an empty state is inexpensive, follow these practices for larger applications:
+
+- Render a dedicated `<EmptyState />` component to keep rendering logic clean.
+- Use **React Profiler** to identify unnecessary renders.
+- Memoize expensive child components with `React.memo`.
+- Use `useMemo` and `useCallback` only when profiling shows a benefit.
+- Code-split large pages with `React.lazy()` and `Suspense`.
+- Cache server data using libraries like **TanStack Query** or **SWR** to reduce unnecessary refetches.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows empty message", () => {
+  render(<App />);
+  expect(screen.getByText("No data available.")).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Log API failures to monitoring tools (e.g., Sentry) while showing a friendly empty or error state.
+- Wrap pages with an Error Boundary to catch rendering errors.
+- Consider SSR (Next.js) for SEO-sensitive pages and CSR for highly interactive dashboards.
+- Keep bundles small with lazy loading and route-level code splitting.
+- Deploy static Vite apps to a CDN for fast global delivery.
+
+---
+
+# Pitfalls
+
+- **Don't assume the array exists.** Use `!items?.length` instead of `items.length` if data may be `undefined`.
+- **Differentiate loading from empty.** Don't show "No data available" while a request is still in progress.
+- **Create reusable empty-state components** instead of duplicating the same message throughout the application.
+
 ## Question 2. How do you use Fragment shorthand syntax?
 
 ## Question 3. How do you handle onClick events for dynamically generated buttons?
