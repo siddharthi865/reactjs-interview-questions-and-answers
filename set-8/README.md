@@ -25,6 +25,187 @@
 
 ## Question 1. What is the difference between `useState` lazy initialization vs direct initialization?
 
+## Short answer
+
+Direct initialization computes the initial state on every render (though React only uses it on the first render), while lazy initialization computes the initial state only once on mount using a function passed to `useState`.
+
+---
+
+## Explanation
+
+### 1. Direct initialization
+
+```js
+const [state, setState] = useState(expensiveComputation());
+```
+
+- `expensiveComputation()` runs **on every render**.
+- React only uses the returned value for the **initial render**, but the function is still executed repeatedly.
+- This can cause unnecessary performance overhead.
+
+#### Key behavior:
+
+- Execution happens during render phase.
+- Wasteful if computation is heavy.
+
+---
+
+### 2. Lazy initialization
+
+```js
+const [state, setState] = useState(() => expensiveComputation());
+```
+
+- The function is executed **only once (on initial mount)**.
+- React ignores it on subsequent renders.
+- Ideal for expensive computations or reading from localStorage, IndexedDB, etc.
+
+#### Key behavior:
+
+- Function is passed, not executed immediately.
+- React invokes it only during initial state setup.
+
+---
+
+### React rendering behavior (important for interviews)
+
+- React 18 with concurrent rendering may render components multiple times before committing.
+- Direct initialization can re-run expensive logic unnecessarily during these render attempts.
+- Lazy initialization ensures computation is **isolated to initial mount phase only**, improving performance stability.
+
+---
+
+### State management trade-offs
+
+- Use **direct initialization** when:
+  - Value is cheap (constants, simple calculations)
+  - Readability matters more than micro-optimization
+
+- Use **lazy initialization** when:
+  - Computation is expensive (sorting large arrays, parsing JSON)
+  - Reading from browser APIs (`localStorage`, `sessionStorage`)
+  - Avoiding unnecessary work during re-renders
+
+---
+
+## Example (React + TypeScript)
+
+### Direct vs Lazy Initialization
+
+```tsx
+import React, { useState } from "react";
+
+function expensiveComputation() {
+  console.log("Expensive computation running...");
+  return Array.from({ length: 1000000 }, (_, i) => i).reduce(
+    (a, b) => a + b,
+    0,
+  );
+}
+
+export default function Counter() {
+  // ❌ Runs on every render (bad for expensive logic)
+  const [directValue] = useState(expensiveComputation());
+
+  // ✅ Runs only once on mount
+  const [lazyValue] = useState(() => expensiveComputation());
+
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <h2>Count: {count}</h2>
+      <button onClick={() => setCount((c) => c + 1)}>Re-render</button>
+
+      <p>Direct init value: {directValue}</p>
+      <p>Lazy init value: {lazyValue}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## Tooling & Setup
+
+Use **Vite (recommended)** instead of CRA:
+
+```bash
+npm create vite@latest react-lazy-state -- --template react-ts
+cd react-lazy-state
+npm install
+npm run dev
+```
+
+- Vite uses **ESM-based dev server** (fast HMR)
+- Bundler: **Rollup for production builds**
+- Modern React setups rely on ESM instead of CommonJS for tree-shaking efficiency
+
+---
+
+## Performance
+
+- Prefer lazy initialization when:
+  - CPU-heavy computations exist
+  - Data hydration from storage/API sync is needed
+
+### Optimization techniques:
+
+- Avoid unnecessary re-computation in render
+- Combine with:
+  - `React.memo` for component memoization
+  - `useMemo` for derived state (not initial state)
+  - `useCallback` for stable handlers
+
+- Use React DevTools Profiler to detect re-render cost
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import Counter from "./Counter";
+
+test("renders lazy initialized value", () => {
+  render(<Counter />);
+  expect(screen.getByText(/Direct init value/)).toBeInTheDocument();
+});
+```
+
+- Mock expensive functions using `vi.fn()`
+- Ensure initialization only happens once (spy on function calls)
+
+---
+
+## Ops & Deployment
+
+- Use lazy init to reduce **client-side startup cost**
+- Important in SSR frameworks (Next.js):
+  - Avoid running browser-only logic during SSR
+
+- Combine with:
+  - Code splitting (`React.lazy`)
+  - CDN caching for static assets
+  - Edge rendering (Next.js / Vercel)
+
+---
+
+## Pitfalls
+
+- ❌ Calling expensive functions directly in `useState`
+- ❌ Assuming lazy init runs on every render (it does NOT)
+- ❌ Using lazy init for derived state (better with `useMemo`)
+- ❌ Over-optimizing trivial computations
+
 ## Question 2. How do you implement theme switching using context API?
 
 ## Question 3. Explain the concept of Render Props in React
