@@ -25,6 +25,155 @@
 
 ## Question 1. What is the difference between className and class in JSX?
 
+## Short answer
+
+In JSX, you use `className` instead of `class` because `class` is a reserved keyword in JavaScript. Both serve the same purpose: assigning CSS classes to elements.
+
+---
+
+## Explanation
+
+### Why `className` exists in React (JSX)
+
+JSX is not HTML—it is syntactic sugar over `React.createElement()` calls. Since JavaScript already uses `class` as a reserved keyword for ES6 classes, React avoids conflicts by using `className`.
+
+```jsx
+// JSX
+<div className="container" />
+```
+
+Compiles roughly to:
+
+```js
+React.createElement("div", { className: "container" });
+```
+
+### Rendering behavior
+
+- `className` is passed as a prop to the DOM element.
+- React reconciles it during the virtual DOM diffing process.
+- It updates only when the value changes (React 18 batching optimizes this further).
+
+### React 18 concurrency note
+
+In concurrent rendering, class updates are still part of the commit phase. React batches multiple state updates (even across async boundaries) and applies DOM changes efficiently, including `className` updates.
+
+---
+
+## Example
+
+### React + TypeScript (Vite setup)
+
+#### Scaffold
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+#### Component example
+
+```tsx
+import { useState } from "react";
+
+export default function Button() {
+  const [active, setActive] = useState(false);
+
+  return (
+    <button
+      className={active ? "btn btn-active" : "btn"}
+      onClick={() => setActive((prev) => !prev)}
+    >
+      Toggle
+    </button>
+  );
+}
+```
+
+---
+
+## Tooling & Setup
+
+- Prefer **Vite** for fast ESM-based development (native ES modules, fast HMR).
+- Avoid CRA (deprecated and slower tooling).
+- In modern stacks:
+  - Vite → CSR apps
+  - Next.js → SSR/SSG + React Server Components
+
+JSX compilation happens via:
+
+- Vite: esbuild / SWC (fast transforms)
+- Babel (older setups)
+
+---
+
+## Performance
+
+- `className` updates trigger DOM diffing; avoid unnecessary re-renders.
+- Use:
+  - `React.memo` for component memoization
+  - `useMemo` for computed class strings
+  - `clsx` or `classnames` for efficient conditional classes
+
+Example optimization:
+
+```tsx
+import { useMemo } from "react";
+
+const className = useMemo(() => (active ? "btn btn-active" : "btn"), [active]);
+```
+
+- Use React DevTools Profiler to detect re-render causes.
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**:
+
+```ts
+import { render, screen } from "@testing-library/react";
+import Button from "./Button";
+
+test("renders button with correct class", () => {
+  render(<Button />);
+  const btn = screen.getByRole("button");
+  expect(btn.className).toContain("btn");
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+---
+
+## Ops & Deployment
+
+- Class-based styling integrates well with:
+  - CSS Modules
+  - Tailwind CSS (preferred in modern apps)
+
+- Ensure:
+  - Avoid inline string concatenation for large apps → use utility libraries
+  - SSR frameworks (Next.js) ensure consistent hydration className matching
+
+- Deploy via:
+  - Vercel (Next.js)
+  - Netlify / Cloudflare Pages (Vite apps)
+
+---
+
+## Pitfalls
+
+- Using `class` instead of `className` causes JSX errors
+- Overusing string concatenation for dynamic classes reduces readability
+- Not memoizing complex class logic can lead to unnecessary re-renders
+
 ## Question 2. What are synthetic events in React?
 
 ## Question 3. How do you conditionally apply CSS classes?
