@@ -25,6 +25,321 @@
 
 ## Question 1. How do you implement virtualized lists for large datasets?
 
+# Short answer
+
+Virtualized lists (windowing) render only the items currently visible in the viewport (plus a small overscan buffer) instead of rendering the entire dataset. This significantly reduces DOM nodes, memory usage, and rendering time, making it possible to efficiently display tens of thousands of items. In modern React, libraries like **react-window**, **@tanstack/react-virtual**, and **react-virtuoso** are the preferred solutions.
+
+---
+
+# Explanation
+
+Rendering 50,000 DOM elements at once is expensive because React must:
+
+- Create thousands of component instances
+- Diff all elements during reconciliation
+- Allocate large amounts of memory
+- Force the browser to perform expensive layout and painting
+
+Virtualization solves this by rendering only what's visible.
+
+Example:
+
+```
+Dataset: 100,000 items
+
+Viewport:
++----------------------+
+| Item 150            |
+| Item 151            |
+| Item 152            |
+| Item 153            |
+| Item 154            |
++----------------------+
+
+DOM actually contains:
+150-170 (overscan)
+
+Instead of:
+0-99,999
+```
+
+The scrollbar still represents the full list height, but React only mounts a small subset of rows.
+
+### Popular virtualization libraries
+
+| Library                 | Best for                         | Notes                      |
+| ----------------------- | -------------------------------- | -------------------------- |
+| react-window            | Simple fixed/variable size lists | Lightweight, widely used   |
+| @tanstack/react-virtual | Modern, highly customizable      | Excellent React 18 support |
+| react-virtuoso          | Dynamic heights, grouped lists   | Less manual configuration  |
+| AG Grid                 | Enterprise data grids            | Includes virtualization    |
+
+---
+
+### React 18 considerations
+
+Virtualization works well with React 18 because:
+
+- Automatic batching reduces update overhead.
+- Concurrent rendering keeps scrolling responsive.
+- Only visible components participate in reconciliation.
+- Less work means faster rendering during state updates.
+
+---
+
+### Fixed vs Variable height
+
+**Fixed height**
+
+```
+Item height = 40px
+
+scrollTop / 40
+```
+
+Very fast because offsets are computed mathematically.
+
+**Variable height**
+
+Rows may be:
+
+```
+Item A = 40px
+Item B = 120px
+Item C = 65px
+```
+
+Requires measuring or caching heights.
+
+Libraries like:
+
+- react-virtuoso
+- @tanstack/react-virtual
+
+handle this much better than react-window.
+
+---
+
+### Overscanning
+
+Libraries render a few extra rows above and below the viewport.
+
+```
+Visible:
+20-30
+
+Rendered:
+15-35
+```
+
+Benefits:
+
+- smoother scrolling
+- avoids blank areas
+- reduces pop-in
+
+Trade-off:
+
+Higher overscan =
+
+- more memory
+- smoother UX
+
+---
+
+### Infinite scrolling + virtualization
+
+These are often combined.
+
+```
+Scroll
+
+↓
+
+Reach end
+
+↓
+
+IntersectionObserver
+
+↓
+
+Fetch next page
+
+↓
+
+Append data
+
+↓
+
+Virtualizer updates
+```
+
+This allows millions of records while keeping only dozens mounted.
+
+---
+
+# Example
+
+Using **Vite + React + TypeScript** with **@tanstack/react-virtual**.
+
+## Scaffold
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm i @tanstack/react-virtual
+npm run dev
+```
+
+```tsx
+import { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+
+const rows = Array.from({ length: 100000 }, (_, i) => `Item ${i + 1}`);
+
+export default function VirtualList() {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 40,
+    overscan: 5,
+  });
+
+  return (
+    <div
+      ref={parentRef}
+      style={{
+        height: "400px",
+        overflow: "auto",
+        border: "1px solid gray",
+      }}
+    >
+      <div
+        style={{
+          height: virtualizer.getTotalSize(),
+          position: "relative",
+        }}
+      >
+        {virtualizer.getVirtualItems().map((item) => (
+          <div
+            key={item.key}
+            style={{
+              position: "absolute",
+              top: 0,
+              transform: `translateY(${item.start}px)`,
+              height: `${item.size}px`,
+              width: "100%",
+              borderBottom: "1px solid #eee",
+              display: "flex",
+              alignItems: "center",
+              paddingLeft: "12px",
+            }}
+          >
+            {rows[item.index]}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+Only around 15–30 DOM nodes are mounted even though the dataset contains 100,000 items.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** Vite + React + TypeScript.
+
+Avoid **Create React App (CRA)**, as it is deprecated. Vite provides a faster development server, native ES module support, and efficient production builds.
+
+- **Bundler:** Vite (powered by Rollup for production)
+- **Module system:** Prefer **ES Modules (ESM)**. CommonJS is mainly used in legacy Node.js ecosystems.
+- **Alternatives:** Next.js (SSR, Server Components, App Router), Remix (nested routing, data loading), or Turbopack (Next.js development bundler).
+
+Useful libraries:
+
+```bash
+npm i @tanstack/react-virtual
+```
+
+or
+
+```bash
+npm i react-window
+```
+
+or
+
+```bash
+npm i react-virtuoso
+```
+
+---
+
+# Performance
+
+Virtualization already removes the largest bottleneck, but combine it with other optimizations:
+
+- Use **React.memo** for expensive row components.
+- Memoize derived values with **useMemo**.
+- Memoize event handlers with **useCallback** when passing them to memoized children.
+- Keep row components lightweight and avoid unnecessary state inside each row.
+- Use stable keys (e.g., unique IDs instead of array indices if items can reorder).
+- Code split heavy pages with `React.lazy()` and `Suspense`.
+- Cache fetched pages using libraries like TanStack Query to avoid unnecessary refetches.
+- Use the React DevTools **Profiler** to identify unnecessary re-renders and validate that only visible rows update.
+
+---
+
+# Testing
+
+For unit and integration testing, use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example command:
+
+```bash
+npx vitest
+```
+
+Test that:
+
+- Visible rows render correctly.
+- Scrolling updates the rendered window.
+- Overscan behaves as expected.
+- Newly loaded pages integrate correctly with virtualization.
+
+Use **Playwright** for end-to-end testing of scrolling behavior and infinite loading.
+
+---
+
+# Ops & Deployment
+
+- Add an **Error Boundary** around complex list views to isolate rendering failures.
+- Log fetch and rendering errors using tools such as Sentry.
+- Prefer **SSR** (e.g., Next.js) for SEO-sensitive pages, but note that virtualization primarily benefits client-side rendering after hydration.
+- Use CDN caching for static assets and split large bundles with route-based lazy loading.
+- Monitor bundle size with tools like `rollup-plugin-visualizer` or `source-map-explorer` and avoid shipping multiple virtualization libraries.
+
+---
+
+# Pitfalls
+
+- **Don't render the full array and hide items with CSS**—the DOM cost remains.
+- **Avoid unstable keys** (like array indices for reorderable data), which can cause incorrect state preservation and extra re-renders.
+- **Be careful with dynamic row heights**; choose a library designed for measurement (e.g., `react-virtuoso` or `@tanstack/react-virtual`) or cache measured sizes to avoid layout thrashing.
+
 ## Question 2. How do you handle dynamic tabs with add/remove functionality?
 
 ## Question 3. How do you implement a toast notification system globally?
