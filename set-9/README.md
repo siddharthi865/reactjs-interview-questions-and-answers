@@ -24,6 +24,271 @@
 
 ## Question 1. How do you handle API errors globally in React?
 
+# Short answer
+
+Handle API errors globally by centralizing HTTP requests (e.g., with an Axios instance or Fetch wrapper), using **interceptors/middleware** to normalize errors, integrating with a global state or context for user notifications, handling authentication failures (401/403), logging errors to monitoring tools, and using **React Error Boundaries** for rendering errors (not API errors). For data fetching, libraries like **React Query (TanStack Query)** or **SWR** provide built-in global error handling and retry mechanisms.
+
+---
+
+# Explanation
+
+In production React applications, you should avoid handling API errors separately in every component. Instead, create a single network layer that is responsible for:
+
+- Sending requests
+- Parsing responses
+- Converting different backend error formats into a common structure
+- Handling authentication errors
+- Logging errors
+- Displaying global notifications
+- Triggering retries when appropriate
+
+A common architecture looks like:
+
+```
+React Components
+        │
+        ▼
+API Service Layer
+        │
+        ▼
+Axios / Fetch Wrapper
+        │
+        ▼
+Interceptors
+        │
+ ┌──────┴─────────┐
+ │                │
+ ▼                ▼
+Toast        Error Logging
+ │                │
+ ▼                ▼
+UI         Sentry/Datadog
+```
+
+### React 18 considerations
+
+React 18 introduced:
+
+- Concurrent Rendering
+- Automatic Batching
+- Suspense improvements
+
+API errors themselves are **not caught by Error Boundaries** because they occur asynchronously.
+
+Instead:
+
+- handle them inside async functions
+- let React Query manage them
+- show fallback UI
+- retry failed requests
+- invalidate cache when necessary
+
+---
+
+## Common global error handling flow
+
+```
+User clicks button
+      │
+      ▼
+API Request
+      │
+      ▼
+Interceptor
+      │
+ ┌────┴───────────┐
+ │                │
+401?           Other Error?
+ │                │
+ ▼                ▼
+Logout      Normalize Error
+ │                │
+ ▼                ▼
+Redirect     Toast
+ │                │
+ ▼                ▼
+Log Error     Return Promise.reject()
+```
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest react-api-errors -- --template react-ts
+cd react-api-errors
+npm install
+npm install axios react-hot-toast
+npm run dev
+```
+
+### api.ts
+
+```tsx
+import axios from "axios";
+import { toast } from "react-hot-toast";
+
+export const api = axios.create({
+  baseURL: "https://api.example.com",
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+
+    if (status === 401) {
+      toast.error("Session expired. Please login again.");
+      // logout()
+      // navigate("/login")
+    } else if (status >= 500) {
+      toast.error("Server error. Please try again later.");
+    } else {
+      toast.error(error.response?.data?.message ?? "Something went wrong.");
+    }
+
+    // Send to monitoring service
+    console.error(error);
+
+    return Promise.reject(error);
+  },
+);
+```
+
+### UserList.tsx
+
+```tsx
+import { useEffect, useState } from "react";
+import { api } from "./api";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function UserList() {
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    api
+      .get<User[]>("/users")
+      .then((res) => setUsers(res.data))
+      .catch(() => {
+        // Global interceptor already handled notification
+      });
+  }, []);
+
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Notice that components remain focused on rendering while the interceptor manages cross-cutting concerns like notifications and authentication.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** for fast local development using native ESM and fast HMR.
+- **Next.js App Router** if SSR, streaming, or React Server Components are required.
+- **Remix** is also a strong choice for route-based data loading and error boundaries.
+
+Avoid **Create React App (CRA)** since it is deprecated.
+
+### Modern data-fetching libraries
+
+- **TanStack Query**
+  - Global error callbacks
+  - Automatic retries
+  - Request deduplication
+  - Cache invalidation
+  - Background refetching
+
+- **SWR**
+  - Stale-While-Revalidate
+  - Global fetcher
+  - Retry support
+
+### ESM vs CommonJS
+
+- Modern React projects use **ES Modules (ESM)**.
+- Vite serves native ESM during development and bundles efficiently for production.
+
+---
+
+# Performance
+
+Global error handling also improves performance because:
+
+- duplicated error logic is eliminated
+- retry policies are centralized
+- duplicate API calls can be avoided with caching
+
+Optimization techniques include:
+
+- **React Profiler** to identify unnecessary renders after failed requests.
+- **React.memo** to prevent unaffected components from re-rendering.
+- **useMemo** for expensive derived values.
+- **useCallback** for stable callbacks passed to children.
+- **React.lazy** and `Suspense` for code splitting of error-heavy routes.
+- Use **TanStack Query** cache instead of refetching identical data after transient failures.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test idea:
+
+```tsx
+it("shows an error toast on API failure", async () => {
+  // Mock Axios request
+  // Render component
+  // Assert that the toast is displayed
+});
+```
+
+For end-to-end testing, use **Playwright** to verify scenarios such as expired sessions (401 redirects), offline behavior, and server errors.
+
+---
+
+# Ops & Deployment
+
+In production, pair global error handling with:
+
+- **Error Boundaries** for rendering errors (they do not catch asynchronous API failures).
+- Structured logging with monitoring platforms such as Sentry, Datadog, or New Relic.
+- Correlation/request IDs to trace failures across frontend and backend services.
+- SSR/CSR considerations: handle server-side fetch failures separately from client-side errors.
+- CDN caching and proper HTTP cache headers to reduce unnecessary requests.
+- Bundle size management by importing only the parts of libraries you need and using route-level code splitting.
+
+---
+
+# Pitfalls
+
+- **Do not rely on Error Boundaries for API failures.** They only catch rendering, lifecycle, and constructor errors in React components.
+- **Avoid showing duplicate notifications.** If a global interceptor displays a toast, components generally shouldn't display another one for the same failure.
+- **Normalize backend error formats.** Different services may return different payloads; convert them into a consistent error shape before exposing them to the UI.
+
 ## Question 2. How do you prevent memory leaks with subscriptions in React?
 
 ## Question 3. How do you use React Context with TypeScript?
