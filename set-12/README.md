@@ -25,6 +25,268 @@
 
 ## Question 1. How do you handle click events on dynamically created elements?
 
+# Short answer
+
+In React, you typically **attach `onClick` directly to each rendered element**, even if the elements are created dynamically using `map()`. React's synthetic event system efficiently handles these events through event delegation internally, so you don't need manual event delegation in most cases.
+
+---
+
+# Explanation
+
+This question often tests whether you understand **React's event system** versus traditional DOM event handling.
+
+### 1. Dynamic elements in React
+
+React components frequently render lists dynamically:
+
+```tsx
+items.map((item) => (
+  <button key={item.id} onClick={() => handleClick(item.id)}>
+    {item.name}
+  </button>
+));
+```
+
+Although hundreds of buttons may be rendered, React doesn't attach hundreds of native DOM listeners in the same way vanilla JavaScript often would.
+
+React uses a **Synthetic Event** system that delegates events efficiently (React 17+ delegates events to the React root container instead of the `document`).
+
+---
+
+### 2. Event delegation
+
+In vanilla JavaScript:
+
+```javascript
+document.addEventListener("click", (e) => {
+  if (e.target.matches(".item")) {
+    console.log("clicked");
+  }
+});
+```
+
+This is called **event delegation**.
+
+React already implements an optimized delegation mechanism internally, so you simply write:
+
+```tsx
+<button onClick={handleClick}>Click</button>
+```
+
+No manual delegation is needed.
+
+---
+
+### 3. Passing parameters
+
+Dynamic elements usually require knowing which item was clicked.
+
+Preferred approach:
+
+```tsx
+const handleClick = (id: number) => {
+  console.log(id);
+};
+
+<button onClick={() => handleClick(item.id)}>
+```
+
+or
+
+```tsx
+<button
+  data-id={item.id}
+  onClick={(e) =>
+    handleClick(Number((e.currentTarget as HTMLButtonElement).dataset.id))
+  }
+/>
+```
+
+Using `currentTarget` is safer than `target` because `target` could be a nested child.
+
+---
+
+### 4. Rendering behavior (React 18)
+
+When a click handler updates multiple pieces of state:
+
+```tsx
+setCount((c) => c + 1);
+setLoading(true);
+```
+
+React 18 performs **automatic batching**, producing only **one render**.
+
+Click events are considered **discrete events**, so React gives them high priority to keep the UI responsive.
+
+---
+
+### 5. Component architecture
+
+Instead of attaching one global handler, keep event handlers close to the component that owns the state.
+
+Example:
+
+```
+TodoList
+ ├── TodoItem
+ ├── TodoItem
+ └── TodoItem
+```
+
+Each `TodoItem` exposes:
+
+```tsx
+<TodoItem todo={todo} onSelect={handleSelect} />
+```
+
+This keeps components reusable and testable.
+
+---
+
+### 6. State management trade-offs
+
+For small components:
+
+- local `useState`
+
+For shared interactions:
+
+- Context
+- Redux Toolkit
+- Zustand
+- Jotai
+
+Avoid storing UI-only click state globally unless multiple components need it.
+
+---
+
+# Example
+
+**Scaffold using Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function App() {
+  const [selected, setSelected] = useState<number | null>(null);
+
+  const users: User[] = [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "Bob" },
+    { id: 3, name: "Charlie" },
+  ];
+
+  const handleClick = (id: number) => {
+    setSelected(id);
+  };
+
+  return (
+    <>
+      <h2>Users</h2>
+
+      {users.map((user) => (
+        <button
+          key={user.id}
+          onClick={() => handleClick(user.id)}
+          style={{ display: "block", marginBottom: 8 }}
+        >
+          {user.name}
+        </button>
+      ))}
+
+      <p>Selected ID: {selected}</p>
+    </>
+  );
+}
+```
+
+This demonstrates:
+
+- dynamically rendered elements
+- parameterized click handlers
+- React's synthetic events
+- React 18 automatic batching compatibility
+
+---
+
+# Tooling & Setup
+
+- **Preferred stack:** Vite + React + TypeScript for fast startup, HMR, and modern ESM support.
+- **Avoid Create React App (CRA):** It is deprecated; use Vite, Next.js, or Remix for new projects.
+- **ESM vs CommonJS:** Vite uses native **ES Modules (ESM)** during development for faster module loading. CommonJS is mainly encountered in older Node.js ecosystems.
+- **Bundlers:** Vite uses **esbuild** for dependency pre-bundling and **Rollup** for production builds. Next.js uses Turbopack (development) and webpack/Turbopack depending on configuration.
+- **Dev server:** Run `npm run dev` to start Vite's fast development server with Hot Module Replacement (HMR).
+
+---
+
+# Performance
+
+- React already optimizes event handling using **event delegation**, so avoid manually adding listeners to individual DOM nodes outside React.
+- Use **React DevTools Profiler** to identify unnecessary re-renders after click events.
+- Memoize expensive child components with `React.memo` and stabilize callback identities with `useCallback` when passing handlers deep into the component tree.
+- Use `useMemo` for expensive derived values that depend on click-driven state.
+- Split large feature modules with `React.lazy` and `Suspense` to reduce initial bundle size.
+- Use data-fetching libraries (e.g., React Query/TanStack Query) for caching and background updates rather than manually managing cached click-triggered requests.
+
+---
+
+# Testing
+
+For unit and integration tests, use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/user-event @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+test("selects a user when clicked", async () => {
+  render(<App />);
+
+  await userEvent.click(screen.getByText("Alice"));
+
+  expect(screen.getByText(/Selected ID: 1/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, consider **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to prevent the entire UI from crashing due to rendering errors (note that they do not catch errors thrown inside event handlers; handle those with `try/catch` or error reporting).
+- Log click-related failures to monitoring services such as Sentry or Datadog for production diagnostics.
+- Choose **CSR** for highly interactive applications and **SSR/Server Components** (e.g., Next.js App Router) when SEO or faster initial rendering is important.
+- Keep bundles small through route-based code splitting and lazy loading, and serve static assets via a CDN or edge network for low-latency delivery.
+
+---
+
+# Pitfalls
+
+- Avoid using array indices as `key` values for dynamic lists because they can cause incorrect event associations after reordering.
+- Avoid creating deeply nested inline callbacks when they cause unnecessary re-renders in memoized child components; use `useCallback` where it provides measurable benefit.
+- Do not attach native DOM event listeners (`addEventListener`) to React-managed elements unless you have a specific integration need; always clean them up in `useEffect`.
+
 ## Question 2. How do you handle multiple input fields with one onChange handler?
 
 ## Question 3. How do you use `map()` to render components in JSX?
