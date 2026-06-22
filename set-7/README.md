@@ -25,6 +25,180 @@
 
 ## Question 1. What are default values for props and state?
 
+Got it—React interview answer format engaged.
+
+---
+
+# Short answer
+
+Default values for **props** are defined via default parameters or `defaultProps` (legacy for class components).
+State default values are defined in the component’s initial state using `useState` (or constructor state in class components).
+
+---
+
+# Explanation
+
+## 1. Default values for Props
+
+Props are **inputs to a component**, so React does not enforce defaults automatically. If a parent does not pass a prop, it becomes `undefined` unless a default is defined.
+
+### Modern React (preferred)
+
+Default values are set using **default parameters**:
+
+```tsx
+function Button({
+  label = "Click me",
+  disabled = false,
+}: {
+  label?: string;
+  disabled?: boolean;
+}) {
+  return <button disabled={disabled}>{label}</button>;
+}
+```
+
+### Alternative (still valid)
+
+Using destructuring with default values:
+
+```tsx
+const Button = (props: { label?: string }) => {
+  const { label = "Default Label" } = props;
+  return <button>{label}</button>;
+};
+```
+
+### Legacy (class components)
+
+```tsx
+class Button extends React.Component {
+  static defaultProps = {
+    label: "Click me",
+  };
+
+  render() {
+    return <button>{this.props.label}</button>;
+  }
+}
+```
+
+⚠️ Note: `defaultProps` is **deprecated for function components** in modern React patterns.
+
+---
+
+## 2. Default values for State
+
+State always needs an **initial value**, which becomes the default state.
+
+### Functional Components (modern approach)
+
+```tsx
+import { useState } from "react";
+
+function Counter() {
+  const [count, setCount] = useState<number>(0); // default state = 0
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+### Lazy initialization (performance optimization)
+
+```tsx
+const [value, setValue] = useState(() => expensiveComputation());
+```
+
+This ensures computation runs only once during mount.
+
+---
+
+### Class Components (legacy)
+
+```tsx
+class Counter extends React.Component {
+  state = {
+    count: 0,
+  };
+
+  render() {
+    return <div>{this.state.count}</div>;
+  }
+}
+```
+
+---
+
+# Tooling & Setup
+
+Use modern React setup:
+
+```bash
+npm create vite@latest react-props-state -- --template react-ts
+cd react-props-state
+npm install
+npm run dev
+```
+
+- Vite is preferred over CRA (deprecated)
+- Uses ESM by default → faster dev server and HMR
+- TypeScript improves prop/state safety
+
+---
+
+# Performance
+
+- Use **lazy state initialization** when initial state is expensive
+- Avoid recalculating derived defaults inside render
+- Memoize derived props using `useMemo` if needed
+- Use `React.memo` for components receiving default-heavy props
+- React 18 automatically batches state updates → default state updates inside events are optimized
+
+---
+
+# Testing
+
+With **Vitest + React Testing Library**:
+
+```ts
+import { render, screen } from "@testing-library/react";
+import Button from "./Button";
+
+test("renders default prop value", () => {
+  render(<Button />);
+  expect(screen.getByRole("button")).toHaveTextContent("Click me");
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+---
+
+# Ops & Deployment
+
+- Ensure default props don’t depend on runtime-only values unless handled safely
+- Avoid undefined prop assumptions in SSR (Next.js hydration mismatch risk)
+- Use error boundaries if default state depends on async initialization
+- Bundle optimization: avoid inline heavy default objects/functions
+- Deploy via Vite build (`npm run build`) → static output to CDN
+
+---
+
+# Pitfalls
+
+- Assuming props always exist → leads to runtime `undefined` errors
+- Using deprecated `defaultProps` in function components
+- Initial state derived from props without syncing properly (stale state bug)
+
 ## Question 2. How do you access DOM elements in class components?
 
 ## Question 3. What is the difference between ReactDOM.render and ReactDOM.createRoot?
