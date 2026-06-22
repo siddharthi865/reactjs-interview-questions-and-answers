@@ -25,6 +25,228 @@
 
 ## Question 1. How do you use `useLayoutEffect` to measure DOM elements?
 
+# How do you use `useLayoutEffect` to measure DOM elements?
+
+## Short answer
+
+`useLayoutEffect` runs **synchronously after React has updated the DOM but before the browser paints**. This makes it the correct hook for measuring DOM elements (`getBoundingClientRect()`, `offsetWidth`, `scrollHeight`, etc.) or making layout-related DOM updates without causing visible flickering.
+
+Use it with a `ref` to access the DOM node.
+
+---
+
+# Explanation
+
+React provides two effect hooks:
+
+- **`useEffect`** → Runs **after paint** (non-blocking).
+- **`useLayoutEffect`** → Runs **before paint** (blocking).
+
+### Why this matters
+
+If you need to:
+
+- Measure element width/height
+- Position tooltips/popovers
+- Calculate scroll position
+- Resize canvases
+- Synchronize animations
+
+using `useEffect` may briefly render the UI in the wrong position and then update it, causing a **layout shift (flicker)**.
+
+`useLayoutEffect` avoids this because React waits until your layout calculations finish before painting.
+
+### Execution order
+
+```
+Render
+    ↓
+DOM updated
+    ↓
+useLayoutEffect
+    ↓
+State updates (if any)
+    ↓
+Browser Paint
+    ↓
+useEffect
+```
+
+---
+
+## Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Measure a DOM element
+
+```tsx
+import { useLayoutEffect, useRef, useState } from "react";
+
+export default function App() {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    if (boxRef.current) {
+      const { width } = boxRef.current.getBoundingClientRect();
+      setWidth(width);
+    }
+  }, []);
+
+  return (
+    <>
+      <div
+        ref={boxRef}
+        style={{
+          width: "300px",
+          padding: "20px",
+          background: "#61dafb",
+        }}
+      >
+        Measure me
+      </div>
+
+      <p>Width: {width}px</p>
+    </>
+  );
+}
+```
+
+### What happens?
+
+1. React renders the `<div>`.
+2. DOM is committed.
+3. `useLayoutEffect` executes.
+4. `getBoundingClientRect()` measures the width.
+5. State updates synchronously.
+6. Browser paints only the final UI.
+
+The user never sees an incorrect width.
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for modern React development. `create-react-app` is deprecated.
+- For SSR or full-stack applications, prefer **Next.js (App Router)** or **Remix**.
+- Vite uses **native ESM** during development for fast startup and HMR, while bundling optimized production assets (typically with Rollup). CommonJS is primarily relevant for older Node.js ecosystems and should be avoided for new frontend code when possible.
+
+---
+
+# Performance
+
+### Avoid unnecessary measurements
+
+Measuring layout forces the browser to calculate layout.
+
+Bad:
+
+```tsx
+useLayoutEffect(() => {
+  console.log(ref.current?.getBoundingClientRect());
+});
+```
+
+Runs after every render.
+
+Better:
+
+```tsx
+useLayoutEffect(() => {
+  // measure once
+}, []);
+```
+
+or only when dependencies change.
+
+### Measure on resize
+
+```tsx
+useLayoutEffect(() => {
+  const measure = () => {
+    console.log(ref.current?.getBoundingClientRect());
+  };
+
+  measure();
+
+  window.addEventListener("resize", measure);
+
+  return () => window.removeEventListener("resize", measure);
+}, []);
+```
+
+For production, prefer **`ResizeObserver`** over listening to `window.resize` because it reacts to element size changes regardless of their cause.
+
+### React 18 considerations
+
+- **Automatic batching** batches state updates made inside `useLayoutEffect`, reducing unnecessary re-renders.
+- `useLayoutEffect` still blocks painting, so keep the work minimal.
+- Avoid expensive computations inside the hook; measure only what's necessary.
+
+### Optimization tips
+
+- Use **`React.memo`** to avoid unnecessary child renders.
+- Use **`useMemo`** for expensive derived values.
+- Use **`useCallback`** for stable callback references when passing handlers to memoized children.
+- Use **`React.lazy`** and dynamic imports for code splitting.
+- Use the **React DevTools Profiler** to identify unnecessary renders and layout work.
+
+---
+
+# Testing
+
+Layout measurements are limited in JSDOM because it does not perform real browser layout. Mock measurement APIs when unit testing.
+
+Example with **Vitest + React Testing Library**:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example mock:
+
+```tsx
+vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+  width: 300,
+  height: 100,
+  top: 0,
+  left: 0,
+  right: 300,
+  bottom: 100,
+  x: 0,
+  y: 0,
+  toJSON: () => {},
+});
+```
+
+For end-to-end verification of real layout and positioning, use **Playwright** in a real browser.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures (note that they do not catch errors thrown asynchronously inside effects).
+- Avoid excessive synchronous work in `useLayoutEffect`, especially on low-powered devices, because it delays painting.
+- For SSR, note that `useLayoutEffect` does not run on the server. If a component must render on the server, guard browser-only logic or use an isomorphic pattern that falls back to `useEffect` on the server.
+- Keep bundles small with route-level code splitting and lazy loading.
+- Deploy optimized production builds behind a CDN or edge network to minimize latency.
+
+---
+
+# Pitfalls
+
+- **Don't use `useLayoutEffect` unless you need synchronous layout work.** Prefer `useEffect` for data fetching and most side effects.
+- **Avoid triggering render loops.** Updating state based on measurements every render can cause repeated layouts and poor performance.
+- **Don't perform heavy calculations inside `useLayoutEffect`.** It blocks the browser from painting, harming responsiveness.
+
 ## Question 2. How do you implement infinite scroll with pagination?
 
 ## Question 3. How do you handle conditional rendering based on API response?
