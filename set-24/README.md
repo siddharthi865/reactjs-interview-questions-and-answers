@@ -25,6 +25,303 @@
 
 ## Question 1. How do you implement scroll-to-top buttons dynamically?
 
+# How do you implement scroll-to-top buttons dynamically?
+
+## Short answer
+
+A dynamic **scroll-to-top button** appears only after the user scrolls beyond a certain threshold (e.g., 300px). In React, you typically:
+
+- Listen to the window's scroll position.
+- Store visibility in state.
+- Show/hide the button conditionally.
+- Smoothly scroll to the top using `window.scrollTo({ top: 0, behavior: "smooth" })`.
+- Clean up the event listener in `useEffect`.
+
+---
+
+# Explanation
+
+A scroll-to-top button improves UX on long pages by allowing users to quickly return to the top.
+
+A production-ready implementation should consider:
+
+- Showing the button only after a threshold.
+- Avoiding excessive re-renders from scroll events.
+- Cleaning up listeners.
+- Accessibility.
+- Mobile support.
+- Respecting reduced motion preferences.
+
+### Basic Flow
+
+```
+Page loads
+      ↓
+User scrolls
+      ↓
+Scroll > threshold?
+      ↓
+Yes -----------------> Show button
+No ------------------> Hide button
+      ↓
+User clicks
+      ↓
+window.scrollTo({
+   top: 0,
+   behavior: "smooth"
+})
+```
+
+---
+
+## React 18 Considerations
+
+React 18 automatically batches state updates.
+
+However, **scroll events fire very frequently (60–120 times/sec)**.
+
+Avoid updating state on every event.
+
+Better approaches:
+
+- only update when visibility changes
+- throttle
+- debounce
+- requestAnimationFrame
+
+Example:
+
+```ts
+if (window.scrollY > 300 !== visible) {
+  setVisible(window.scrollY > 300);
+}
+```
+
+This avoids unnecessary renders.
+
+---
+
+## Example (React + TypeScript + Vite)
+
+### Create project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+
+cd my-app
+
+npm install
+
+npm run dev
+```
+
+### ScrollToTopButton.tsx
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function ScrollToTopButton() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const shouldShow = window.scrollY > 300;
+      setVisible((prev) => (prev !== shouldShow ? shouldShow : prev));
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    handleScroll();
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  if (!visible) return null;
+
+  return (
+    <button
+      onClick={scrollToTop}
+      aria-label="Scroll to top"
+      style={{
+        position: "fixed",
+        right: 20,
+        bottom: 20,
+        padding: "12px 16px",
+        borderRadius: "50%",
+        cursor: "pointer",
+      }}
+    >
+      ↑
+    </button>
+  );
+}
+```
+
+### App.tsx
+
+```tsx
+import ScrollToTopButton from "./ScrollToTopButton";
+
+export default function App() {
+  return (
+    <>
+      <div style={{ height: "3000px", padding: 20 }}>
+        <h1>Long Page</h1>
+        <p>Scroll down to see the button.</p>
+      </div>
+
+      <ScrollToTopButton />
+    </>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+### Preferred Stack
+
+- **Vite + React + TypeScript**
+  - Fast dev server (ES modules).
+  - Lightning-fast HMR.
+  - Excellent TypeScript support.
+
+Avoid **Create React App (CRA)** since it is deprecated.
+
+Other good choices:
+
+- **Next.js** (SSR, SSG, App Router)
+- **Remix** (nested routing and data loading)
+- **Turbopack** (Next.js development bundler)
+
+### ESM vs CommonJS
+
+- Vite uses **ES Modules (ESM)** natively in development for faster startup.
+- CommonJS is primarily used in older Node.js ecosystems; modern React projects should prefer ESM.
+
+---
+
+# Performance
+
+For long pages, optimize scroll handling:
+
+### 1. Passive event listeners
+
+```ts
+window.addEventListener("scroll", handleScroll, {
+  passive: true,
+});
+```
+
+Allows the browser to optimize scrolling.
+
+---
+
+### 2. Throttle scroll events
+
+```ts
+let ticking = false;
+
+const handleScroll = () => {
+  if (!ticking) {
+    requestAnimationFrame(() => {
+      setVisible(window.scrollY > 300);
+      ticking = false;
+    });
+    ticking = true;
+  }
+};
+```
+
+---
+
+### 3. Avoid unnecessary state updates
+
+```ts
+setVisible((prev) => (prev !== shouldShow ? shouldShow : prev));
+```
+
+---
+
+### 4. Memoization
+
+- `React.memo` if the button receives props.
+- `useCallback` for event handlers passed to child components.
+- `useMemo` only if expensive calculations are involved (not usually necessary here).
+
+---
+
+### 5. Code splitting
+
+If the button is part of a large UI library:
+
+```tsx
+const ScrollButton = React.lazy(() => import("./ScrollButton"));
+```
+
+---
+
+### 6. React Profiler
+
+Use React DevTools Profiler to ensure:
+
+- Scroll events don't trigger unnecessary renders.
+- Only the button re-renders when its visibility changes.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import ScrollToTopButton from "./ScrollToTopButton";
+
+test("button is hidden initially", () => {
+  render(<ScrollToTopButton />);
+  expect(screen.queryByRole("button")).toBeNull();
+});
+```
+
+For end-to-end behavior (scrolling and clicking), tools like Playwright are well-suited.
+
+---
+
+# Ops & Deployment
+
+- Log client-side errors with services such as Sentry.
+- Wrap the application in an Error Boundary to isolate rendering failures (note that Error Boundaries do not catch errors in event handlers).
+- In SSR frameworks like Next.js, ensure browser-only APIs (`window`, `document`) are accessed inside effects or client components.
+- Keep the button lightweight to avoid impacting bundle size.
+- Deploy static assets via a CDN and use cache headers for optimal performance.
+
+---
+
+# Pitfalls
+
+- **Forgetting to remove the scroll event listener**, causing memory leaks.
+- **Updating state on every scroll event**, leading to excessive re-renders.
+- **Ignoring accessibility**, such as missing an `aria-label` or not respecting users who prefer reduced motion.
+
 ## Question 2. How do you implement a global error handling system with context?
 
 ## Question 3. How do you implement a multi-select dropdown with search functionality?
