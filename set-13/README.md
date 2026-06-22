@@ -25,6 +25,277 @@
 
 ## Question 1. How do you share state between sibling components?
 
+# How do you share state between sibling components?
+
+## Short answer
+
+Sibling components **cannot directly share state**. The recommended approach is to **lift the shared state up** to their closest common parent and pass the state and update functions down as props. For larger applications, use a shared state solution such as **React Context**, Redux, Zustand, Jotai, or server-state libraries like TanStack Query when appropriate.
+
+---
+
+# Explanation
+
+In React, data flows **one way (parent → child)**. Since sibling components don't have a direct relationship, they communicate through their common ancestor.
+
+The typical pattern is:
+
+```
+Parent
+ ├── Sibling A (updates state)
+ └── Sibling B (reads state)
+```
+
+The parent owns the state.
+
+```
+Parent
+   state
+     │
+ ┌───┴────┐
+ │        │
+A        B
+```
+
+When **Sibling A** changes the state, React re-renders the parent, and the updated state is passed to **Sibling B**.
+
+### Why React recommends lifting state up
+
+- Creates a **single source of truth**
+- Prevents duplicated state
+- Makes components predictable
+- Easier debugging
+- Easier testing
+
+---
+
+## Common approaches
+
+### 1. Lift State Up (Recommended)
+
+Best for:
+
+- Forms
+- Small to medium applications
+- Closely related components
+
+Example:
+
+```
+Parent
+  count
+  setCount
+```
+
+Both children receive:
+
+```
+count
+setCount
+```
+
+---
+
+### 2. React Context
+
+When many sibling or deeply nested components need the same state.
+
+```
+App
+ └── Context Provider
+      ├── Component A
+      ├── Component B
+      └── Component C
+```
+
+Avoids prop drilling.
+
+---
+
+### 3. Global State Libraries
+
+For complex applications.
+
+Examples:
+
+- Redux Toolkit
+- Zustand
+- Jotai
+- MobX
+- Recoil (legacy/less actively maintained)
+
+Useful when many unrelated components need the same state.
+
+---
+
+### 4. Server State
+
+If the shared data comes from an API, avoid copying it into local state.
+
+Instead use libraries like:
+
+- TanStack Query
+- SWR
+
+These automatically share cached server state across components.
+
+---
+
+## Rendering behavior (React 18)
+
+When a sibling updates shared state:
+
+1. Event occurs.
+2. State setter is called.
+3. **Automatic batching** groups multiple updates triggered during the same event or async context into a single render where possible.
+4. Parent re-renders.
+5. Both siblings receive updated props.
+6. React only updates the DOM where values actually changed.
+
+If only one sibling depends on the changed value, optimize rendering with `React.memo` or by splitting components appropriately.
+
+---
+
+## Component architecture
+
+Good architecture:
+
+```
+Dashboard
+ ├── SearchBox
+ ├── ProductList
+ └── CartSummary
+```
+
+Shared state:
+
+```
+Dashboard
+   searchTerm
+   cartItems
+```
+
+Each child receives only the props it needs.
+
+Avoid:
+
+```
+SearchBox
+     ↓
+ProductList
+     ↓
+CartSummary
+```
+
+Siblings should **not** update each other directly.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+function CounterButtons({ onIncrement }: { onIncrement: () => void }) {
+  return <button onClick={onIncrement}>Increment</button>;
+}
+
+function CounterDisplay({ count }: { count: number }) {
+  return <h2>Count: {count}</h2>;
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <>
+      <CounterButtons onIncrement={() => setCount((c) => c + 1)} />
+      <CounterDisplay count={count} />
+    </>
+  );
+}
+```
+
+Here:
+
+- `App` owns the shared state.
+- `CounterButtons` updates it.
+- `CounterDisplay` reads it.
+- The siblings never communicate directly.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** as it is deprecated.
+- Prefer **Vite** for fast startup, ESM-native development, and efficient builds.
+- Use **Next.js App Router** when you need SSR, SSG, streaming, or React Server Components.
+- **Remix** is a strong choice for data-driven routing and progressive enhancement.
+- Modern tooling favors **ES Modules (ESM)** over CommonJS for better tree-shaking and browser-native module support.
+- Vite uses native ESM during development and Rollup for production bundling.
+
+---
+
+# Performance
+
+When sharing state:
+
+- Keep state as close as possible to where it's needed to reduce unnecessary re-renders.
+- Use `React.memo` to prevent sibling re-renders when props are unchanged.
+- Use `useCallback` for stable callback references passed to memoized children.
+- Use `useMemo` for expensive derived values, not as a default optimization.
+- Split large contexts into smaller providers or use context selectors to avoid re-rendering all consumers.
+- Use `React.lazy` and dynamic imports for code splitting.
+- Profile rendering behavior with **React DevTools Profiler** before optimizing.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example command:
+
+```bash
+npm run test
+```
+
+Test that clicking the button updates the displayed count by rendering the parent component and asserting the shared state flows correctly between siblings.
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Log state transitions selectively in development; avoid verbose production logging.
+- Use **Error Boundaries** to isolate UI failures (for render/lifecycle errors).
+- Choose **CSR** for highly interactive SPAs and **SSR/SSG** (e.g., Next.js) for faster first paint and SEO.
+- Keep bundles small with route-level code splitting, tree-shaking, and dependency analysis.
+- Deploy static Vite apps to a CDN, or use edge-capable platforms (e.g., Vercel, Cloudflare) for SSR applications.
+
+---
+
+# Pitfalls
+
+- **Duplicating state** in multiple sibling components instead of lifting it up.
+- **Using Context for rapidly changing state**, causing unnecessary re-renders across many consumers.
+- **Passing too many props (prop drilling)** instead of introducing Context or a state management library when the component tree grows.
+
 ## Question 2. How do you create a reusable modal component with context?
 
 ## Question 3. How do you implement tab-based navigation with state?
