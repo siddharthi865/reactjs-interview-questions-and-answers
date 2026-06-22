@@ -25,6 +25,297 @@
 
 ## Question 1. How do you toggle CSS classes dynamically in React?
 
+# How do you toggle CSS classes dynamically in React?
+
+## Short answer
+
+In React, CSS classes are toggled dynamically by computing the `className` prop based on component state or props. The most common approaches are:
+
+- Conditional (ternary) expressions
+- Logical `&&` expressions
+- Template literals
+- Utility libraries like `clsx` or `classnames` (recommended for complex conditions)
+
+React re-evaluates the `className` during each render whenever state or props change.
+
+---
+
+# Explanation
+
+React does not manipulate the DOM classes directly like:
+
+```js
+element.classList.add("active");
+```
+
+Instead, React follows a **declarative approach**:
+
+1. Store UI state.
+2. Render classes based on that state.
+3. React updates the DOM efficiently during reconciliation.
+
+Example flow:
+
+```
+Button Click
+      ↓
+State changes
+      ↓
+Component re-renders
+      ↓
+className recalculated
+      ↓
+React updates DOM
+```
+
+This keeps UI predictable and avoids manual DOM manipulation.
+
+### Common approaches
+
+### 1. Ternary Operator (Most Common)
+
+```jsx
+className={isActive ? "active" : ""}
+```
+
+Suitable when toggling between two values.
+
+---
+
+### 2. Template Literals
+
+Useful when combining fixed and conditional classes.
+
+```jsx
+className={`btn ${isActive ? "active" : ""}`}
+```
+
+Produces:
+
+```
+btn
+```
+
+or
+
+```
+btn active
+```
+
+---
+
+### 3. Logical AND
+
+Useful when only adding a class.
+
+```jsx
+className={`card ${selected && "selected"}`}
+```
+
+Although common, many teams prefer `clsx` because it avoids accidental `"false"` values in some patterns.
+
+---
+
+### 4. clsx (Recommended)
+
+For multiple conditions, `clsx` keeps code clean.
+
+```tsx
+className={clsx(
+  "btn",
+  isPrimary && "btn-primary",
+  disabled && "btn-disabled",
+  loading && "loading"
+)}
+```
+
+Much easier to maintain than nested ternaries.
+
+---
+
+## React Rendering Behavior (React 18)
+
+When state changes:
+
+```tsx
+setIsActive(true);
+```
+
+React 18:
+
+- Automatically batches multiple state updates.
+- Schedules rendering efficiently with concurrent rendering capabilities.
+- Recomputes `className` during render.
+- Updates only the changed DOM attributes.
+
+Example:
+
+```tsx
+setIsActive(true);
+setLoading(false);
+```
+
+React performs **one render** instead of two (automatic batching).
+
+---
+
+## Component Architecture
+
+For reusable components:
+
+```tsx
+<Button active disabled />
+```
+
+The component decides its own classes.
+
+```tsx
+function Button({ active, disabled }) {
+  return (
+    <button
+      className={`btn ${active ? "active" : ""} ${disabled ? "disabled" : ""}`}
+    />
+  );
+}
+```
+
+This keeps styling encapsulated and reusable.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app with Vite (recommended):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+Install `clsx`:
+
+```bash
+npm install clsx
+```
+
+**`App.tsx`**
+
+```tsx
+import { useState } from "react";
+import clsx from "clsx";
+import "./App.css";
+
+export default function App() {
+  const [active, setActive] = useState(false);
+
+  return (
+    <div>
+      <button
+        className={clsx("btn", {
+          active,
+        })}
+        onClick={() => setActive((prev) => !prev)}
+      >
+        {active ? "Active" : "Inactive"}
+      </button>
+    </div>
+  );
+}
+```
+
+**`App.css`**
+
+```css
+.btn {
+  padding: 12px 20px;
+  background: gray;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.active {
+  background: royalblue;
+}
+```
+
+Clicking the button toggles the `active` class without any direct DOM manipulation.
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for React projects because it offers fast startup, instant hot module replacement (HMR), and native ES module development.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- For SSR or hybrid rendering, prefer **Next.js App Router**; for nested routing and data loading, **Remix** is another strong option.
+- Modern React tooling is ESM-first. Vite bundles with Rollup for production and serves native ES modules during development, resulting in fast rebuilds and efficient tree-shaking.
+
+---
+
+# Performance
+
+Dynamic class toggling is inexpensive because React only updates the changed `className` attribute.
+
+For larger applications:
+
+- Use **React Profiler** to identify unnecessary re-renders.
+- Memoize expensive child components with `React.memo`.
+- Use `useCallback` when passing event handlers to memoized children.
+- Use `useMemo` only for expensive class computations (rare).
+- Split large routes/components using `React.lazy` and `Suspense`.
+- Use caching libraries such as TanStack Query for server state to reduce unnecessary UI updates.
+
+---
+
+# Testing
+
+For unit and integration testing, use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("toggles active class", () => {
+  render(<App />);
+
+  const button = screen.getByRole("button");
+
+  fireEvent.click(button);
+
+  expect(button).toHaveClass("active");
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Log UI state transitions for debugging in development; integrate structured logging or monitoring in production.
+- Choose SSR (e.g., Next.js) when SEO or faster first paint is important; CSR with Vite is ideal for many dashboards and internal apps.
+- Minimize bundle size with code splitting, tree-shaking, and lazy loading.
+- Deploy static Vite builds behind a CDN for efficient asset delivery.
+
+---
+
+# Pitfalls
+
+- **Avoid manually changing classes with `element.classList`** in React components; it can conflict with React's virtual DOM.
+- **Prefer `clsx` or `classnames`** over deeply nested ternary expressions for readability and maintainability.
+- **Use functional state updates** (`setState(prev => !prev)`) when toggling booleans to avoid stale state issues.
+
 ## Question 2. How do you render a "loading" spinner while data is being fetched?
 
 ## Question 3. How do you create a reusable input component?
