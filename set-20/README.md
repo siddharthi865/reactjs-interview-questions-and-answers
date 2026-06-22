@@ -25,6 +25,360 @@
 
 ## Question 1. How do you implement offline-first React apps with service workers?
 
+# How do you implement offline-first React apps with service workers?
+
+## Short answer
+
+An **offline-first React app** uses a **Service Worker** to cache application assets and API responses so the app continues to work without an internet connection. Modern React applications typically use **Vite + vite-plugin-pwa**, **Next.js with PWA plugins**, or **Workbox** instead of manually writing service worker logic. The service worker intercepts network requests and serves cached resources based on caching strategies like **Cache First**, **Network First**, or **Stale While Revalidate**.
+
+---
+
+# Explanation
+
+A **Service Worker** is a JavaScript file that runs separately from your React application in the browser. It acts as a programmable proxy between your app and the network.
+
+Typical request flow:
+
+```
+Browser
+    │
+    ▼
+Service Worker
+   │      │
+Cache   Network
+   │      │
+   └──► Response
+```
+
+An offline-first React application generally consists of:
+
+1. **App Shell**
+   - HTML
+   - JavaScript bundles
+   - CSS
+   - Fonts
+   - Icons
+
+These are cached during installation so the application loads instantly even when offline.
+
+2. **Runtime Cache**
+   - API responses
+   - Images
+   - User avatars
+   - JSON
+   - Documents
+
+These are cached as users browse the application.
+
+3. **Background Sync (optional)**
+   - Queue failed POST/PUT requests
+   - Retry automatically when connectivity returns
+
+4. **Cache Strategies**
+
+| Strategy               | Best For                  |
+| ---------------------- | ------------------------- |
+| Cache First            | Images, fonts, icons      |
+| Network First          | API data                  |
+| Stale While Revalidate | Product lists, news feeds |
+| Cache Only             | Versioned assets          |
+| Network Only           | Payments, authentication  |
+
+---
+
+### React Architecture
+
+A production React app usually separates responsibilities:
+
+```
+React Components
+        │
+        ▼
+React Query / Redux Toolkit
+        │
+        ▼
+Fetch API
+        │
+        ▼
+Service Worker
+        │
+   Cache Storage
+```
+
+React components should never directly manipulate cache storage.
+
+Instead:
+
+- Components request data.
+- React Query manages client cache.
+- Service Worker manages browser cache.
+- Backend remains the source of truth.
+
+---
+
+### React 18 considerations
+
+React 18 features still work normally offline.
+
+Examples include:
+
+- Automatic batching
+- Concurrent rendering
+- Suspense
+- Lazy loading
+
+When connectivity changes:
+
+```
+offline
+↓
+
+render cached data
+
+↓
+
+connection restored
+
+↓
+
+background fetch
+
+↓
+
+React Query updates UI
+
+↓
+
+automatic batched render
+```
+
+---
+
+### Caching Strategies
+
+### Cache First
+
+```
+Cache?
+
+Yes → Return cache
+
+No
+
+↓
+
+Network
+
+↓
+
+Save cache
+```
+
+Good for:
+
+- Logos
+- Images
+- CSS
+- Fonts
+
+---
+
+### Network First
+
+```
+Network
+
+↓
+
+Success → Cache
+
+↓
+
+Return
+
+↓
+
+Failure
+
+↓
+
+Use cache
+```
+
+Best for:
+
+- Dashboard
+- User profile
+- Orders
+
+---
+
+### Stale While Revalidate
+
+```
+Return cache immediately
+
+↓
+
+Fetch network
+
+↓
+
+Update cache
+
+↓
+
+Next request gets fresh data
+```
+
+Perfect for:
+
+- News
+- Blogs
+- Products
+
+---
+
+# Example
+
+**Scaffold a modern React app (Vite + TypeScript):**
+
+```bash
+npm create vite@latest offline-demo -- --template react-ts
+cd offline-demo
+npm i
+npm i -D vite-plugin-pwa
+npm run dev
+```
+
+**vite.config.ts**
+
+```ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/jsonplaceholder\.typicode\.com\//,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
+```
+
+**App.tsx**
+
+```tsx
+import { useEffect, useState } from "react";
+
+type Todo = {
+  id: number;
+  title: string;
+};
+
+export default function App() {
+  const [todos, setTodos] = useState<Todo[]>([]);
+
+  useEffect(() => {
+    fetch("https://jsonplaceholder.typicode.com/todos?_limit=5")
+      .then((r) => r.json())
+      .then(setTodos);
+  }, []);
+
+  return (
+    <ul>
+      {todos.map((todo) => (
+        <li key={todo.id}>{todo.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+The first successful request is cached by the service worker. If the network becomes unavailable later, the cached response is served according to the configured `NetworkFirst` strategy.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + TypeScript + `vite-plugin-pwa`** for lightweight, production-ready PWAs. For server-rendered applications, **Next.js** can be paired with a PWA plugin. Avoid **Create React App (CRA)**, as it is deprecated.
+
+- **Vite**: Fast development server using native ES modules (ESM) and Rollup for production builds.
+- **ESM vs CommonJS**: Modern React tooling favors **ESM**, enabling efficient tree-shaking and native browser module support. CommonJS remains common in Node.js but is less suitable for browser bundles.
+- **Dev server**: Use `npm run dev` during development and `npm run build` for optimized production assets. Test service workers using a production preview (`npm run preview`) because they are typically disabled or limited in development.
+
+---
+
+# Performance
+
+- **React Profiler**: Measure unnecessary renders before optimizing caching behavior.
+- **Memoization**: Use `React.memo`, `useMemo`, and `useCallback` to reduce re-renders when cached data updates.
+- **Code splitting**: Use `React.lazy` and `Suspense` so only required chunks are downloaded and cached.
+- **Cache strategies**:
+  - Cache static assets aggressively.
+  - Use `StaleWhileRevalidate` for frequently viewed content.
+  - Use `NetworkFirst` for user-specific data.
+
+- **Precaching**: Cache the application shell during service worker installation to enable instant offline startup.
+- **Avoid cache bloat**: Version caches and remove outdated entries during service worker activation.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for component tests and **Playwright** for end-to-end validation of offline behavior.
+
+Example commands:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+```bash
+npx playwright test
+```
+
+For offline testing:
+
+- Simulate offline mode in browser DevTools.
+- Verify cached assets load correctly.
+- Confirm API fallbacks behave as expected.
+- Test service worker updates and cache invalidation.
+
+---
+
+# Ops & Deployment
+
+- Add **Error Boundaries** to gracefully handle rendering failures independent of network state.
+- Use structured logging (e.g., Sentry or OpenTelemetry) to monitor service worker lifecycle events and offline failures.
+- **SSR vs CSR**:
+  - CSR PWAs benefit most from service workers.
+  - SSR frameworks (e.g., Next.js) can combine server rendering with offline support for static assets and selected API responses.
+
+- Manage bundle size with tree-shaking, dynamic imports, and route-level code splitting.
+- Serve assets from a CDN with immutable cache headers for hashed files, while allowing the service worker to control runtime caching and updates.
+
+---
+
+# Pitfalls
+
+- **Do not cache everything**—stale authenticated or sensitive data can cause inconsistent behavior and security risks.
+- **Version and clean caches** whenever deploying a new application build to avoid serving outdated assets.
+- **Keep business logic out of the service worker**; it should focus on request interception, caching, synchronization, and update management.
+
 ## Question 2. How do you implement analytics tracking (Google Analytics, Segment) in React?
 
 ## Question 3. How do you handle cross-tab state synchronization using localStorage or IndexedDB?
