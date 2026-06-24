@@ -746,7 +746,533 @@ npm install -D @playwright/test
 
 ## Question 4. What is the difference between setState callback and useEffect?
 
+# Short answer
+
+The key difference is:
+
+- **`setState` callback** (available in **class components only**) runs **immediately after a state update has been committed**.
+- **`useEffect`** (used in **functional components**) runs **after React renders and commits the update**, and can respond to changes in one or more state values, props, or other dependencies.
+
+Since functional components don't support a `setState` callback, **`useEffect` is the modern replacement** for performing side effects after state changes.
+
+---
+
+# Explanation
+
+## `setState` callback (Class Components)
+
+In class components, `setState` accepts an optional callback:
+
+```jsx
+this.setState({ count: this.state.count + 1 }, () => {
+  console.log("State updated:", this.state.count);
+});
+```
+
+The callback runs:
+
+1. State is updated.
+2. React re-renders the component.
+3. DOM is committed.
+4. Callback executes.
+
+Typical uses:
+
+- Access the updated state
+- Trigger API calls
+- Focus an element
+- Notify parent components
+
+This API **does not exist** in functional components.
+
+---
+
+## `useEffect` (Functional Components)
+
+In functional components, use `useEffect` to react to state changes.
+
+```tsx
+useEffect(() => {
+  console.log("Count changed:", count);
+}, [count]);
+```
+
+The effect runs:
+
+1. State changes.
+2. React renders.
+3. DOM is committed.
+4. `useEffect` executes.
+
+Unlike the class callback, `useEffect` can listen to:
+
+- State changes
+- Prop changes
+- Context changes
+- Multiple dependencies
+
+---
+
+## Comparison
+
+| Feature                       | `setState` Callback | `useEffect`              |
+| ----------------------------- | ------------------- | ------------------------ |
+| Component Type                | Class components    | Functional components    |
+| Available in React Hooks      | ❌ No               | ✅ Yes                   |
+| Runs after render             | ✅ Yes              | ✅ Yes                   |
+| Watches multiple dependencies | ❌ No               | ✅ Yes                   |
+| Cleanup support               | ❌ No               | ✅ Yes (return function) |
+| Recommended for new code      | ❌ No               | ✅ Yes                   |
+
+---
+
+## React 18 Rendering Behavior
+
+React 18 introduced:
+
+- **Automatic batching**
+- **Concurrent Rendering**
+- **Transitions**
+- **Suspense improvements**
+
+`useEffect` works correctly with these features because it runs **after React commits the UI**. It should be used for side effects such as:
+
+- Fetching data
+- Logging
+- Analytics
+- DOM manipulation
+- Subscriptions
+
+Avoid using effects for values that can be derived during rendering.
+
+---
+
+## Component Architecture
+
+A common pattern is to separate rendering from side effects:
+
+```text
+App
+ ├── Counter
+ │     ├── State (count)
+ │     ├── UI
+ │     └── useEffect (log, analytics)
+ └── Other Components
+```
+
+Keep effects focused on a single responsibility. Multiple small `useEffect` hooks are usually easier to understand and maintain than one large effect.
+
+---
+
+# Example
+
+## Scaffold a React + TypeScript app with Vite
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+`App.tsx`
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    console.log("Count updated:", count);
+
+    document.title = `Count: ${count}`;
+  }, [count]);
+
+  return (
+    <main>
+      <h2>{count}</h2>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </main>
+  );
+}
+```
+
+Every time `count` changes:
+
+1. React updates the state.
+2. The component re-renders.
+3. The DOM is updated.
+4. `useEffect` runs and updates the document title.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**
+
+Why Vite?
+
+- Fast startup using native **ESM**
+- Instant Hot Module Replacement (HMR)
+- Optimized production builds with Rollup
+- Excellent TypeScript support
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### ESM vs CommonJS
+
+- Use **ES Modules (`import`/`export`)** for modern React applications.
+- CommonJS (`require`) is primarily for legacy Node.js environments.
+
+Framework choices:
+
+- **Vite** → Client-side React (SPA)
+- **Next.js** → SSR, SSG, React Server Components
+- **Remix** → Server-first React applications
+
+---
+
+# Performance
+
+- Keep `useEffect` dependency arrays accurate to avoid unnecessary executions.
+- Avoid storing derived data in state; compute it during render instead.
+- Use `React.memo` to prevent unnecessary child re-renders.
+- Use `useMemo` for expensive calculations.
+- Use `useCallback` for stable function references passed to memoized children.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Profile effect execution with the **React DevTools Profiler** before optimizing.
+
+---
+
+# Testing
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("updates count", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Increment"));
+
+  expect(screen.getByText("1")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing:
+
+```bash
+npm install -D @playwright/test
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Log effect-related errors to services like Sentry.
+- Clean up subscriptions, timers, and event listeners in `useEffect` to prevent memory leaks.
+- Keep bundles small with lazy loading and tree shaking.
+- Choose SSR (e.g., Next.js) for SEO-sensitive pages and CSR (e.g., Vite) for highly interactive applications.
+
+---
+
+# Pitfalls
+
+- Expecting `useEffect` to behave exactly like a class component's `setState` callback—it runs based on its dependency array, not as a callback argument.
+- Omitting dependencies from the dependency array, leading to stale values or bugs.
+- Performing synchronous calculations in `useEffect` that could be done directly during rendering.
+
 ## Question 5. How do you handle multiple sibling components updating the same state?
+
+# Short answer
+
+When multiple sibling components need to update the same state, **lift the state up** to their nearest common parent and pass the state and update functions down via props.
+
+For larger applications, use a shared state solution such as **Context API**, **Redux Toolkit**, **Zustand**, or **Jotai** to avoid excessive prop drilling.
+
+---
+
+# Explanation
+
+React follows a **unidirectional data flow**. Sibling components cannot directly modify each other's state because each component owns its own local state.
+
+The recommended approach is:
+
+1. Move (lift) the shared state to the closest common parent.
+2. Pass the state to siblings as props.
+3. Pass callback functions so siblings can request state updates.
+
+```text
+        Parent
+           │
+   Shared State
+      /       \
+ Child A     Child B
+(read/update) (read/update)
+```
+
+This keeps a **single source of truth**, making the application predictable and easier to debug.
+
+---
+
+## Example: Lifting State Up
+
+Suppose two sibling components need to increment and reset the same counter.
+
+- **Parent** owns the `count` state.
+- **CounterControls** updates the state.
+- **CounterDisplay** displays the state.
+
+This is the most common interview answer.
+
+---
+
+## React 18 Rendering Behavior
+
+In React 18:
+
+- Multiple state updates are **automatically batched**.
+- When a sibling updates shared state, React schedules a re-render of the parent.
+- The parent passes the updated props to both siblings.
+- React's reconciliation algorithm updates only the components whose rendered output changed.
+
+Example:
+
+```tsx
+setCount((c) => c + 1);
+setName("John");
+```
+
+Both updates are batched into a single render for better performance.
+
+---
+
+## State Management Trade-offs
+
+### 1. Lift State Up (Recommended for small apps)
+
+Best when:
+
+- Few sibling components
+- State is local to one feature
+- Easy prop passing
+
+Pros:
+
+- Simple
+- Built into React
+- Easy to test
+
+Cons:
+
+- Can lead to prop drilling
+
+---
+
+### 2. Context API
+
+Best when:
+
+- Many nested components
+- Theme
+- Authentication
+- User preferences
+
+Pros:
+
+- Eliminates prop drilling
+
+Cons:
+
+- Context updates can re-render all consumers unless optimized (e.g., by splitting contexts or using selector patterns).
+
+---
+
+### 3. Redux Toolkit / Zustand
+
+Best when:
+
+- Large applications
+- Shared global state
+- Complex business logic
+
+Pros:
+
+- Centralized state
+- Excellent debugging tools
+- Scalable architecture
+
+---
+
+### 4. Server State
+
+Avoid storing API data in Context.
+
+Instead use:
+
+- TanStack Query
+- SWR
+
+These libraries provide:
+
+- Caching
+- Background refetching
+- Automatic synchronization
+- Optimistic updates
+
+---
+
+# Example
+
+## Scaffold a React + TypeScript app with Vite
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+`App.tsx`
+
+```tsx
+import { useState } from "react";
+
+type ControlsProps = {
+  onIncrement: () => void;
+  onReset: () => void;
+};
+
+function CounterControls({ onIncrement, onReset }: ControlsProps) {
+  return (
+    <>
+      <button onClick={onIncrement}>+</button>
+      <button onClick={onReset}>Reset</button>
+    </>
+  );
+}
+
+function CounterDisplay({ count }: { count: number }) {
+  return <h2>Count: {count}</h2>;
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <>
+      <CounterDisplay count={count} />
+
+      <CounterControls
+        onIncrement={() => setCount((c) => c + 1)}
+        onReset={() => setCount(0)}
+      />
+    </>
+  );
+}
+```
+
+Both sibling components work with the same state owned by the parent. Using the functional updater (`setCount((c) => c + 1)`) ensures updates are based on the latest state.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**
+
+Why Vite?
+
+- Fast development server powered by native **ESM**
+- Instant Hot Module Replacement (HMR)
+- Optimized production builds with Rollup
+- Excellent TypeScript support
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### ESM vs CommonJS
+
+- Use **ES Modules** (`import`/`export`) in modern React projects.
+- **CommonJS** (`require`) is primarily for legacy Node.js environments.
+
+Choose your stack based on requirements:
+
+- **Vite** → SPAs and dashboards
+- **Next.js** → SSR, SSG, React Server Components
+- **Remix** → Server-first routing and data loading
+
+---
+
+# Performance
+
+- Lift state only as high as necessary to minimize re-renders.
+- Use `React.memo` to prevent unnecessary re-renders of sibling components.
+- Use `useCallback` for callbacks passed to memoized children.
+- Use `useMemo` for expensive derived values.
+- Split contexts if using Context API to reduce unnecessary consumer updates.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Profile with the **React DevTools Profiler** before optimizing.
+- Use TanStack Query or SWR for server-state caching instead of storing API responses in component state.
+
+---
+
+# Testing
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { fireEvent, render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("increments shared counter", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("+"));
+
+  expect(screen.getByText("Count: 1")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing:
+
+```bash
+npm install -D @playwright/test
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Log runtime errors with tools like Sentry.
+- Keep shared state localized when possible to reduce rendering overhead.
+- Use lazy loading and route-based code splitting to minimize bundle size.
+- For SEO-sensitive applications, prefer SSR (e.g., Next.js); for highly interactive dashboards, CSR with Vite is often sufficient.
+- Deploy static Vite apps to a CDN-backed host such as Vercel or Netlify.
+
+---
+
+# Pitfalls
+
+- Keeping duplicate copies of the same state in sibling components, leading to inconsistent UI.
+- Lifting state too high in the component tree, causing unnecessary re-renders.
+- Using Context for frequently changing state without optimization, which can trigger avoidable re-renders.
 
 ## Question 6. How do you pass props with default values in React?
 
