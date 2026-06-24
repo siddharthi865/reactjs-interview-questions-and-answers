@@ -541,7 +541,508 @@ Use Playwright for end-to-end testing.
 
 ## Question 4. How do you prevent a component from rendering?
 
+# Short answer
+
+You cannot completely “stop React from rendering” a component once its parent renders, but you can **prevent unnecessary re-renders** using techniques like:
+
+- `React.memo` (for functional components)
+- `shouldComponentUpdate` / `PureComponent` (class components)
+- Early returns (`return null`) to skip UI output
+- Stable props/state with memoization (`useMemo`, `useCallback`)
+- Conditional rendering at parent level
+
+---
+
+# Explanation
+
+## 1. React rendering model (important context)
+
+In React:
+
+- A **render is triggered by state/props/context changes**
+- When a parent re-renders, children may re-render by default
+- React does not re-render the DOM unless something actually changed (reconciliation)
+
+So the goal is not “prevent render entirely,” but:
+
+> Avoid unnecessary reconciliation and expensive child renders.
+
+---
+
+## 2. Functional components: `React.memo`
+
+### Shallow prop comparison optimization
+
+```tsx id="memo1"
+import React from "react";
+
+type Props = {
+  value: number;
+};
+
+const Child = React.memo(({ value }: Props) => {
+  console.log("Child rendered");
+  return <div>{value}</div>;
+});
+
+export default Child;
+```
+
+### How it works
+
+- React skips re-render if props are **shallowly equal**
+- Useful for pure UI components
+
+---
+
+## 3. Prevent re-render with stable props
+
+Even with `React.memo`, new references cause re-renders:
+
+```tsx id="stable1"
+const Parent = () => {
+  const data = { count: 1 }; // ❌ new object every render
+
+  return <Child value={data.count} />;
+};
+```
+
+Fix using `useMemo`:
+
+```tsx id="stable2"
+const Parent = () => {
+  const data = useMemo(() => ({ count: 1 }), []);
+
+  return <Child value={data.count} />;
+};
+```
+
+---
+
+## 4. Class components: `shouldComponentUpdate`
+
+```tsx id="class1"
+class Child extends React.Component<{ value: number }> {
+  shouldComponentUpdate(nextProps: { value: number }) {
+    return nextProps.value !== this.props.value;
+  }
+
+  render() {
+    console.log("Child rendered");
+    return <div>{this.props.value}</div>;
+  }
+}
+```
+
+---
+
+## 5. `PureComponent` (shallow comparison shortcut)
+
+```tsx id="pure1"
+class Child extends React.PureComponent<{ value: number }> {
+  render() {
+    return <div>{this.props.value}</div>;
+  }
+}
+```
+
+- Automatically implements shallow prop + state comparison
+- Faster to implement but less flexible than `shouldComponentUpdate`
+
+---
+
+## 6. Conditional rendering (skip mounting UI)
+
+If you want to prevent rendering UI entirely:
+
+```tsx id="cond1"
+const App = ({ show }: { show: boolean }) => {
+  if (!show) return null;
+
+  return <div>Rendered only when show is true</div>;
+};
+```
+
+This prevents the component from being mounted/rendered at all.
+
+---
+
+## 7. Prevent child rendering via parent control
+
+```tsx id="parent1"
+const Parent = ({ shouldRender }: { shouldRender: boolean }) => {
+  return <div>{shouldRender ? <HeavyComponent /> : null}</div>;
+};
+```
+
+This is often the **cleanest and most explicit approach**.
+
+---
+
+## 8. Context optimization (common hidden re-render cause)
+
+Context updates re-render all consumers:
+
+```tsx id="ctx1"
+const ValueContext = React.createContext(0);
+```
+
+Optimize by splitting contexts or memoizing values:
+
+```tsx id="ctx2"
+const value = useMemo(() => ({ theme, setTheme }), [theme]);
+```
+
+---
+
+# Tooling & Setup
+
+Use modern stack:
+
+```bash id="setup1"
+npm create vite@latest react-render-control -- --template react-ts
+cd react-render-control
+npm install
+npm run dev
+```
+
+- Vite (fast HMR, ESM-based)
+- Avoid CRA (deprecated)
+- Prefer React 18+ for automatic batching and concurrent rendering
+
+---
+
+# Performance
+
+Key strategies:
+
+### 1. Memoization
+
+- `React.memo` → component memoization
+- `useMemo` → expensive calculations
+- `useCallback` → stable function references
+
+### 2. Profiling
+
+Use **React DevTools Profiler**:
+
+- Identify “wasted renders”
+- Measure commit time
+
+### 3. Code splitting
+
+```tsx id="lazy1"
+const Heavy = React.lazy(() => import("./Heavy"));
+```
+
+### 4. Avoid unnecessary state updates
+
+React 18 batches updates automatically, but:
+
+- Re-setting same state still triggers render unless equality check is applied
+
+---
+
+# Testing
+
+With Vitest + React Testing Library:
+
+```tsx id="test1"
+import { render } from "@testing-library/react";
+import Child from "./Child";
+
+test("renders only when needed", () => {
+  const { rerender } = render(<Child value={1} />);
+  rerender(<Child value={1} />); // should not re-render if memoized
+});
+```
+
+```bash id="testcmd1"
+npm run test
+```
+
+Use **Playwright** for verifying UI render behavior.
+
+---
+
+# Ops & Deployment
+
+- Avoid over-memoization (can increase memory usage)
+- Use React DevTools in production profiling mode for performance debugging
+- Ensure SSR frameworks (Next.js) avoid hydration mismatches when conditionally rendering
+- Code splitting reduces initial render cost
+- Deploy via CDN (Vercel, Netlify, Cloudflare)
+
+---
+
+# Pitfalls
+
+- Overusing `React.memo` (can hurt performance due to shallow compare cost)
+- Forgetting that new object/function references trigger re-renders
+- Assuming “no re-render” means “no execution” (component function still runs in some cases)
+- Using context too broadly causing global re-renders
+
 ## Question 5. What is the difference between local and global state in React?
+
+# Short answer
+
+**Local state** is state that belongs to a single component and is not shared elsewhere (e.g., `useState` inside a component).
+**Global state** is shared across multiple components in the app (e.g., via Context, Redux, Zustand, or React Query cache).
+
+---
+
+# Explanation
+
+## 1. Local State
+
+Local state is **encapsulated within a component** and controls only that component’s behavior.
+
+### Characteristics
+
+- Scoped to a single component
+- Managed using `useState`, `useReducer`, or class state
+- Re-renders only that component (and its children if props change)
+- Simple, fast, and easy to reason about
+- Ideal for UI state
+
+### Example use cases
+
+- Input values
+- Toggle (open/close modal)
+- Form state
+- UI flags (loading, hover, active tab inside a component)
+
+---
+
+## 2. Global State
+
+Global state is **shared across multiple components**, often at different levels of the component tree.
+
+### Characteristics
+
+- Shared across unrelated components
+- Requires a shared store/provider
+- Causes broader re-renders if not optimized
+- More complex but necessary for cross-cutting concerns
+
+### Example use cases
+
+- Authentication state (user, token)
+- Theme (dark/light mode)
+- Cart in e-commerce apps
+- Language/locale settings
+- Server cache (React Query, SWR)
+
+---
+
+## 3. Key architectural difference
+
+| Aspect             | Local State              | Global State                         |
+| ------------------ | ------------------------ | ------------------------------------ |
+| Scope              | Single component         | Entire app / multiple components     |
+| Complexity         | Low                      | Medium–High                          |
+| Performance impact | Minimal                  | Can be broad                         |
+| Tools              | `useState`, `useReducer` | Context, Redux, Zustand, React Query |
+| Reusability        | Not shared               | Shared across app                    |
+| Best for           | UI behavior              | App-wide data                        |
+
+---
+
+## 4. React rendering behavior
+
+### Local state
+
+When local state changes:
+
+- Only that component re-renders
+- React reconciles its subtree
+
+### Global state
+
+When global state changes:
+
+- All subscribed consumers re-render
+- Can cause **prop drilling or unnecessary re-renders** if not optimized
+
+React 18 improves batching, but does not eliminate re-render propagation for shared state.
+
+---
+
+## 5. Example
+
+### Create Vite project
+
+```bash id="vite1"
+npm create vite@latest react-state-demo -- --template react-ts
+cd react-state-demo
+npm install
+npm run dev
+```
+
+---
+
+### Local state example
+
+```tsx id="local1"
+import { useState } from "react";
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <p>Local count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+Only `Counter` re-renders when `count` changes.
+
+---
+
+### Global state using Context API
+
+```tsx id="global1"
+import React, { createContext, useContext, useState } from "react";
+
+type Theme = "light" | "dark";
+
+const ThemeContext = createContext<{
+  theme: Theme;
+  toggleTheme: () => void;
+} | null>(null);
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<Theme>("light");
+
+  const toggleTheme = () =>
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
+  return ctx;
+}
+```
+
+### Consuming global state
+
+```tsx id="global2"
+import { useTheme } from "./ThemeProvider";
+
+export function Button() {
+  const { theme, toggleTheme } = useTheme();
+
+  return <button onClick={toggleTheme}>Current theme: {theme}</button>;
+}
+```
+
+---
+
+## 6. Tooling & Setup
+
+Modern stack:
+
+- **Vite + React + TypeScript** (recommended for SPAs)
+- **Next.js** for SSR + server components + hybrid state
+- **State tools (optional):**
+  - Context API → small apps
+  - Zustand → lightweight global state
+  - Redux Toolkit → large enterprise apps
+  - React Query / TanStack Query → server state (important distinction)
+
+⚠️ Important modern pattern:
+
+> Separate **client state (UI state)** from **server state (API data)**.
+
+---
+
+## 7. Performance considerations
+
+### Local state
+
+- Cheap re-renders
+- Keep state as close as possible to usage (“colocation” principle)
+
+### Global state
+
+Risks:
+
+- Broad re-renders across app
+- Context provider changes propagate to all consumers
+
+Optimizations:
+
+- Split context into multiple smaller contexts
+- Memoize context values:
+
+```tsx id="perf1"
+const value = useMemo(() => ({ theme, toggleTheme }), [theme]);
+```
+
+- Use selector-based stores (Redux/Zustand) to avoid full re-renders
+- Use React DevTools Profiler to detect unnecessary updates
+
+---
+
+## 8. Testing
+
+### Local state
+
+Test component behavior directly:
+
+```tsx id="test1"
+import { render, screen, fireEvent } from "@testing-library/react";
+import { Counter } from "./Counter";
+
+test("increments count", () => {
+  render(<Counter />);
+  fireEvent.click(screen.getByText("Increment"));
+  expect(screen.getByText(/1/)).toBeInTheDocument();
+});
+```
+
+### Global state
+
+Wrap components with provider:
+
+```tsx id="test2"
+render(
+  <ThemeProvider>
+    <Button />
+  </ThemeProvider>,
+);
+```
+
+Use Vitest or Jest + React Testing Library.
+
+---
+
+## 9. Ops & Deployment
+
+- Avoid overusing global state (causes tight coupling)
+- Prefer server state libraries (React Query) instead of manual global caching
+- Keep SSR compatibility in mind (Next.js hydration consistency)
+- Use code splitting to isolate state-heavy modules
+- Monitor state updates using React DevTools Profiler in production builds
+
+---
+
+## 10. Pitfalls
+
+- Using global state for everything (leads to unnecessary complexity)
+- Context used as a replacement for all state management (causes performance issues)
+- Not colocating local state near where it is used
+- Passing global state deep instead of using selectors or splitting context
 
 ## Question 6. Can you update state directly without setState? Why not?
 
