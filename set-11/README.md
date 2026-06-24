@@ -893,7 +893,624 @@ For end-to-end testing, use **Playwright**.
 
 ## Question 4. How do you apply conditional rendering with ternary operators?
 
+# How do you apply conditional rendering with ternary operators?
+
+## Short answer
+
+In React, the **ternary operator (`condition ? A : B`)** is used to render one of two UI outputs based on a condition.
+
+```jsx
+{
+  isLoggedIn ? <Dashboard /> : <Login />;
+}
+```
+
+It is the most common way to perform inline conditional rendering in JSX when you need an **either/or UI decision**.
+
+---
+
+# Explanation
+
+Conditional rendering in React is just JavaScript expression evaluation inside JSX. Since JSX is compiled to `React.createElement`, any valid JS expression can be used inside `{}`.
+
+The ternary operator is especially useful because it:
+
+- Returns a value (so it works in JSX)
+- Keeps logic inline and declarative
+- Avoids verbose `if/else` blocks in render functions
+
+---
+
+## 1. Basic ternary rendering
+
+```tsx id="r1a2b3"
+export default function App() {
+  const isLoggedIn = true;
+
+  return (
+    <div>{isLoggedIn ? <h1>Welcome back!</h1> : <h1>Please log in</h1>}</div>
+  );
+}
+```
+
+---
+
+## 2. Conditional component rendering
+
+```tsx id="c4d5e6"
+function Dashboard() {
+  return <h2>Dashboard</h2>;
+}
+
+function Login() {
+  return <h2>Login Page</h2>;
+}
+
+export default function App() {
+  const isLoggedIn = false;
+
+  return <div>{isLoggedIn ? <Dashboard /> : <Login />}</div>;
+}
+```
+
+---
+
+## 3. Ternary with state (real-world pattern)
+
+```tsx id="s7t8u9"
+import { useState } from "react";
+
+export default function App() {
+  const [isLoading, setIsLoading] = useState(false);
+
+  return <div>{isLoading ? <p>Loading...</p> : <p>Data loaded</p>}</div>;
+}
+```
+
+---
+
+## 4. Nested ternary (use carefully)
+
+```tsx id="n1n2n3"
+export default function App() {
+  const status = "error";
+
+  return (
+    <div>
+      {status === "loading" ? (
+        <p>Loading...</p>
+      ) : status === "error" ? (
+        <p>Error occurred</p>
+      ) : (
+        <p>Success</p>
+      )}
+    </div>
+  );
+}
+```
+
+⚠️ Nested ternaries work but can hurt readability. In production, prefer:
+
+- early returns
+- switch statements
+- mapping status to components
+
+---
+
+## 5. Conditional props or attributes
+
+Ternaries are also used outside JSX elements:
+
+```tsx id="p3q4r5"
+<button disabled={isSubmitting ? true : false}>Submit</button>
+```
+
+Better version:
+
+```tsx id="p3q4r5b"
+<button disabled={isSubmitting}>Submit</button>
+```
+
+---
+
+## 6. Ternary vs logical AND (`&&`)
+
+| Use case            | Best approach |
+| ------------------- | ------------- |
+| Either A or B       | ternary       |
+| Render only if true | `&&`          |
+
+Example:
+
+```tsx id="l8m9n0"
+{
+  isLoggedIn && <Dashboard />;
+}
+```
+
+vs
+
+```tsx id="l8m9n0b"
+{
+  isLoggedIn ? <Dashboard /> : <Login />;
+}
+```
+
+---
+
+# Rendering behavior (React internals)
+
+- React evaluates JSX expressions during render phase.
+- Ternary expressions are **pure JavaScript evaluation**, not React-specific logic.
+- React 18’s **automatic batching** ensures multiple state updates triggering conditional UI changes are grouped efficiently.
+- Conditional branches may mount/unmount components, triggering:
+  - `useEffect` cleanup
+  - state reset on unmount
+  - re-initialization when remounted
+
+This is important for performance and correctness (especially with forms, modals, or data fetching components).
+
+---
+
+# Example (React + TypeScript)
+
+## Setup (Vite recommended)
+
+```bash id="v1setup"
+npm create vite@latest conditional-ui -- --template react-ts
+cd conditional-ui
+npm install
+npm run dev
+```
+
+---
+
+## Example: Auth-based UI switch
+
+```tsx id="auth1"
+import { useState } from "react";
+
+function Dashboard() {
+  return <h1>Dashboard</h1>;
+}
+
+function Login() {
+  return <h1>Login Page</h1>;
+}
+
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  return (
+    <div>
+      {isLoggedIn ? <Dashboard /> : <Login />}
+
+      <button onClick={() => setIsLoggedIn((v) => !v)}>Toggle Auth</button>
+    </div>
+  );
+}
+```
+
+---
+
+# Performance considerations
+
+- Avoid deeply nested ternaries → reduce readability and maintainability issues.
+- Extract conditional logic into variables or helper functions:
+
+```tsx
+const content = isLoading ? <Loader /> : <Data />;
+return <div>{content}</div>;
+```
+
+- Use `React.memo` to prevent re-renders of conditional child components when props don't change.
+- Use `useMemo` when expensive UI branches depend on computed values.
+- Be aware that switching branches can unmount components, resetting internal state.
+
+---
+
+# Testing
+
+With **Vitest + React Testing Library**:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders correct UI based on auth state", () => {
+  render(<App />);
+  expect(screen.getByText(/login/i)).toBeInTheDocument();
+});
+```
+
+For E2E testing:
+
+- Use **Playwright** to validate UI state transitions.
+
+---
+
+# Ops & deployment notes
+
+- Conditional rendering can affect:
+  - hydration in SSR (Next.js)
+  - component remounting behavior
+  - client/server mismatch if conditions depend on browser-only APIs
+
+- Ensure SSR-safe conditions (avoid `window` checks during render unless guarded).
+- Monitor conditional UI paths in production via logging/analytics.
+- Use Error Boundaries around conditionally rendered feature blocks.
+
+---
+
+# Common pitfalls and best practices
+
+- Avoid **nested ternaries** for complex UI logic—move to variables or mapping objects.
+- Don’t misuse ternary when `&&` is clearer for single-condition rendering.
+- Be aware that toggling conditions can **unmount components and reset state**.
+- Keep JSX readable—prefer extracting logic when conditions grow.
+
 ## Question 5. How do you handle multiple class names dynamically?
+
+# How do you handle multiple class names dynamically?
+
+## Short answer
+
+In React, multiple class names are handled dynamically using:
+
+- Template literals
+- Array join patterns
+- Conditional expressions (ternary / logical AND)
+- Utility libraries like **classnames** or **clsx** (recommended)
+
+```tsx
+<div className={`${isActive ? "active" : ""} btn primary`} />
+```
+
+For production apps, **clsx/classnames is the cleanest and most scalable approach**.
+
+---
+
+# Explanation
+
+React uses `className` (not `class`) to assign CSS classes. When class logic becomes dynamic, you typically need to:
+
+- Add/remove classes based on state
+- Combine multiple static + conditional classes
+- Avoid messy string concatenation
+
+This becomes important in large-scale UI systems where styling depends on:
+
+- component state
+- props
+- feature flags
+- user roles
+- API data
+
+---
+
+## 1. Template literals (basic approach)
+
+```tsx id="t1"
+export default function Button({ isActive }: { isActive: boolean }) {
+  return (
+    <button className={`btn ${isActive ? "btn-active" : "btn-inactive"}`}>
+      Click
+    </button>
+  );
+}
+```
+
+### Pros
+
+- Simple
+- No dependencies
+
+### Cons
+
+- Becomes unreadable with many conditions
+- Hard to maintain at scale
+
+---
+
+## 2. Array join pattern (cleaner for multiple classes)
+
+```tsx id="t2"
+export default function Button({ isActive, isDisabled }: any) {
+  return (
+    <button
+      className={["btn", isActive && "active", isDisabled && "disabled"]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      Click
+    </button>
+  );
+}
+```
+
+### Pros
+
+- More scalable than templates
+- Easy to add/remove conditions
+
+### Cons
+
+- Still verbose for large apps
+
+---
+
+## 3. Using `clsx` (recommended in production)
+
+Install:
+
+```bash id="c1"
+npm install clsx
+```
+
+Usage:
+
+```tsx id="c2"
+import clsx from "clsx";
+
+export default function Button({
+  isActive,
+  isDisabled,
+}: {
+  isActive: boolean;
+  isDisabled: boolean;
+}) {
+  return (
+    <button
+      className={clsx("btn", {
+        active: isActive,
+        disabled: isDisabled,
+      })}
+    >
+      Click
+    </button>
+  );
+}
+```
+
+### Why this is preferred
+
+- Clean syntax
+- Handles complex conditions
+- Widely used in production apps
+- Tree-shakeable and lightweight
+
+---
+
+## 4. Using `classnames` (older but still common)
+
+```tsx id="c3"
+import classNames from "classnames";
+
+classNames("btn", {
+  active: true,
+  disabled: false,
+});
+```
+
+Functionally similar to `clsx`, but slightly heavier.
+
+---
+
+## 5. Conditional variants with state logic
+
+```tsx id="c4"
+export default function Card({
+  status,
+}: {
+  status: "loading" | "error" | "success";
+}) {
+  return (
+    <div
+      className={clsx("card", {
+        "card-loading": status === "loading",
+        "card-error": status === "error",
+        "card-success": status === "success",
+      })}
+    >
+      {status}
+    </div>
+  );
+}
+```
+
+This pattern is widely used in **design systems**.
+
+---
+
+## 6. CSS Modules + dynamic class names
+
+```css id="c5"
+.button {
+  padding: 10px;
+}
+.active {
+  background: green;
+}
+```
+
+```tsx id="c6"
+import styles from "./Button.module.css";
+import clsx from "clsx";
+
+export default function Button({ isActive }: any) {
+  return (
+    <button
+      className={clsx(styles.button, {
+        [styles.active]: isActive,
+      })}
+    >
+      Click
+    </button>
+  );
+}
+```
+
+### Key benefit
+
+- Scoped styles + dynamic behavior (best of both worlds)
+
+---
+
+# Rendering behavior (React internals)
+
+- `className` is just a **string prop applied to the DOM element**
+- React reconciliation compares previous vs next `className` string
+- Any change triggers a DOM update (not a full re-render necessarily)
+- React 18 automatic batching ensures multiple state updates affecting classes are grouped efficiently
+
+### Performance note
+
+- Creating new string expressions every render is cheap
+- But deeply nested logic in JSX can hurt readability and maintainability
+- Memoization (`React.memo`) helps when class-dependent components are expensive
+
+---
+
+# Example (React + TypeScript + Vite)
+
+## Setup
+
+```bash id="setup1"
+npm create vite@latest class-demo -- --template react-ts
+cd class-demo
+npm install
+npm run dev
+```
+
+---
+
+## Example: Toggle button with dynamic classes
+
+```tsx id="ex1"
+import { useState } from "react";
+import clsx from "clsx";
+import "./styles.css";
+
+export default function App() {
+  const [isActive, setIsActive] = useState(false);
+  const [isDisabled, setIsDisabled] = useState(false);
+
+  return (
+    <div>
+      <button
+        className={clsx("btn", {
+          active: isActive,
+          disabled: isDisabled,
+        })}
+        onClick={() => setIsActive((v) => !v)}
+        disabled={isDisabled}
+      >
+        Toggle Active
+      </button>
+
+      <button onClick={() => setIsDisabled((v) => !v)}>Toggle Disabled</button>
+    </div>
+  );
+}
+```
+
+---
+
+## styles.css
+
+```css id="styles1"
+.btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+}
+
+.active {
+  background: green;
+  color: white;
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for fast HMR and modern ESM-based builds
+- Use **Next.js** when SSR or SEO is required
+- Prefer **CSS Modules or Tailwind CSS** in large applications
+- Use **clsx** for conditional class composition (standard in modern React stacks)
+- Avoid CRA (Create React App is deprecated)
+
+---
+
+# Performance
+
+- Avoid heavy inline string concatenation logic inside JSX for complex conditions
+- Prefer extracting class logic:
+
+```tsx
+const buttonClass = clsx("btn", { active: isActive });
+```
+
+- Use `React.memo` for components that depend heavily on class props
+- Use React DevTools Profiler to detect unnecessary re-renders
+- Avoid recalculating large class logic inside deeply nested render trees
+
+---
+
+# Testing
+
+Install:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("applies active class", () => {
+  render(<App />);
+  const btn = screen.getByRole("button");
+  expect(btn.className).toContain("btn");
+});
+```
+
+For E2E:
+
+- Use **Playwright** to assert class changes on interactions
+
+---
+
+# Ops & Deployment
+
+- Ensure class names are stable in production builds (especially with CSS Modules)
+- Use PurgeCSS / Tailwind content scanning to remove unused styles
+- Avoid runtime-heavy class computations in SSR (Next.js hydration consistency matters)
+- Monitor bundle size if using large styling libraries
+
+---
+
+# Pitfalls
+
+- ❌ Overusing template literals for complex logic → unreadable code
+- ❌ Forgetting to filter falsy values in array-based class building
+- ❌ Mixing global CSS and CSS Modules inconsistently
+- ❌ Recomputing expensive class logic inside deeply nested renders
 
 ## Question 6. What is the difference between state and props immutability?
 
