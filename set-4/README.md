@@ -806,7 +806,621 @@ Instead, test what users can see and do.
 
 ## Question 4. How do you handle async operations in React?
 
+# Short answer
+
+Async operations in React are handled using **`useEffect` for side effects**, combined with **Promises / async-await**, and often managed more robustly using **data-fetching libraries like React Query or SWR**. You must also handle **loading, success, error states, and cleanup (to avoid memory leaks or race conditions)**.
+
+---
+
+# Explanation
+
+## 1. Core pattern: `useEffect` + async/await
+
+React components should remain **pure**, so async work is performed in effects, not during render.
+
+Typical flow:
+
+- Component renders
+- `useEffect` triggers async operation
+- State updates when data arrives
+- Re-render occurs
+
+### React 18 considerations
+
+- Effects run after render
+- Strict Mode may run effects twice in development (to detect side effects)
+- Concurrent rendering can interrupt or restart renders, so async logic must be resilient
+
+---
+
+## 2. Key concerns in async handling
+
+### a. Loading state
+
+Track when request is in progress.
+
+### b. Error handling
+
+Catch failures and update UI accordingly.
+
+### c. Race conditions
+
+Multiple fast requests may resolve out of order.
+
+### d. Cleanup / cancellation
+
+Avoid setting state after component unmount.
+
+---
+
+## 3. State management trade-offs
+
+### Basic approach (local state)
+
+- Good for simple components
+- Scales poorly for complex data flows
+
+### Context / Redux
+
+- Useful when multiple components need shared async data
+- Redux middleware (Thunk / Saga) helps centralize async logic
+
+### React Query / SWR (recommended modern approach)
+
+- Handles caching, retries, deduping, background refetch
+- Removes most manual loading/error boilerplate
+- Ideal for server-state management
+
+---
+
+## 4. Performance considerations
+
+- Avoid triggering unnecessary re-fetches in `useEffect`
+- Use memoized dependencies carefully
+- Debounce API calls (e.g., search inputs)
+- Use abort controllers to cancel stale requests
+- Prefer server-state libraries for caching and deduplication
+
+---
+
+# Example (React + TypeScript + Vite)
+
+## Setup
+
+```bash id="setup1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Example: Async fetch with cleanup
+
+```tsx id="async1"
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function Users() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchUsers() {
+      try {
+        setLoading(true);
+
+        const res = await fetch("https://jsonplaceholder.typicode.com/users", {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error("Failed to fetch users");
+
+        const data: User[] = await res.json();
+        setUsers(data);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setError(err.message);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchUsers();
+
+    return () => {
+      controller.abort(); // prevents memory leaks / stale updates
+    };
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
+
+  return (
+    <ul>
+      {users.map((u) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended modern stack
+
+### Vite (preferred)
+
+- Fast dev server
+- Native ESM
+- Minimal config
+
+### React Query (TanStack Query)
+
+Best-in-class async data handling:
+
+```bash id="rq1"
+npm install @tanstack/react-query
+```
+
+Wrap app:
+
+```tsx id="rq2"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Users />
+    </QueryClientProvider>
+  );
+}
+```
+
+---
+
+## Why avoid CRA
+
+- Deprecated
+- Slower builds
+- Less flexible than Vite / Next.js / Remix
+
+---
+
+# Performance
+
+### Key optimizations
+
+- **AbortController** → prevents stale updates
+- **React Query caching** → avoids redundant requests
+- **Debouncing input-driven requests**
+- **Memoization (`useMemo`, `useCallback`)** to prevent re-fetch triggers
+- **Code splitting** for async-heavy routes
+
+### React 18 concurrency impact
+
+- Requests may be started/abandoned during render interruptions
+- Effects may re-run in Strict Mode (dev only)
+- Always assume async calls can be duplicated → make them idempotent or cancellable
+
+### Profiling
+
+- React DevTools Profiler → detect unnecessary re-renders
+- Network tab → check duplicate API calls
+- React Query Devtools → inspect caching behavior
+
+---
+
+# Testing
+
+## Unit / Integration (Vitest + RTL)
+
+Mock async requests:
+
+```tsx id="test1"
+import { render, screen, waitFor } from "@testing-library/react";
+import Users from "./Users";
+
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([{ id: 1, name: "John" }]),
+  }),
+) as any;
+
+test("renders users", async () => {
+  render(<Users />);
+
+  expect(screen.getByText(/loading/i)).toBeInTheDocument();
+
+  await waitFor(() => {
+    expect(screen.getByText("John")).toBeInTheDocument();
+  });
+});
+```
+
+---
+
+## E2E (Playwright)
+
+```bash id="pw1"
+npx playwright test
+```
+
+Example:
+
+- intercept API
+- validate UI state transitions
+
+---
+
+# Ops & Deployment
+
+### Production concerns
+
+- Handle API failures gracefully (fallback UI)
+- Use retries with exponential backoff (React Query helps)
+- Avoid memory leaks from long-running requests
+- Use **Error Boundaries** for rendering failures
+- Monitor API latency with observability tools (Sentry, Datadog)
+- Cache server-state at CDN or edge when possible
+
+### SSR vs CSR
+
+- SSR (Next.js): fetch data on server → faster first paint
+- CSR (React SPA): fetch after mount → simpler but slower initial load
+- Hybrid (recommended): Next.js App Router with server components
+
+---
+
+# Pitfalls
+
+- Updating state after unmount (memory leaks)
+- Ignoring race conditions in fast-changing inputs
+- Triggering infinite loops in `useEffect`
+- Overusing `useEffect` instead of using React Query/SWR
+- Not handling error states in UI
+
 ## Question 5. Explain debouncing and throttling in React components
+
+# Short answer
+
+**Debouncing** delays executing a function until a pause in events (e.g., user stops typing), while **throttling** ensures a function executes at most once in a fixed time interval (e.g., every 300ms during scrolling).
+
+In React, both are used to **optimize frequent event handling** like input changes, resize, scroll, and API calls.
+
+---
+
+# Explanation
+
+## 1. Debouncing in React
+
+### Concept
+
+Debouncing waits until the user stops triggering an event before running logic.
+
+Example:
+
+- User types in search box
+- API call is made only after user pauses typing (e.g., 500ms)
+
+### Why it matters in React
+
+Without debouncing:
+
+- Every keystroke triggers re-render + API call
+- Causes performance issues and unnecessary network requests
+
+### React 18 context
+
+- Each keystroke triggers a render
+- Debounce prevents excessive state updates / side effects
+- Works well with `useEffect` or controlled inputs
+
+---
+
+## 2. Throttling in React
+
+### Concept
+
+Throttling ensures a function runs at most once per interval.
+
+Example:
+
+- Scroll event fires continuously
+- Function executes every 200ms instead of every pixel scroll
+
+### Why it matters in React
+
+Without throttling:
+
+- Scroll/resize handlers cause performance degradation
+- Excessive re-renders in concurrent rendering mode
+
+---
+
+## 3. Key difference
+
+| Feature          | Debouncing                     | Throttling                  |
+| ---------------- | ------------------------------ | --------------------------- |
+| Execution timing | After event stops              | At regular intervals        |
+| Best for         | Search inputs, form validation | Scroll, resize, drag events |
+| API calls        | Yes (preferred)                | Rare                        |
+| Frequency        | Once after delay               | Repeated but limited        |
+
+---
+
+## 4. State management perspective
+
+- Debounce reduces **state updates frequency**
+- Throttle limits **render/update rate**
+- Both help prevent:
+  - unnecessary renders
+  - excessive API calls
+  - UI jank in React concurrent rendering
+
+---
+
+## 5. Performance impact in React 18
+
+React 18 introduces:
+
+- concurrent rendering
+- automatic batching
+- interruptible renders
+
+Without debounce/throttle:
+
+- many renders may be queued or interrupted
+- expensive calculations run repeatedly
+
+With them:
+
+- fewer renders
+- smoother UI transitions
+- reduced CPU usage
+
+---
+
+# Example (React + TypeScript)
+
+## Setup (Vite)
+
+```bash id="setup1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## 1. Debounce example (search input)
+
+```tsx id="debounce1"
+import { useEffect, useState } from "react";
+
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+export default function Search() {
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 500);
+
+  useEffect(() => {
+    if (debouncedQuery) {
+      console.log("API call:", debouncedQuery);
+      // fetch(`/api/search?q=${debouncedQuery}`)
+    }
+  }, [debouncedQuery]);
+
+  return (
+    <input
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      placeholder="Search..."
+    />
+  );
+}
+```
+
+---
+
+## 2. Throttle example (scroll event)
+
+```tsx id="throttle1"
+import { useEffect, useState } from "react";
+
+function throttle(fn: Function, delay: number) {
+  let lastCall = 0;
+
+  return (...args: any[]) => {
+    const now = Date.now();
+
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      fn(...args);
+    }
+  };
+}
+
+export default function ScrollTracker() {
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = throttle(() => {
+      setScrollY(window.scrollY);
+    }, 200);
+
+    window.addEventListener("scroll", handleScroll);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  return <div>Scroll position: {scrollY}px</div>;
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended approach
+
+Instead of writing custom implementations everywhere:
+
+### Use utility libraries
+
+```bash id="lib1"
+npm install lodash
+```
+
+- `lodash.debounce`
+- `lodash.throttle`
+
+Or modern alternatives:
+
+- `use-debounce`
+- `ahooks`
+
+### Why Vite?
+
+- Fast refresh
+- ESM-based modules
+- Better DX than CRA (deprecated)
+
+---
+
+## ESM vs CommonJS note
+
+- Vite uses **ESM**
+- Lodash imports should be modular:
+
+  ```ts
+  import debounce from "lodash/debounce";
+  ```
+
+This avoids full bundle imports.
+
+---
+
+# Performance
+
+## Why debouncing/throttling matters
+
+### Without optimization:
+
+- input → 10 keystrokes → 10 renders + 10 API calls
+- scroll → 100 events/sec → 100 state updates
+
+### With optimization:
+
+- debounce → 1 API call after typing stops
+- throttle → 5–10 updates/sec max
+
+---
+
+## React optimization techniques
+
+- Combine with `useMemo` for expensive computations
+- Use `useCallback` for stable handlers
+- Use `React.memo` for preventing child re-renders
+- Avoid inline function creation in JSX
+- Use `requestAnimationFrame` for UI-heavy scroll animations
+
+---
+
+## Profiling
+
+Use:
+
+- React DevTools Profiler
+- Chrome Performance tab
+
+Look for:
+
+- excessive re-renders
+- repeated API calls
+- long tasks (>50ms)
+
+---
+
+# Testing
+
+## Debounce testing (Vitest + RTL)
+
+```tsx id="test1"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import Search from "./Search";
+
+test("debounces input updates", async () => {
+  render(<Search />);
+
+  const input = screen.getByPlaceholderText("Search...");
+
+  fireEvent.change(input, { target: { value: "react" } });
+  fireEvent.change(input, { target: { value: "react js" } });
+
+  await waitFor(() => {
+    // verify effect runs only after delay
+    expect(console.log).toHaveBeenCalledWith("API call:", "react js");
+  });
+});
+```
+
+## E2E (Playwright)
+
+- simulate typing fast
+- assert only one network request fired
+
+---
+
+# Ops & Deployment
+
+- Debounce search inputs to reduce backend load
+- Throttle scroll analytics events (e.g., tracking)
+- Avoid memory leaks (clear timers on unmount)
+- Use server-side caching alongside client debounce
+- Monitor API call frequency in production logs
+
+---
+
+# Pitfalls
+
+- Forgetting to clean up timers in `useEffect`
+- Using debounce where throttle is needed (and vice versa)
+- Creating new debounced functions on every render
+- Blocking urgent UI updates due to excessive delay
+- Not considering React Strict Mode double-invocation in dev
 
 ## Question 6. How do you use React.forwardRef?
 
