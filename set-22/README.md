@@ -628,7 +628,426 @@ test("selects a user when button is clicked", async () => {
 
 ## Question 4. How do you implement a “toggle visibility” component?
 
+# Short answer
+
+Implement a **toggle visibility** component by using the `useState` hook to track whether content is visible and conditionally render it or hide it.
+
+```tsx
+const [isVisible, setIsVisible] = useState(false);
+
+<button onClick={() => setIsVisible((prev) => !prev)}>
+  {isVisible ? "Hide" : "Show"}
+</button>;
+
+{
+  isVisible && <p>This content is visible.</p>;
+}
+```
+
+---
+
+# Explanation
+
+A toggle visibility component maintains a **boolean state** (`true`/`false`) that determines whether a piece of UI should be displayed.
+
+Typical workflow:
+
+```text
+Button Click
+      │
+      ▼
+setIsVisible(prev => !prev)
+      │
+      ▼
+React re-renders
+      │
+      ▼
+Content shown/hidden
+```
+
+Using the **functional state update** is recommended because it always uses the latest state:
+
+```tsx
+setIsVisible((prev) => !prev);
+```
+
+instead of
+
+```tsx
+setIsVisible(!isVisible);
+```
+
+This avoids stale state issues when multiple updates are batched in React 18.
+
+### Conditional Rendering Options
+
+**1. Logical AND (`&&`)** – Best when rendering only if visible.
+
+```tsx
+{
+  isVisible && <Details />;
+}
+```
+
+**2. Ternary Operator** – Useful when rendering different UI.
+
+```tsx
+{
+  isVisible ? <Details /> : <p>Hidden</p>;
+}
+```
+
+**3. CSS Visibility** – Keeps the component mounted.
+
+```tsx
+<div style={{ display: isVisible ? "block" : "none" }}>
+  <Details />
+</div>
+```
+
+Choose based on the requirement:
+
+- **Unmount component:** Conditional rendering (`&&` or ternary)
+- **Keep state alive:** Hide with CSS
+
+### React 18 Considerations
+
+- **Automatic batching** combines multiple state updates triggered by the click into a single render.
+- **Concurrent rendering** improves responsiveness without changing the implementation.
+- If the hidden component is expensive to mount, consider keeping it mounted and toggling visibility with CSS or using memoization.
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+function ToggleVisibility() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setIsVisible((prev) => !prev)}>
+        {isVisible ? "Hide Details" : "Show Details"}
+      </button>
+
+      {isVisible && (
+        <div style={{ marginTop: "1rem" }}>
+          <h3>React Interview</h3>
+          <p>This content can be toggled on and off.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <main>
+      <ToggleVisibility />
+    </main>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** since it is deprecated.
+- Use **Vite** for fast development, instant Hot Module Replacement (HMR), and excellent TypeScript support.
+- Vite uses **ES Modules (ESM)** during development and Rollup for optimized production builds.
+- For applications requiring SSR, SEO, or React Server Components, use **Next.js App Router**. For SPAs, Vite is the preferred choice.
+
+---
+
+# Performance
+
+Although a visibility toggle is lightweight, consider these optimizations in larger applications:
+
+- Use **React Profiler** to measure rendering performance.
+- Wrap expensive child components with `React.memo` to avoid unnecessary re-renders.
+- Use `useMemo` for expensive calculations that depend on visibility.
+- Use `useCallback` when passing toggle handlers to memoized children.
+- Lazy-load heavy components:
+
+```tsx
+const SettingsPanel = React.lazy(() => import("./SettingsPanel"));
+```
+
+```tsx
+<Suspense fallback={<p>Loading...</p>}>
+  {isVisible && <SettingsPanel />}
+</Suspense>
+```
+
+- Cache server data with **TanStack Query** or **SWR** so reopening the panel doesn't trigger unnecessary network requests.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("toggles content visibility", async () => {
+  render(<App />);
+
+  expect(screen.queryByText(/React Interview/i)).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /show details/i }));
+
+  expect(screen.getByText(/React Interview/i)).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Log toggle interactions only if they represent meaningful user actions (e.g., opening a settings panel or expanding important content).
+- Use **Error Boundaries** to isolate rendering failures in child components (note that they do not catch errors inside event handlers).
+- For SEO-sensitive content, prefer SSR with Next.js; for interactive dashboards, CSR with Vite is often sufficient.
+- Keep bundles small using lazy loading and route-level code splitting, and serve assets through a CDN for faster delivery.
+
+---
+
+# Pitfalls
+
+- **Use functional state updates** (`setIsVisible(prev => !prev)`) instead of relying on the current state value.
+- **Choose the right hiding strategy:** conditional rendering unmounts components; CSS hiding keeps them mounted and preserves internal state.
+- **Don't overuse memoization.** Apply `React.memo`, `useMemo`, or `useCallback` only after profiling demonstrates a benefit.
+
 ## Question 5. How do you implement a simple slider using state?
+
+# Short answer
+
+Implement a simple slider by storing the **current slide index** in state and updating it with **Next** and **Previous** buttons.
+
+```tsx
+const [currentIndex, setCurrentIndex] = useState(0);
+
+const next = () => setCurrentIndex((prev) => (prev + 1) % slides.length);
+
+const prev = () =>
+  setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
+
+return <h2>{slides[currentIndex]}</h2>;
+```
+
+Using the functional state update ensures the latest state is used, even with React 18's automatic batching.
+
+---
+
+# Explanation
+
+A slider (or carousel) displays **one item at a time** while maintaining the currently active slide in state.
+
+The basic flow is:
+
+```text
+Current Index (state)
+        │
+        ▼
+Render current slide
+        │
+        ▼
+Previous / Next clicked
+        │
+        ▼
+Update index
+        │
+        ▼
+React re-renders with new slide
+```
+
+The current slide is usually stored as a numeric index:
+
+```tsx
+const [currentIndex, setCurrentIndex] = useState(0);
+```
+
+### Next Slide
+
+```tsx
+setCurrentIndex((prev) => (prev + 1) % slides.length);
+```
+
+The modulo (`%`) operator wraps back to the first slide after the last one.
+
+### Previous Slide
+
+```tsx
+setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
+```
+
+Adding `slides.length` prevents negative indexes before applying modulo.
+
+### Why use functional updates?
+
+Instead of:
+
+```tsx
+setCurrentIndex(currentIndex + 1);
+```
+
+prefer:
+
+```tsx
+setCurrentIndex((prev) => prev + 1);
+```
+
+This avoids stale state when multiple updates are queued and works correctly with React 18's automatic batching.
+
+### Production considerations
+
+A production-ready slider often includes:
+
+- Infinite looping
+- Auto-play (`setInterval` with cleanup)
+- Swipe support (touch/mouse gestures)
+- Keyboard navigation
+- Accessibility (`aria-label`, focus management)
+- Animated transitions (CSS or animation libraries)
+
+---
+
+# Example
+
+### Create the project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+const slides = ["React", "TypeScript", "Vite", "Next.js"];
+
+export default function App() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const next = () => setCurrentIndex((prev) => (prev + 1) % slides.length);
+
+  const prev = () =>
+    setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
+
+  return (
+    <div style={{ textAlign: "center", padding: "2rem" }}>
+      <h2>{slides[currentIndex]}</h2>
+
+      <button onClick={prev}>Previous</button>
+
+      <button onClick={next} style={{ marginLeft: "1rem" }}>
+        Next
+      </button>
+
+      <p>
+        {currentIndex + 1} / {slides.length}
+      </p>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Prefer **Vite** for modern React development due to its fast dev server, HMR, and Rollup-based production builds.
+- Vite uses **ES Modules (ESM)** during development for faster startup and efficient module loading.
+- If SEO, SSR, or React Server Components are required, use **Next.js App Router**. For client-side SPAs, Vite is the preferred choice.
+
+---
+
+# Performance
+
+For a simple slider, rendering is inexpensive, but production applications should consider:
+
+- Use **React Profiler** to measure render frequency.
+- Memoize expensive slide components using `React.memo`.
+- Use `useCallback` for navigation handlers if they are passed to memoized child components.
+- Lazy-load image-heavy slides with `React.lazy()` or native image lazy loading (`loading="lazy"`).
+- Cache slide data fetched from APIs with **TanStack Query** or **SWR**.
+- For large collections, render only the current and adjacent slides instead of the entire list.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("moves to the next slide", async () => {
+  render(<App />);
+
+  expect(screen.getByText("React")).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /next/i }));
+
+  expect(screen.getByText("TypeScript")).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Track meaningful interactions (e.g., slide changes) using analytics tools if they represent business events.
+- Use Error Boundaries to isolate rendering failures in slide components (they do not catch errors inside event handlers).
+- For marketing carousels that require SEO, prefer SSR with Next.js. For authenticated dashboards, CSR with Vite is typically sufficient.
+- Optimize bundle size by lazy-loading media-heavy slides and serve static assets through a CDN.
+
+---
+
+# Pitfalls
+
+- **Use functional state updates** (`setCurrentIndex(prev => ...)`) to avoid stale state issues.
+- **Handle edge cases** such as an empty `slides` array before accessing `slides[currentIndex]`.
+- **Clean up timers** with `useEffect` if implementing auto-play to prevent memory leaks.
 
 ## Question 6. How do you implement a counter with step increments?
 
