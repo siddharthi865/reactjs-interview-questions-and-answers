@@ -807,7 +807,602 @@ Use **Playwright** for end-to-end tests to validate focus behavior, keyboard nav
 
 ## Question 4. How do you implement a multi-step wizard form with progress tracking?
 
+# How do you implement a multi-step wizard form with progress tracking?
+
+## Short answer
+
+A multi-step wizard form is implemented by:
+
+- Keeping the **current step** in state.
+- Storing **all form data** in a single shared state (or reducer).
+- Rendering one step at a time.
+- Tracking progress using the current step index.
+- Validating each step before allowing navigation.
+- Preserving state when moving between steps.
+
+For large applications, use **React Hook Form** with **Zod/Yup** for validation and keep each step as an independent, reusable component.
+
+---
+
+# Explanation
+
+A production-ready wizard separates navigation, state, validation, and presentation.
+
+```text
+               Wizard
+                  │
+        ┌─────────┴─────────┐
+        │                   │
+   Current Step        Form Data
+        │                   │
+        ▼                   ▼
+  Step Components      Shared State
+        │
+        ▼
+ Validation
+        │
+        ▼
+ Next / Previous
+```
+
+### Component architecture
+
+```
+src/
+ ├── components/
+ │    ├── Wizard.tsx
+ │    ├── ProgressBar.tsx
+ │    ├── Step1.tsx
+ │    ├── Step2.tsx
+ │    └── Step3.tsx
+ ├── hooks/
+ │    └── useWizard.ts
+ └── App.tsx
+```
+
+Each step should:
+
+- Receive only the data it needs.
+- Update shared state through callbacks.
+- Contain step-specific validation.
+- Be reusable independently.
+
+---
+
+### Managing state
+
+Instead of storing state inside every step:
+
+```tsx
+const [formData, setFormData] = useState({
+  name: "",
+  email: "",
+  address: "",
+});
+```
+
+or for larger forms:
+
+```tsx
+const [state, dispatch] = useReducer(reducer, initialState);
+```
+
+This prevents losing entered values when users move between steps.
+
+---
+
+### Navigation
+
+```tsx
+Next
+Previous
+Go To Step
+Submit
+```
+
+Example:
+
+```tsx
+setCurrentStep((step) => step + 1);
+```
+
+Disable Next until validation succeeds.
+
+---
+
+### Progress Tracking
+
+Progress can be calculated as:
+
+```ts
+progress = (currentStep / totalSteps) * 100;
+```
+
+Example:
+
+```
+Step 1 / 4
+██████░░░░░░ 25%
+
+Step 2 / 4
+██████████░░ 50%
+
+Step 3 / 4
+██████████████ 75%
+```
+
+A progress bar improves user experience by showing completion status.
+
+---
+
+### Validation
+
+Validate only the current step.
+
+Example:
+
+Step 1
+
+- Name required
+- Email required
+
+Step 2
+
+- Address required
+
+Step 3
+
+- Review
+
+Avoid validating the whole form until submission.
+
+Libraries:
+
+- React Hook Form
+- Zod
+- Yup
+
+---
+
+### React 18 considerations
+
+React 18 provides:
+
+- Automatic batching
+- Concurrent rendering
+- `useTransition`
+
+For expensive validation:
+
+```tsx
+startTransition(() => {
+  setCurrentStep(next);
+});
+```
+
+This keeps navigation responsive while large components render.
+
+---
+
+# Example
+
+### Scaffold with Vite (React + TypeScript)
+
+```bash
+npm create vite@latest wizard-form -- --template react-ts
+cd wizard-form
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+type FormData = {
+  name: string;
+  email: string;
+};
+
+const totalSteps = 2;
+
+export default function App() {
+  const [step, setStep] = useState(1);
+
+  const [form, setForm] = useState<FormData>({
+    name: "",
+    email: "",
+  });
+
+  const progress = (step / totalSteps) * 100;
+
+  return (
+    <div style={{ padding: 20, maxWidth: 400 }}>
+      <h2>Multi-Step Wizard</h2>
+
+      <progress value={progress} max={100} />
+      <p>{Math.round(progress)}%</p>
+
+      {step === 1 && (
+        <>
+          <label>Name</label>
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <label>Email</label>
+          <input
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </>
+      )}
+
+      <div style={{ marginTop: 20 }}>
+        <button disabled={step === 1} onClick={() => setStep((s) => s - 1)}>
+          Previous
+        </button>
+
+        {step < totalSteps ? (
+          <button onClick={() => setStep((s) => s + 1)}>Next</button>
+        ) : (
+          <button onClick={() => alert(JSON.stringify(form))}>Submit</button>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+This example demonstrates:
+
+- Shared form state.
+- Step navigation.
+- Progress tracking.
+- State persistence across steps.
+- Conditional rendering of step components.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** since it is deprecated.
+- Prefer **Vite** for fast development, native ESM support, and excellent TypeScript integration.
+- For production applications, combine **React Hook Form** with **Zod** or **Yup** for schema-based validation and minimal re-renders.
+- If the wizard is part of an SSR application, **Next.js App Router** is a strong choice. Interactive wizard components should be Client Components (`"use client"`).
+- **ESM vs CommonJS:** Modern React projects should use **ES Modules (ESM)** for better tree-shaking and faster builds.
+
+---
+
+# Performance
+
+- Store all form data in a single source of truth (`useState` or `useReducer`) to simplify updates.
+- Use `React.memo` for step components that don't depend on frequently changing props.
+- Memoize navigation handlers with `useCallback` when passing them to memoized children.
+- Use `useMemo` for expensive derived values (e.g., dynamic summaries or computed validation state).
+- Lazy-load rarely visited or heavy steps with `React.lazy` and `Suspense`.
+- Profile the wizard using the **React DevTools Profiler** to ensure navigating between steps doesn't trigger unnecessary re-renders.
+- Cache server-side validation or lookup data (e.g., address autocomplete) with **TanStack Query** or **SWR**.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Test scenarios:
+
+- Initial step renders correctly.
+- "Next" advances only after valid input.
+- "Previous" retains entered values.
+- Progress indicator updates correctly.
+- Final submission contains data from all steps.
+
+For end-to-end testing, use **Playwright** to verify the complete user flow, including validation, navigation, and submission.
+
+---
+
+# Ops & Deployment
+
+- Persist unfinished wizard data in `localStorage` or IndexedDB for long forms, and synchronize with the server if needed.
+- Wrap complex steps with **Error Boundaries** to isolate rendering failures.
+- Log validation failures and submission errors to monitor user friction.
+- Consider SSR for the initial page when SEO matters; most authenticated or dashboard wizards are well-suited to CSR.
+- Optimize bundle size by code-splitting optional steps and loading them on demand. Deploy static assets through a CDN for faster delivery.
+
+---
+
+# Pitfalls
+
+- **Keeping state inside each step**, causing data loss when components unmount.
+- **Validating the entire form on every step**, leading to poor UX; validate only the active step.
+- **Using deeply nested state updates** instead of a reducer or form library for large, complex wizards.
+
 ## Question 5. How do you implement a global loader for API requests?
+
+# How do you implement a global loader for API requests?
+
+## Short answer
+
+A global loader is typically implemented by:
+
+- Managing a **global loading state** using **React Context**, Redux, or a data-fetching library.
+- Incrementing a counter when an API request starts and decrementing it when the request finishes.
+- Displaying a full-screen loader whenever the number of active requests is greater than zero.
+- Using **Axios interceptors** or centralized `fetch` wrappers so individual components don't manually manage loading state.
+
+This approach works correctly even when **multiple API requests run concurrently**.
+
+---
+
+# Explanation
+
+A production-ready solution should **not** rely on a single boolean:
+
+❌ Bad
+
+```tsx
+const [loading, setLoading] = useState(false);
+```
+
+If two requests start simultaneously:
+
+```text
+Request A starts → loading = true
+Request B starts → loading = true
+
+Request A finishes → loading = false ❌
+Request B still running
+```
+
+The loader disappears too early.
+
+Instead, maintain an **active request counter**.
+
+```text
+API Request Starts
+        │
+        ▼
+ activeRequests++
+        │
+        ▼
+loading = activeRequests > 0
+        │
+        ▼
+API finishes
+        │
+        ▼
+activeRequests--
+```
+
+---
+
+### Architecture
+
+```text
+               App
+                │
+      LoadingProvider
+                │
+        Loading Context
+                │
+      ┌─────────┴─────────┐
+      │                   │
+ Component A        Component B
+      │                   │
+      └──── API Requests ─┘
+                │
+         Global Loader
+```
+
+The provider exposes:
+
+- `showLoader()`
+- `hideLoader()`
+- `loading`
+
+or simply manages the request counter internally.
+
+---
+
+### Axios interceptor approach
+
+```text
+Request
+   │
+   ▼
+Increment Counter
+   │
+   ▼
+Axios Request
+   │
+   ▼
+Response/Error
+   │
+   ▼
+Decrement Counter
+```
+
+Every request automatically updates the loader without component-specific logic.
+
+---
+
+### React 18 considerations
+
+React 18 improves responsiveness with:
+
+- Automatic batching
+- Concurrent rendering
+- `useTransition`
+
+However, **API loading state still requires explicit management**. React doesn't automatically track network requests.
+
+For applications using **TanStack Query** or **SWR**, leverage their built-in global fetching indicators instead of reinventing the solution.
+
+---
+
+# Example
+
+### Scaffold with Vite (React + TypeScript)
+
+```bash
+npm create vite@latest global-loader -- --template react-ts
+cd global-loader
+npm install
+npm install axios
+npm run dev
+```
+
+### `LoadingContext.tsx`
+
+```tsx
+import { createContext, useContext, useMemo, useState, ReactNode } from "react";
+
+type LoadingContextType = {
+  loading: boolean;
+  start: () => void;
+  stop: () => void;
+};
+
+const LoadingContext = createContext<LoadingContextType | null>(null);
+
+export function LoadingProvider({ children }: { children: ReactNode }) {
+  const [count, setCount] = useState(0);
+
+  const value = useMemo(
+    () => ({
+      loading: count > 0,
+      start: () => setCount((c) => c + 1),
+      stop: () => setCount((c) => Math.max(0, c - 1)),
+    }),
+    [count],
+  );
+
+  return (
+    <LoadingContext.Provider value={value}>
+      {children}
+      {count > 0 && <div className="loader">Loading...</div>}
+    </LoadingContext.Provider>
+  );
+}
+
+export function useLoading() {
+  const context = useContext(LoadingContext);
+  if (!context) {
+    throw new Error("useLoading must be used inside LoadingProvider");
+  }
+  return context;
+}
+```
+
+### Axios interceptor
+
+```tsx
+import axios from "axios";
+
+export const api = axios.create({
+  baseURL: "/api",
+});
+
+export function registerInterceptors(start: () => void, stop: () => void) {
+  api.interceptors.request.use((config) => {
+    start();
+    return config;
+  });
+
+  api.interceptors.response.use(
+    (response) => {
+      stop();
+      return response;
+    },
+    (error) => {
+      stop();
+      return Promise.reject(error);
+    },
+  );
+}
+```
+
+This example demonstrates:
+
+- Global loading state.
+- Concurrent request handling.
+- Automatic loader updates through interceptors.
+- No loading logic inside individual components.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Prefer **Vite** for fast development, HMR, and native ESM support.
+- Use **Next.js App Router** when SSR or React Server Components are required. Client-side loading overlays belong in Client Components (`"use client"`).
+- **ESM vs CommonJS:** Use ES Modules (ESM) for modern React projects. Vite and current bundlers optimize ESM for tree-shaking and faster builds.
+- For server state, prefer **TanStack Query** or **SWR**, which expose global fetching status (`useIsFetching` in TanStack Query) and simplify cache management.
+
+---
+
+# Performance
+
+- Track the **number of active requests** instead of a boolean to handle concurrent API calls correctly.
+- Memoize the context value with `useMemo` to reduce unnecessary consumer re-renders.
+- Memoize loader components with `React.memo` if they render complex UI.
+- Use `useCallback` for context actions if they're passed independently.
+- Avoid showing a loader for very short requests (e.g., under 150–200 ms) to reduce UI flicker.
+- Use the **React DevTools Profiler** to verify that loader state changes don't cause excessive re-renders.
+- Cache API responses using **TanStack Query** or **SWR** to minimize repeated loading states.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Test scenarios:
+
+- Loader appears when a request starts.
+- Loader disappears only after **all** concurrent requests finish.
+- Loader hides after failed requests as well as successful ones.
+- Interceptors correctly increment and decrement the active request counter.
+
+For end-to-end testing, use **Playwright** to verify the loading overlay during real network activity.
+
+---
+
+# Ops & Deployment
+
+- Always decrement the request counter in both **success** and **error** paths to avoid a stuck loader.
+- Handle request cancellation (`AbortController` or Axios cancellation) and ensure canceled requests also update the counter.
+- Log slow requests and API failures for observability.
+- Wrap major application sections with **Error Boundaries** to isolate rendering errors; API errors should be handled separately.
+- For SSR applications, distinguish server-rendering loading states from client-side request loaders.
+- Optimize assets and deploy through a CDN; cache API responses appropriately to reduce unnecessary loading indicators.
+
+---
+
+# Pitfalls
+
+- **Using a single boolean** instead of an active request counter, causing incorrect behavior with concurrent requests.
+- **Forgetting to decrement** the counter on error or cancellation, leaving the loader visible indefinitely.
+- **Managing loading state in every component**, leading to duplicated logic instead of using centralized interceptors or a shared data-fetching library.
 
 ## Question 6. How do you implement optimistic UI updates when deleting a list item?
 
