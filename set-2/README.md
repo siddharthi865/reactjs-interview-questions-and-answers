@@ -583,7 +583,631 @@ For end-to-end verification of visual states, use Playwright.
 
 ## Question 4. Explain the role of key prop in React lists
 
+## Short answer
+
+The `key` prop in React lists uniquely identifies each item so React can efficiently track changes (add, remove, reorder) during reconciliation and update only what’s necessary instead of re-rendering the entire list.
+
+---
+
+# Explanation
+
+## Why `key` exists
+
+When you render a list:
+
+```tsx
+items.map((item) => <li>{item.name}</li>);
+```
+
+React needs a way to understand:
+
+- Which items are **new**
+- Which items are **removed**
+- Which items are **moved**
+- Which items are **unchanged**
+
+Without `key`, React falls back to **index-based diffing**, which can lead to incorrect UI updates.
+
+---
+
+## How React uses `key` internally
+
+During reconciliation:
+
+1. React builds a virtual DOM tree.
+2. It compares previous and new trees.
+3. `key` helps React match old and new elements.
+4. React reuses DOM nodes where possible.
+5. Only mismatched nodes are updated.
+
+This improves:
+
+- Performance (less DOM mutation)
+- Correctness (avoids state misalignment)
+- Stability in dynamic lists
+
+---
+
+## Important behavior in React 18
+
+With concurrent rendering:
+
+- React may pause and resume rendering work.
+- Stable `key`s ensure React can safely resume work without mixing up list items.
+- Incorrect keys can lead to UI inconsistencies under concurrent mode.
+
+---
+
+## Key rules (very important for interviews)
+
+### 1. Keys must be unique among siblings
+
+```tsx
+items.map((item) => <li key={item.id}>{item.name}</li>);
+```
+
+### 2. Keys must be stable (not changing on re-render)
+
+❌ Bad:
+
+```tsx
+key={Math.random()}
+```
+
+❌ Bad:
+
+```tsx
+key = { index };
+```
+
+✔ Good:
+
+```tsx
+key={user.id}
+```
+
+---
+
+## Why using index as key is risky
+
+```tsx
+items.map((item, index) => <li key={index}>{item.name}</li>);
+```
+
+Problems:
+
+- Wrong item reuse when list order changes
+- State bugs in controlled inputs
+- Animation glitches
+- Incorrect component identity preservation
+
+### Example bug scenario
+
+If you reorder a list:
+
+- Input fields may "move" to wrong items
+- Local component state may stick to wrong row
+
+---
+
+## Component identity & state preservation
+
+React uses `key` to decide whether a component is:
+
+- **Same component → preserve state**
+- **Different component → reset state**
+
+```tsx
+{
+  show && <Counter key="counter1" />;
+}
+```
+
+Changing the key forces remount:
+
+```tsx
+<Counter key={version} />
+```
+
+Useful for:
+
+- Resetting forms
+- Reinitializing components
+- Forcing fresh state
+
+---
+
+# Example
+
+## Vite setup
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Correct usage of keys
+
+```tsx
+type User = {
+  id: string;
+  name: string;
+};
+
+const users: User[] = [
+  { id: "u1", name: "Alice" },
+  { id: "u2", name: "Bob" },
+  { id: "u3", name: "Charlie" },
+];
+
+export default function App() {
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## Demonstrating remount via key
+
+```tsx
+import { useState } from "react";
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>;
+}
+
+export default function App() {
+  const [version, setVersion] = useState(1);
+
+  return (
+    <div>
+      <button onClick={() => setVersion((v) => v + 1)}>Reset Counter</button>
+
+      <Counter key={version} />
+    </div>
+  );
+}
+```
+
+Changing `key` forces a full remount → state resets.
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** (recommended) for fast ESM-based development.
+- Avoid **Create React App (CRA)** (deprecated).
+- For large apps:
+  - Next.js (SSR, routing, server components)
+  - Remix (full-stack React patterns)
+
+- Bundlers:
+  - Vite uses esbuild (dev) + Rollup (prod)
+  - Next.js uses Turbopack (modern builds)
+
+---
+
+# Performance
+
+- Correct keys reduce unnecessary DOM operations.
+- Avoid index keys in dynamic lists.
+- Use:
+  - `React.memo` for list items
+  - virtualization (`react-window`, `react-virtualized`) for large lists
+
+- Use React DevTools Profiler to detect:
+  - unnecessary re-renders
+  - unstable key issues
+
+- Code split large lists or pages if needed
+
+---
+
+# Testing
+
+Using Vitest + React Testing Library:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+
+test("renders list items", () => {
+  render(<App />);
+
+  const items = screen.getAllByRole("listitem");
+  expect(items).toHaveLength(3);
+});
+```
+
+For dynamic list behavior, also test:
+
+- reorder correctness
+- state persistence
+- DOM stability
+
+---
+
+# Ops & Deployment
+
+- Ensure stable IDs from backend APIs (preferred key source).
+- Avoid generating keys on client side unless necessary.
+- In SSR (Next.js):
+  - keys must match between server and client render to avoid hydration mismatches.
+
+- Use CDN caching carefully when list data is static.
+- Log rendering anomalies in large lists (e.g., duplicate key warnings).
+
+---
+
+# Pitfalls
+
+- Using `index` as key in dynamic/reorderable lists
+- Using unstable keys like `Math.random()`
+- Assuming keys are passed as props (they are not accessible in component props)
+- Changing keys unnecessarily causing remounts and lost state
+
 ## Question 5. How do you debug React applications?
+
+## Short answer
+
+React apps are debugged using a combination of **React DevTools**, **browser DevTools (Console + Network + Performance tabs)**, **logging strategies**, and **runtime profiling tools** like the React Profiler. For complex issues, you trace rendering behavior, state updates, and side effects step-by-step through component re-renders and hooks execution.
+
+---
+
+# Explanation
+
+Debugging React is mainly about understanding **render cycles, state flow, and side effects**.
+
+A React app typically fails due to:
+
+- Incorrect state updates
+- Unintended re-renders
+- Broken props flow
+- Async side effects (API calls, subscriptions)
+- Context or Redux state mismatches
+- Rendering performance issues
+
+---
+
+## 1. React DevTools (most important tool)
+
+Install:
+
+- Chrome / Firefox React DevTools extension
+
+### Key features:
+
+#### a) Component tree inspection
+
+- View props and state live
+- Check context values
+- Identify unexpected re-renders
+
+#### b) Highlight updates
+
+Shows which components re-rendered
+
+#### c) Profiler tab
+
+Measures render cost and timing
+
+---
+
+## 2. Browser DevTools
+
+### Console
+
+- Log state changes and props
+- Catch runtime errors
+- Use `console.trace()` for call stack debugging
+
+```tsx id="q8d2v3"
+console.log("State:", state);
+console.trace("Render trace");
+```
+
+---
+
+### Network tab
+
+Used for:
+
+- API request debugging
+- Checking failed or slow requests
+- Inspecting payloads and headers
+
+---
+
+### Performance tab
+
+Helps identify:
+
+- Long scripting tasks
+- Re-render bottlenecks
+- Layout thrashing
+
+---
+
+## 3. Debugging rendering behavior
+
+React re-renders when:
+
+- State changes (`useState`, `useReducer`)
+- Props change
+- Context changes
+- Parent re-renders
+
+### Example debug pattern:
+
+```tsx id="k2d9x1"
+useEffect(() => {
+  console.log("Component rendered");
+});
+```
+
+Better:
+
+```tsx id="z7v1m2"
+console.count("Render count");
+```
+
+---
+
+## React 18 concurrency insight
+
+In React 18:
+
+- Rendering may be interrupted and restarted
+- State updates are automatically batched
+- Effects run after commit phase
+
+So debugging must consider:
+
+- Multiple render attempts
+- Strict Mode double rendering (development only)
+
+---
+
+## 4. Debugging hooks
+
+### Common issues:
+
+#### useEffect dependency bugs
+
+```tsx id="p9x4m1"
+useEffect(() => {
+  fetchData();
+}, []); // missing dependencies bug
+```
+
+Fix using ESLint plugin:
+
+- `eslint-plugin-react-hooks`
+
+---
+
+### stale closures
+
+```tsx id="t5n8q3"
+useEffect(() => {
+  setInterval(() => {
+    console.log(count); // stale value
+  }, 1000);
+}, []);
+```
+
+Fix using refs or correct dependencies.
+
+---
+
+## 5. Debugging state management
+
+### useState / useReducer
+
+- Log state transitions
+- Ensure immutability
+
+```tsx id="m4k8d9"
+setState((prev) => {
+  console.log(prev);
+  return prev + 1;
+});
+```
+
+### Redux / Context
+
+- Use Redux DevTools
+- Inspect dispatched actions
+- Time travel debugging
+
+---
+
+## 6. Breakpoint debugging
+
+You can use `debugger`:
+
+```tsx id="u2k9d8"
+function handleClick() {
+  debugger;
+  setCount((c) => c + 1);
+}
+```
+
+Then:
+
+- Open Chrome DevTools → Sources
+- Step through execution
+
+---
+
+## 7. Performance debugging
+
+### React Profiler
+
+- Records render duration
+- Shows wasted renders
+
+Look for:
+
+- unnecessary re-renders
+- slow components
+
+### Optimization tools:
+
+- `React.memo`
+- `useMemo`
+- `useCallback`
+- virtualization (`react-window`)
+
+---
+
+## 8. Logging strategies (production-safe)
+
+Avoid excessive console logs in production.
+
+Use:
+
+- Feature flags
+- Logging libraries (e.g., Sentry, LogRocket)
+
+```tsx id="r8m1q7"
+if (process.env.NODE_ENV === "development") {
+  console.log("Debug info:", data);
+}
+```
+
+---
+
+## Example
+
+## Vite setup
+
+```bash id="v9x1c2"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Debug-friendly component
+
+```tsx id="d4p8q1"
+import { useState, useEffect } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    console.log("Component rendered");
+  });
+
+  return (
+    <div>
+      <h1>Count: {count}</h1>
+
+      <button
+        onClick={() => {
+          debugger;
+          setCount((c) => c + 1);
+        }}
+      >
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+### Recommended stack:
+
+- **Vite** (fast dev server, modern ESM)
+- **React DevTools**
+- **TypeScript**
+- **ESLint + React Hooks plugin**
+- **Redux DevTools (if Redux used)**
+- **Sentry / LogRocket (production monitoring)**
+
+### Why not CRA?
+
+- Deprecated
+- Slower builds
+- Less flexible than Vite/Next.js
+
+---
+
+# Performance
+
+Key debugging-performance workflow:
+
+1. Open React Profiler
+2. Record interaction
+3. Identify slow commits
+4. Fix with:
+   - memoization (`React.memo`)
+   - stable callbacks (`useCallback`)
+   - derived state cleanup
+   - virtualization for large lists
+
+---
+
+# Testing (debugging via tests)
+
+Use **Vitest + React Testing Library**:
+
+```tsx id="t1v8m3"
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("increments counter", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Increment"));
+
+  expect(screen.getByText(/Count: 1/)).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash id="x8k2v9"
+npm run test
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** for runtime UI errors
+- Add **global error tracking** (Sentry)
+- Monitor performance via **Web Vitals**
+- Ensure source maps are enabled in staging for debugging
+- Use CI logs for build-time errors
+
+---
+
+# Pitfalls
+
+- Relying only on `console.log` instead of React DevTools
+- Ignoring dependency arrays in `useEffect`
+- Not considering Strict Mode double rendering in development
+- Debugging without reproducing the exact state/context conditions
 
 ## Question 6. What is ReactDOM? Difference between React and ReactDOM?
 
