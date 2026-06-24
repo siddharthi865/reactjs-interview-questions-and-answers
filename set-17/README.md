@@ -857,7 +857,494 @@ For end-to-end testing, use **Playwright** to validate complete form interaction
 
 ## Question 4. How do you handle simple inline validation for an input field?
 
+# How do you handle simple inline validation for an input field?
+
+## Short answer
+
+Handle inline validation by validating the input whenever its value changes (or when it loses focus), storing any validation message in state, and rendering the error message directly below the input. Keep the input as a **controlled component** so the UI always reflects the current validation state.
+
+---
+
+# Explanation
+
+Inline validation provides immediate feedback as the user interacts with a form.
+
+Typical validation flow:
+
+```text
+User types
+      ↓
+onChange fires
+      ↓
+Update input state
+      ↓
+Run validation
+      ↓
+Update error state
+      ↓
+React re-renders
+```
+
+For simple forms, validation is often handled inside the component using `useState`.
+
+Example:
+
+```tsx
+const [email, setEmail] = useState("");
+const [error, setError] = useState("");
+```
+
+Validate after updating the value:
+
+```tsx
+const handleChange = (value: string) => {
+  setEmail(value);
+
+  if (!value.includes("@")) {
+    setError("Please enter a valid email.");
+  } else {
+    setError("");
+  }
+};
+```
+
+Then conditionally render the error:
+
+```tsx
+{
+  error && <p className="error">{error}</p>;
+}
+```
+
+### Validation Timing
+
+Common strategies include:
+
+- **On change** – Immediate feedback while typing.
+- **On blur** – Validate when the user leaves the field.
+- **On submit** – Validate the entire form before submission.
+
+For a better user experience, many applications validate on blur first, then on change after the field has been touched.
+
+---
+
+## React 18 Rendering Behavior
+
+Each call to `setState` schedules a re-render.
+
+```tsx
+setEmail(value);
+setError(errorMessage);
+```
+
+In React 18:
+
+- These updates are **automatically batched**, producing a single render.
+- Only the affected parts of the DOM (input value and error message) are updated.
+- Concurrent rendering helps keep typing responsive even in larger applications.
+
+---
+
+## Component Architecture
+
+Keep validation logic close to the form for simple cases:
+
+```text
+LoginForm
+ ├── EmailInput
+ └── PasswordInput
+```
+
+For larger applications:
+
+- Create reusable validation utilities.
+- Share validation rules across forms.
+- Use schema validation (e.g., Zod or Yup) with **React Hook Form** for complex forms.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app with Vite (recommended):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`App.tsx`**
+
+```tsx
+import { ChangeEvent, useState } from "react";
+import "./App.css";
+
+export default function App() {
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+
+    setUsername(value);
+
+    if (value.trim().length < 3) {
+      setError("Username must be at least 3 characters.");
+    } else {
+      setError("");
+    }
+  };
+
+  return (
+    <div>
+      <label htmlFor="username">Username</label>
+
+      <input
+        id="username"
+        value={username}
+        onChange={handleChange}
+        aria-invalid={!!error}
+        aria-describedby={error ? "username-error" : undefined}
+      />
+
+      {error && (
+        <p id="username-error" className="error">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+```
+
+**`App.css`**
+
+```css
+.error {
+  color: red;
+  font-size: 14px;
+  margin-top: 4px;
+}
+```
+
+This example validates the username while the user types and displays an inline error until the input contains at least three characters.
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for modern React development because of its fast dev server, HMR, and optimized production builds.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- For applications requiring SSR or Server Components, use **Next.js App Router**.
+- Vite is **ESM-first**, serving native ES modules during development and bundling with Rollup for production.
+
+---
+
+# Performance
+
+Simple validation is inexpensive, but large forms benefit from optimization:
+
+- Use **React Profiler** to identify unnecessary re-renders.
+- Wrap expensive child components with `React.memo`.
+- Use `useCallback` when passing handlers to memoized children.
+- Debounce expensive validations (e.g., server-side username availability checks).
+- Use **React Hook Form** for large forms because it minimizes re-renders.
+- Use **Zod** or **Yup** for reusable schema validation.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("shows validation message for short username", async () => {
+  const user = userEvent.setup();
+
+  render(<App />);
+
+  await user.type(screen.getByLabelText(/username/i), "ab");
+
+  expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright** to verify validation behavior during real user interactions.
+
+---
+
+# Ops & Deployment
+
+- Display clear, accessible validation messages without blocking user input.
+- Use **Error Boundaries** for rendering errors (they do not handle validation logic).
+- Validate again on the server—client-side validation improves UX but should never be the only validation.
+- Keep bundles small with code splitting and deploy static assets through a CDN.
+
+---
+
+# Pitfalls
+
+- **Don't rely only on client-side validation**; always validate on the server for security and data integrity.
+- **Avoid validating expensive rules on every keystroke**; debounce or validate on blur when appropriate.
+- **Always associate error messages with inputs** using `aria-invalid` and `aria-describedby` for accessibility.
+
 ## Question 5. How do you implement a "show password" toggle?
+
+# How do you implement a "show password" toggle?
+
+## Short answer
+
+Implement a **Show Password** toggle by storing a boolean state (e.g., `showPassword`) and switching the input's `type` between `"password"` and `"text"`.
+
+```tsx
+<input type={showPassword ? "text" : "password"} />
+```
+
+When the user clicks the toggle button, update the state:
+
+```tsx
+setShowPassword((prev) => !prev);
+```
+
+---
+
+# Explanation
+
+A password field normally hides user input:
+
+```html
+<input type="password" />
+```
+
+To allow users to view what they've typed, React conditionally changes the `type` attribute.
+
+Flow:
+
+```text
+User clicks "Show"
+        ↓
+showPassword becomes true
+        ↓
+Component re-renders
+        ↓
+type="text"
+        ↓
+Password becomes visible
+```
+
+Clicking again:
+
+```text
+User clicks "Hide"
+        ↓
+showPassword becomes false
+        ↓
+type="password"
+```
+
+This is a perfect example of React's declarative rendering—React updates the DOM based on state instead of manually changing the element.
+
+---
+
+## React 18 Rendering Behavior
+
+When the button is clicked:
+
+```tsx
+setShowPassword((prev) => !prev);
+```
+
+React 18:
+
+- Automatically batches state updates.
+- Re-renders only the affected component.
+- Updates only the `type` attribute and button label in the DOM.
+- Keeps the UI responsive through concurrent rendering.
+
+Since this is a lightweight state update, performance impact is negligible.
+
+---
+
+## Component Architecture
+
+Instead of embedding the toggle logic in every form, create a reusable password input component.
+
+```text
+LoginForm
+ ├── PasswordInput
+ └── SubmitButton
+```
+
+The reusable component can encapsulate:
+
+- Password visibility toggle
+- Label
+- Error message
+- Validation
+- Accessibility
+- Ref forwarding (optional)
+
+This avoids duplicating logic across login, signup, and reset-password forms.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app with Vite (recommended):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`PasswordInput.tsx`**
+
+```tsx
+import { useState, ChangeEvent } from "react";
+
+type PasswordInputProps = {
+  value: string;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+};
+
+export default function PasswordInput({ value, onChange }: PasswordInputProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <div>
+      <label htmlFor="password">Password</label>
+
+      <div style={{ display: "flex", gap: "8px" }}>
+        <input
+          id="password"
+          type={showPassword ? "text" : "password"}
+          value={value}
+          onChange={onChange}
+        />
+
+        <button
+          type="button"
+          onClick={() => setShowPassword((prev) => !prev)}
+          aria-pressed={showPassword}
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? "Hide" : "Show"}
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+**`App.tsx`**
+
+```tsx
+import { useState } from "react";
+import PasswordInput from "./PasswordInput";
+
+export default function App() {
+  const [password, setPassword] = useState("");
+
+  return (
+    <PasswordInput
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+    />
+  );
+}
+```
+
+This implementation keeps the password field controlled by the parent while the visibility state is managed internally by the reusable component.
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for modern React development because of its fast startup, Hot Module Replacement (HMR), and optimized production builds.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- For applications requiring SSR, SEO, or Server Components, use **Next.js App Router**.
+- Vite is **ESM-first**, serving native ES modules in development and bundling with Rollup for production.
+
+---
+
+# Performance
+
+A password toggle is inexpensive, but general optimization practices still apply:
+
+- Use **React Profiler** to confirm that only the password input re-renders.
+- Wrap unrelated child components with `React.memo` if they're expensive to render.
+- Use `useCallback` when passing handlers to memoized children.
+- Lazy load large authentication pages if appropriate.
+- Cache authentication-related API calls with libraries like TanStack Query where applicable (not for password visibility itself).
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import PasswordInput from "./PasswordInput";
+
+test("toggles password visibility", async () => {
+  const user = userEvent.setup();
+
+  render(<PasswordInput value="secret" onChange={() => {}} />);
+
+  const input = screen.getByLabelText(/password/i);
+  const button = screen.getByRole("button", { name: /show password/i });
+
+  expect(input).toHaveAttribute("type", "password");
+
+  await user.click(button);
+
+  expect(input).toHaveAttribute("type", "text");
+});
+```
+
+For end-to-end testing, use **Playwright** to verify the toggle behavior in a real browser.
+
+---
+
+# Ops & Deployment
+
+- Ensure the toggle button uses `type="button"` to avoid accidentally submitting forms.
+- Add accessible labels (`aria-label`, `aria-pressed`) so screen readers announce the current state.
+- Remember that showing the password improves usability but also exposes it visually—let users choose.
+- Keep authentication bundles small with code splitting and deploy assets via a CDN for faster loading.
+
+---
+
+# Pitfalls
+
+- **Use `type="button"`** on the toggle button; otherwise, it may submit the form.
+- **Store only the visibility state locally**; the actual password value should remain controlled by the parent form.
+- **Don't mistake hiding the password for security**; changing the input type only affects the UI, not how the password is transmitted or stored.
 
 ## Question 6. How do you display the length of a text input dynamically?
 
