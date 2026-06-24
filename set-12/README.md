@@ -821,7 +821,520 @@ For end-to-end testing, use **Playwright** to verify list rendering and user int
 
 ## Question 4. How do you conditionally render `null` in React?
 
+# Short answer
+
+You conditionally render `null` in React by returning `null` from a component or expression when you want **nothing to be rendered**. React treats `null`, `undefined`, and `false` as “render nothing”.
+
+---
+
+# Explanation
+
+In React, rendering is declarative. If a condition is not met, you simply return `null` instead of JSX.
+
+### 1. Returning `null` from a component
+
+```tsx id="x1q8ab"
+function UserProfile({ user }: { user: { name: string } | null }) {
+  if (!user) return null;
+
+  return <h1>{user.name}</h1>;
+}
+```
+
+If `user` is `null`, React renders nothing for this component.
+
+---
+
+### 2. Inline conditional rendering
+
+You can also use logical conditions inside JSX:
+
+```tsx id="v9k2lm"
+return <div>{isLoggedIn ? <Dashboard /> : null}</div>;
+```
+
+Here:
+
+- `true` → renders `<Dashboard />`
+- `false` → renders `null` (nothing)
+
+---
+
+### 3. Using `&&` operator (common pattern)
+
+```tsx id="c3p8xz"
+return <div>{isAdmin && <AdminPanel />}</div>;
+```
+
+If `isAdmin` is `false`, React renders `false` → effectively nothing (React ignores it).
+
+---
+
+### 4. Why `null` matters in React rendering
+
+React reconciliation treats `null` as:
+
+- No DOM node created
+- No update needed for that branch
+- Clean removal of previous render output if condition changes
+
+Example:
+
+```tsx id="r7m2pq"
+{
+  showMessage ? <Message /> : null;
+}
+```
+
+When `showMessage` flips:
+
+- React removes `<Message />` from DOM
+- No manual DOM manipulation required
+
+---
+
+### 5. React 18 rendering behavior
+
+With React 18:
+
+- Conditional rendering is still part of the normal render phase
+- Updates are **batched automatically**
+- If multiple state updates toggle rendering, React groups them into a single render
+
+```tsx id="b4n7qz"
+setShow(true);
+setCount((c) => c + 1);
+```
+
+Both updates are batched → one re-render.
+
+---
+
+### 6. Component architecture perspective
+
+Using `null` is often better than conditional logic in parent components when:
+
+- A component has its own visibility rules
+- You want encapsulation of rendering logic
+- You want reusable UI components
+
+Example:
+
+```tsx id="m1z9kd"
+function Tooltip({ text }: { text?: string }) {
+  if (!text) return null;
+  return <span>{text}</span>;
+}
+```
+
+This makes the component self-contained.
+
+---
+
+### 7. State management trade-offs
+
+- Use `null` rendering for **UI visibility**
+- Use state management (Context, Redux, Zustand) only if visibility is shared across components
+- Avoid storing “render flags” globally unless multiple parts of the app depend on them
+
+---
+
+# Example
+
+**Vite setup (React + TypeScript)**
+
+```bash id="z8kq1w"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+```tsx id="p9r2va"
+import { useState } from "react";
+
+function Notification({ message }: { message: string | null }) {
+  if (!message) return null;
+
+  return <div style={{ padding: 10, background: "lightgreen" }}>{message}</div>;
+}
+
+export default function App() {
+  const [message, setMessage] = useState<string | null>(null);
+
+  return (
+    <div>
+      <button onClick={() => setMessage("Hello!")}>Show Message</button>
+
+      <button onClick={() => setMessage(null)}>Hide Message</button>
+
+      <Notification message={message} />
+    </div>
+  );
+}
+```
+
+This demonstrates:
+
+- conditional rendering using `null`
+- clean unmounting of components
+- controlled state toggling
+- reusable component design
+
+---
+
+# Tooling & Setup
+
+- **Preferred stack:** Vite + React + TypeScript (fast HMR, modern ESM, minimal config)
+- Avoid CRA (deprecated)
+- For SSR: use Next.js or Remix if visibility depends on server-side data
+- React uses **ESM-based bundling in Vite**, improving build speed and tree-shaking
+
+---
+
+# Performance
+
+- Returning `null` is cheap — it avoids DOM creation entirely
+- Prefer conditional rendering over CSS `display: none` when you want to **unmount components**
+- Use `React.memo` for components that frequently toggle visibility but receive stable props
+- Use `useMemo`/`useCallback` only when visibility changes cause expensive re-renders
+- Use React DevTools Profiler to ensure hidden components are not unnecessarily re-rendering
+
+---
+
+# Testing
+
+Using **Vitest + React Testing Library**:
+
+```bash id="q2k9ld"
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx id="t8m2pw"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("hides notification when message is null", () => {
+  render(<App />);
+
+  expect(screen.queryByText("Hello!")).not.toBeInTheDocument();
+});
+```
+
+Key idea:
+
+- `queryByText` returns `null` when element is not rendered
+
+---
+
+# Ops & Deployment
+
+- Ensure conditional rendering aligns with SSR hydration (Next.js): mismatched `null` vs DOM output can cause hydration warnings
+- Use Error Boundaries to prevent UI crashes when conditional branches fail
+- Log unexpected null states in production (Sentry or similar)
+- Keep UI logic declarative to avoid manual DOM manipulation issues
+
+---
+
+# Pitfalls
+
+- Returning `undefined` accidentally from a component can lead to inconsistent behavior (prefer explicit `null`)
+- Using `&&` can render unexpected falsy values (e.g., `0 && <Component />` renders `0`)
+- Overusing conditional rendering instead of proper component decomposition can lead to cluttered JSX
+
 ## Question 5. How do you prevent re-rendering when props haven't changed?
+
+# Short answer
+
+You prevent unnecessary re-renders when props haven’t changed by using **`React.memo` for components**, and ensuring **referential stability of props using `useMemo` and `useCallback`**. React then skips re-rendering when shallow comparison shows props are unchanged.
+
+---
+
+# Explanation
+
+In React, a component re-renders when:
+
+- its **parent re-renders**
+- its **state changes**
+- its **context changes**
+
+Even if props are “logically the same”, React compares them using **shallow equality**, meaning:
+
+- primitives → compared by value
+- objects/functions → compared by reference
+
+So this causes re-renders:
+
+```tsx
+<User name="John" />
+```
+
+inside a parent that re-renders, even if `"John"` didn’t change.
+
+---
+
+## 1. `React.memo` (primary solution)
+
+Wrap components with `React.memo` to memoize rendering:
+
+```tsx id="memo1"
+const User = React.memo(function User({ name }: { name: string }) {
+  console.log("render");
+  return <div>{name}</div>;
+});
+```
+
+### How it works:
+
+- React compares previous and next props
+- If shallowly equal → skips render
+- If different → re-renders
+
+---
+
+## 2. Referential equality problem
+
+Even with `React.memo`, this still re-renders:
+
+```tsx id="ref1"
+<User user={{ name: "John" }} />
+```
+
+Because `{ name: "John" }` is a **new object reference every render**.
+
+---
+
+## 3. Fix with `useMemo`
+
+Stabilize object props:
+
+```tsx id="memo2"
+const user = useMemo(() => {
+  return { name: "John" };
+}, []);
+
+<User user={user} />;
+```
+
+Now React sees the same reference → skips re-render.
+
+---
+
+## 4. Fix with `useCallback` (functions)
+
+Functions also break memoization:
+
+```tsx id="cb1"
+<User onClick={() => doSomething()} />
+```
+
+Fix:
+
+```tsx id="cb2"
+const handleClick = useCallback(() => {
+  doSomething();
+}, []);
+
+<User onClick={handleClick} />;
+```
+
+---
+
+## 5. Component architecture strategy
+
+### Good structure:
+
+- Keep state as low as possible (local state)
+- Memoize heavy children
+- Split large components into smaller ones
+
+```txt
+App
+ ├── Header (memoized)
+ ├── UserList (memoized)
+ │     └── UserItem (memoized)
+```
+
+---
+
+## 6. React 18 rendering behavior
+
+React 18 introduces:
+
+- **automatic batching** → multiple state updates trigger one render
+- **concurrent rendering** → renders may be interrupted and restarted
+- **memoization still applies**, but React may re-render if priorities change
+
+Important: `React.memo` is still effective, but not a guarantee if:
+
+- context changes
+- state inside component changes
+- props references change
+
+---
+
+## 7. Advanced optimization patterns
+
+### A. Split state to reduce re-renders
+
+```tsx id="split1"
+const [count, setCount] = useState(0);
+const [text, setText] = useState("");
+```
+
+Avoid mixing unrelated state in one object unless necessary.
+
+---
+
+### B. Context optimization
+
+Context causes re-renders of all consumers.
+
+Fix:
+
+- split contexts
+- memoize provider values
+
+```tsx id="ctx1"
+const value = useMemo(() => ({ user, setUser }), [user]);
+```
+
+---
+
+### C. Virtualization for large lists
+
+Instead of optimizing renders, reduce DOM nodes:
+
+- `react-window`
+- `react-virtualized`
+
+---
+
+# Example
+
+**Vite setup (React + TypeScript)**
+
+```bash id="vite1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+---
+
+### Optimized parent + memoized child
+
+```tsx id="ex1"
+import React, { useCallback, useState } from "react";
+
+type Props = {
+  name: string;
+  onClick: () => void;
+};
+
+const Child = React.memo(({ name, onClick }: Props) => {
+  console.log("Child rendered");
+  return <button onClick={onClick}>{name}</button>;
+});
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const handleClick = useCallback(() => {
+    console.log("clicked");
+  }, []);
+
+  return (
+    <div>
+      <h1>Count: {count}</h1>
+
+      <button onClick={() => setCount((c) => c + 1)}>
+        Increment Parent State
+      </button>
+
+      <Child name="Stable Button" onClick={handleClick} />
+    </div>
+  );
+}
+```
+
+### Behavior:
+
+- Clicking "Increment Parent State" re-renders App
+- `Child` does NOT re-render because:
+  - `name` is stable
+  - `onClick` is memoized with `useCallback`
+  - `React.memo` blocks unnecessary render
+
+---
+
+# Tooling & Setup
+
+- Use **Vite + React + TypeScript**
+  - fast HMR
+  - ESM-based dev server
+  - optimized production builds via Rollup
+
+- Avoid CRA (deprecated)
+- Use Next.js if SSR or server components are required
+
+---
+
+# Performance
+
+- Use `React.memo` for pure components
+- Stabilize props with `useMemo` and `useCallback`
+- Avoid inline object/function creation in JSX
+- Use React DevTools Profiler to detect wasted renders
+- Use virtualization for large datasets
+- Prefer splitting components over deep memo chains
+
+---
+
+# Testing
+
+Using Vitest + React Testing Library:
+
+```bash id="test1"
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+```tsx id="test2"
+import { render } from "@testing-library/react";
+import App from "./App";
+
+test("does not re-render memoized child unnecessarily", () => {
+  render(<App />);
+  // Use console spy or render counters in real test setups
+});
+```
+
+For deeper verification:
+
+- mock `console.log`
+- assert render counts
+
+---
+
+# Ops & Deployment
+
+- Memoization reduces CPU work but can increase memory usage—measure before optimizing
+- Use React Profiler before adding `React.memo` everywhere
+- Avoid premature optimization; focus on list-heavy or expensive components
+- Ensure SSR frameworks (Next.js) don’t break memo assumptions during hydration
+- Use CDN caching for static bundles and code-splitting for large apps
+
+---
+
+# Pitfalls
+
+- Overusing `React.memo` → adds complexity without real benefit
+- Forgetting that new object/function references break memoization
+- Using `useMemo` everywhere → unnecessary overhead
+- Assuming memoization prevents all re-renders (it doesn’t block state/context updates)
 
 ## Question 6. What are the rules of JSX syntax?
 
