@@ -997,7 +997,595 @@ Use **Playwright** for end-to-end testing against a real or test GraphQL backend
 
 ## Question 4. How do you implement lazy-loaded routes with React Router?
 
+# Short answer
+
+Lazy-loaded routes in **React Router v6** are implemented using **`React.lazy()`** to dynamically import route components and **`<Suspense>`** to display a fallback UI while the component is loading. This enables **route-based code splitting**, reducing the initial JavaScript bundle and improving application startup time.
+
+For larger applications, lazy-load feature modules (e.g., Dashboard, Admin, Settings) and preload critical routes when appropriate.
+
+---
+
+# Explanation
+
+By default, all route components are bundled together:
+
+```text
+App Bundle
+├── Home
+├── Dashboard
+├── Admin
+├── Reports
+└── Settings
+```
+
+Even if a user only visits the home page, they download every page.
+
+With lazy loading:
+
+```text
+Initial Bundle
+├── Home
+└── Router
+
+Dashboard Bundle (loaded on demand)
+
+Admin Bundle (loaded on demand)
+
+Reports Bundle (loaded on demand)
+```
+
+Only the code for the current route is downloaded, improving:
+
+- Faster initial page load
+- Smaller JavaScript bundles
+- Better Core Web Vitals
+- Reduced bandwidth usage
+
+---
+
+## How it works
+
+### Step 1: Lazy-load the component
+
+```tsx
+const Dashboard = React.lazy(() => import("./pages/Dashboard"));
+```
+
+The component is downloaded only when it's first rendered.
+
+---
+
+### Step 2: Wrap routes with Suspense
+
+`Suspense` displays a fallback while the dynamic import is in progress.
+
+```tsx
+<Suspense fallback={<Spinner />}>
+  <Dashboard />
+</Suspense>
+```
+
+---
+
+### Step 3: Route navigation
+
+```text
+User clicks Dashboard
+        │
+        ▼
+Download Dashboard chunk
+        │
+        ▼
+Show loading spinner
+        │
+        ▼
+Render Dashboard
+```
+
+The downloaded chunk is cached by the browser, so subsequent visits are typically instantaneous.
+
+---
+
+## React Router v6 Route Structure
+
+A common production structure:
+
+```text
+App
+│
+├── Public Layout
+│      ├── Home
+│      └── About
+│
+└── Protected Layout
+       ├── Dashboard
+       ├── Reports
+       └── Settings
+```
+
+Lazy-load entire feature areas instead of individual small components to avoid creating too many tiny network requests.
+
+---
+
+## React 18 Considerations
+
+React 18 improves the lazy-loading experience with concurrent rendering.
+
+Best practices include:
+
+- Use `Suspense` boundaries around layouts or feature groups rather than every small component.
+- Combine lazy loading with protected routes so unauthorized users don't download restricted bundles.
+- Use automatic batching to reduce re-renders during navigation.
+- Consider prefetching commonly visited routes after login or during idle time.
+
+---
+
+# Example
+
+**Scaffold with Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install react-router-dom
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { Suspense, lazy } from "react";
+
+const Home = lazy(() => import("./pages/Home"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const About = lazy(() => import("./pages/About"));
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <nav>
+        <Link to="/">Home</Link> | <Link to="/dashboard">Dashboard</Link> |{" "}
+        <Link to="/about">About</Link>
+      </nav>
+
+      <Suspense fallback={<p>Loading page...</p>}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/about" element={<About />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  );
+}
+```
+
+**pages/Home.tsx**
+
+```tsx
+export default function Home() {
+  return <h1>Home</h1>;
+}
+```
+
+**pages/Dashboard.tsx**
+
+```tsx
+export default function Dashboard() {
+  return <h1>Dashboard</h1>;
+}
+```
+
+Each page is compiled into a separate JavaScript chunk and downloaded only when the user navigates to it.
+
+> **Note:** React Router also supports route-level `lazy` APIs (introduced with the Data Router APIs in v6.4+), which allow lazy-loading route modules containing the component, loader, and action together. This is the preferred approach when using `createBrowserRouter`.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite (esbuild for development, Rollup for production).
+- **Module system:** Use **ESM** (`import`/`export`) to enable efficient code splitting.
+- **Frameworks:** If using **Next.js App Router**, route-based code splitting is automatic. **Remix** also provides route-level splitting and server-driven data loading.
+- **Dev server:** Start with:
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+# Performance
+
+- **Code splitting:** Split bundles by feature or route instead of by every component to balance bundle size and network overhead.
+- **React Profiler:** Measure whether lazy-loaded routes reduce initial render time and whether fallback UIs are displayed appropriately.
+- **Memoization:** Use `React.memo`, `useMemo`, and `useCallback` only after profiling identifies unnecessary re-renders.
+- **Prefetching:** Preload frequently visited routes (e.g., after login or on link hover) to make navigation feel instantaneous.
+- **Caching:** Browser caching ensures downloaded chunks are reused on subsequent visits. Use long-lived cache headers with hashed filenames for production builds.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test ideas:
+
+```tsx
+it("shows loading fallback while route loads", () => {
+  // Render app and assert the fallback is visible.
+});
+
+it("renders dashboard after lazy import resolves", () => {
+  // Mock the lazy-loaded component and verify rendering.
+});
+```
+
+Use **Playwright** for end-to-end tests to verify navigation, loading indicators, and protected lazy-loaded routes.
+
+---
+
+# Ops & Deployment
+
+- Analyze bundle sizes with tools like `rollup-plugin-visualizer` or `vite-bundle-visualizer`.
+- Serve hashed JavaScript chunks through a CDN with appropriate cache headers.
+- Wrap route trees with **Error Boundaries** to handle failed chunk downloads gracefully.
+- Monitor lazy-loading failures (e.g., network errors) using Sentry or similar observability tools.
+- Combine lazy loading with SSR (e.g., Next.js) where appropriate to improve SEO and initial page rendering.
+
+---
+
+# Pitfalls
+
+- **Wrapping every small component in `React.lazy`**, creating excessive network requests instead of splitting by feature or route.
+- **Forgetting to use `Suspense`**, which causes runtime errors when rendering lazy-loaded components.
+- **Displaying poor fallback UIs**, leading to layout shifts or a confusing loading experience.
+
 ## Question 5. How do you implement React Query for data fetching and caching?
+
+# Short answer
+
+**React Query (TanStack Query)** is a server-state management library that simplifies **data fetching, caching, synchronization, background refetching, pagination, optimistic updates, and mutations**. It eliminates much of the boilerplate associated with `useEffect` + `fetch` and provides hooks like `useQuery`, `useMutation`, `useInfiniteQuery`, and `useQueryClient`.
+
+For modern React apps, wrap your app with `QueryClientProvider`, use `useQuery` for reads, `useMutation` for writes, and let React Query manage the cache and background synchronization.
+
+---
+
+# Explanation
+
+React Query is designed for **server state**, not client UI state.
+
+- **Client state:** Theme, modal visibility, selected tab, form inputs (use `useState`, Context, Redux, Zustand, etc.)
+- **Server state:** Users, products, orders, API responses (use React Query)
+
+Architecture:
+
+```text
+React Components
+        │
+useQuery / useMutation
+        │
+TanStack Query
+        │
+Query Cache
+        │
+Background Refetch
+        │
+REST / GraphQL API
+        │
+Database
+```
+
+Unlike a manual `useEffect` approach:
+
+```tsx
+useEffect(() => {
+  fetch(...)
+}, []);
+```
+
+React Query automatically handles:
+
+- Caching
+- Loading states
+- Error states
+- Background refetching
+- Request deduplication
+- Automatic retries
+- Cache invalidation
+- Stale data management
+
+---
+
+## Setting up QueryClient
+
+Create a single `QueryClient` for the application:
+
+```tsx
+const queryClient = new QueryClient();
+```
+
+Wrap the application:
+
+```text
+App
+ └── QueryClientProvider
+        ├── Users
+        ├── Products
+        └── Dashboard
+```
+
+All components share the same cache.
+
+---
+
+## Fetching Data with `useQuery`
+
+`useQuery` requires:
+
+- A unique **query key**
+- A **query function**
+
+Example:
+
+```tsx
+useQuery({
+  queryKey: ["users"],
+  queryFn: fetchUsers,
+});
+```
+
+It returns:
+
+- `data`
+- `isLoading`
+- `isError`
+- `error`
+- `isFetching`
+- `refetch`
+
+Lifecycle:
+
+```text
+Component Mount
+       │
+       ▼
+Cache?
+  │        │
+Yes       No
+ │         │
+Return   Fetch API
+ │         │
+Background Cache Update
+```
+
+---
+
+## Mutations with `useMutation`
+
+Mutations are used for:
+
+- Create
+- Update
+- Delete
+
+Typical flow:
+
+```text
+Button Click
+      │
+Mutation
+      │
+Server Response
+      │
+Invalidate Query
+      │
+Fresh Data
+```
+
+Example:
+
+```tsx
+queryClient.invalidateQueries({
+  queryKey: ["users"],
+});
+```
+
+This refetches affected data after a successful mutation.
+
+---
+
+## Caching
+
+Each query is identified by a **query key**.
+
+Examples:
+
+```text
+["users"]
+
+["users", userId]
+
+["products", category]
+
+["orders", customerId]
+```
+
+Benefits:
+
+- No duplicate requests
+- Shared cache
+- Background synchronization
+- Automatic refetching when needed
+
+---
+
+## React 18 Considerations
+
+React 18 works well with React Query:
+
+- Automatic batching reduces re-renders from query state updates.
+- Combine `Suspense` (optional) with React Query for declarative loading experiences.
+- Use `startTransition` for non-urgent UI updates triggered by user interactions.
+- Avoid copying query data into local component state unless you need an editable draft.
+
+---
+
+# Example
+
+**Scaffold with Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install @tanstack/react-query
+npm run dev
+```
+
+**main.tsx**
+
+```tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import App from "./App";
+
+const queryClient = new QueryClient();
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <QueryClientProvider client={queryClient}>
+    <App />
+  </QueryClientProvider>,
+);
+```
+
+**App.tsx**
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+
+type User = {
+  id: number;
+  name: string;
+  email: string;
+};
+
+async function fetchUsers(): Promise<User[]> {
+  const response = await fetch("https://jsonplaceholder.typicode.com/users");
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch users");
+  }
+
+  return response.json();
+}
+
+export default function App() {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["users"],
+    queryFn: fetchUsers,
+  });
+
+  if (isLoading) return <p>Loading...</p>;
+
+  if (isError) {
+    return <p>{(error as Error).message}</p>;
+  }
+
+  return (
+    <ul>
+      {data?.map((user) => (
+        <li key={user.id}>
+          {user.name} - {user.email}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+This example caches the user list, avoids duplicate requests, and automatically manages loading and error states.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite (fast HMR, optimized production builds).
+- **Module system:** Use **ESM** (`import`/`export`) for tree-shaking and modern tooling.
+- **DevTools:** Install **@tanstack/react-query-devtools** during development to inspect queries, cache entries, retries, and invalidations.
+- **Frameworks:** React Query integrates well with Vite, Next.js (App Router), and Remix. For SSR frameworks, hydrate prefetched queries to avoid duplicate client-side requests.
+
+Run:
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+# Performance
+
+- **Cache tuning:** Configure `staleTime` and `gcTime` (formerly `cacheTime`) to balance freshness and network usage.
+- **Background refetching:** Enable or disable refetch-on-window-focus based on application needs.
+- **Prefetching:** Use `queryClient.prefetchQuery()` for routes or data users are likely to visit next.
+- **Pagination:** Use `useInfiniteQuery` or paginated queries with `keepPreviousData` for smooth page transitions.
+- **Memoization:** Avoid unnecessary `useMemo` around query results; React Query preserves referential stability where possible. Use the React Profiler to identify actual render bottlenecks.
+
+---
+
+# Testing
+
+Use **Vitest** and **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Testing approach:
+
+```tsx
+// Wrap the component with QueryClientProvider
+// Create a fresh QueryClient per test
+// Mock fetch or API responses
+// Assert loading, success, and error states
+```
+
+Use **Playwright** for end-to-end testing of real API interactions, optimistic updates, pagination, and retry behavior.
+
+---
+
+# Ops & Deployment
+
+- Configure global retry and error handling through `QueryClient` defaults.
+- Integrate logging/monitoring (e.g., Sentry, OpenTelemetry) for failed queries and mutations.
+- For SSR (e.g., Next.js), prefetch data on the server and hydrate it on the client using `dehydrate`/`HydrationBoundary`.
+- Use CDN caching for static assets while letting React Query manage dynamic API caching.
+- Avoid storing sensitive server responses in persistent client-side caches unless required and secured.
+
+---
+
+# Pitfalls
+
+- **Using React Query for client UI state** instead of server state.
+- **Creating unstable query keys** (e.g., using non-serializable objects), which leads to cache misses and unnecessary refetches.
+- **Invalidating too many queries** after mutations instead of targeting the specific affected query keys.
 
 ## Question 6. How do you implement state normalization for complex apps?
 
