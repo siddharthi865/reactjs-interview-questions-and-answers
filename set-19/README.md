@@ -866,7 +866,605 @@ Use **Playwright** for end-to-end testing to verify user-visible notifications d
 
 ## Question 4. How do you implement a live search component that fetches results dynamically?
 
+# Short answer
+
+A live search component fetches results as the user types by combining a **controlled input**, **debouncing**, **asynchronous API requests**, **request cancellation** (using `AbortController`), and **loading/error states**. In production, use a data-fetching library like **TanStack Query** for caching and request deduplication, and debounce input to avoid excessive API calls.
+
+---
+
+# Explanation
+
+A production-ready live search flow looks like this:
+
+```text
+User types
+
+↓
+
+Update input state
+
+↓
+
+Debounce (300ms)
+
+↓
+
+Cancel previous request
+
+↓
+
+Fetch latest results
+
+↓
+
+Display loading
+
+↓
+
+Render results
+
+↓
+
+Cache response
+```
+
+## Component architecture
+
+A typical implementation has:
+
+- **SearchInput** – Controlled input component.
+- **useDebounce** – Delays API requests until the user pauses typing.
+- **SearchResults** – Displays loading, errors, empty state, or results.
+- **API layer** – Encapsulates fetch logic.
+- **Cache layer** – TanStack Query or SWR for caching and deduplication.
+
+```text
+App
+│
+├── SearchBox
+│      │
+│      ├── Input
+│      ├── Debounce
+│      ├── API
+│      └── Results
+│
+└── Search Service
+```
+
+---
+
+## Why debounce?
+
+Without debounce:
+
+```text
+User types:
+R
+Re
+Rea
+Reac
+React
+
+↓
+
+5 API calls
+```
+
+With a **300ms debounce**:
+
+```text
+User types:
+React
+
+↓
+
+1 API call
+```
+
+This reduces:
+
+- Server load
+- Network traffic
+- UI flickering
+
+---
+
+## Avoid race conditions
+
+A common issue:
+
+```text
+Search "Re"
+
+↓
+
+Request A
+
+Search "React"
+
+↓
+
+Request B
+
+↓
+
+B finishes first
+
+↓
+
+A finishes later
+
+↓
+
+Old results overwrite new results ❌
+```
+
+Solution:
+
+- `AbortController`
+- Request IDs
+- TanStack Query cancellation
+
+---
+
+## React 18 considerations
+
+React 18 introduces features that improve live search responsiveness:
+
+### `useDeferredValue`
+
+Keeps typing responsive while rendering expensive search results.
+
+```tsx
+const deferredQuery = useDeferredValue(query);
+```
+
+---
+
+### `useTransition`
+
+Marks result updates as non-urgent.
+
+```tsx
+const [isPending, startTransition] = useTransition();
+
+startTransition(() => {
+  setResults(data);
+});
+```
+
+Typing stays responsive even if rendering is expensive.
+
+---
+
+### Automatic batching
+
+Multiple updates like:
+
+```tsx
+setLoading(true);
+setResults(data);
+setLoading(false);
+```
+
+are batched into fewer renders.
+
+---
+
+# Example
+
+Using **Vite + React + TypeScript**.
+
+## Scaffold
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+```tsx
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function LiveSearch() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const timer = setTimeout(async () => {
+      try {
+        setLoading(true);
+
+        const res = await fetch(
+          `https://jsonplaceholder.typicode.com/users?name_like=${query}`,
+          {
+            signal: controller.signal,
+          },
+        );
+
+        const data = await res.json();
+        setResults(data);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error(error);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  return (
+    <div>
+      <input
+        placeholder="Search users..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
+      {loading && <p>Loading...</p>}
+
+      {!loading && results.length === 0 && query && <p>No results found.</p>}
+
+      <ul>
+        {results.map((user) => (
+          <li key={user.id}>{user.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+This example demonstrates:
+
+- Controlled input
+- Debounced API requests
+- Request cancellation
+- Loading state
+- Empty state
+- Cleanup on unmount
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite (fast HMR and Rollup for production builds).
+- **Module system:** Prefer **ES Modules (ESM)**. CommonJS is primarily for legacy Node.js environments.
+- **Framework alternatives:** Next.js (App Router, SSR, Server Components) or Remix for data-driven applications.
+
+For production applications, consider:
+
+```bash
+npm i @tanstack/react-query
+```
+
+Benefits:
+
+- Request caching
+- Background refetching
+- Automatic deduplication
+- Retry handling
+- Request cancellation
+- Stale-while-revalidate caching
+
+---
+
+# Performance
+
+Optimize live search by:
+
+- Debouncing input (200–500 ms depending on UX requirements).
+- Using `AbortController` to cancel stale requests.
+- Applying `useDeferredValue` to keep typing responsive during expensive renders.
+- Using `useTransition` for non-urgent result updates.
+- Memoizing expensive result components with `React.memo`.
+- Using `useMemo` for derived or filtered data.
+- Memoizing callbacks with `useCallback` when passing them to memoized children.
+- Virtualizing long result lists using libraries like `@tanstack/react-virtual`.
+- Profiling with the React DevTools **Profiler** to identify unnecessary re-renders.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Test scenarios:
+
+- Debounce delays API requests.
+- Only the latest request updates the UI.
+- Previous requests are cancelled.
+- Loading indicator appears while fetching.
+- Empty state is shown when no results are returned.
+- Errors are handled gracefully.
+
+Use **Playwright** for end-to-end tests covering complete search workflows and keyboard interactions.
+
+---
+
+# Ops & Deployment
+
+- Centralize API logic in a dedicated service layer for reuse and easier testing.
+- Log API failures using tools such as Sentry or LogRocket.
+- Add an **Error Boundary** around the search page to isolate rendering failures (note that asynchronous fetch errors should still be handled in the component or data-fetching layer).
+- For SSR frameworks like Next.js, consider server-rendering the initial page while performing live searches on the client.
+- Use CDN caching for static assets and HTTP caching (e.g., `ETag`, `Cache-Control`) where appropriate for search endpoints.
+
+---
+
+# Pitfalls
+
+- **Don't trigger an API request on every keystroke**—always debounce or throttle user input.
+- **Don't ignore stale requests**—cancel them with `AbortController` or use a library that manages request cancellation.
+- **Don't forget loading, empty, and error states**—they are essential for a polished user experience.
+
 ## Question 5. How do you create a reusable card component with dynamic content?
+
+# Short answer
+
+A reusable card component is created by designing it to be **composable** rather than tightly coupled to a specific use case. Instead of hardcoding content, accept props such as `title`, `subtitle`, `image`, and use `children` for flexible content. Expose optional slots (header, body, footer) so the same component can display products, users, blog posts, dashboards, or any custom UI.
+
+---
+
+# Explanation
+
+A reusable card should follow these principles:
+
+- **Composition over configuration** – Use `children` for arbitrary content instead of creating dozens of props.
+- **Single Responsibility Principle** – The card handles layout and styling, not business logic.
+- **Type safety** – Use TypeScript interfaces for predictable APIs.
+- **Accessibility** – Use semantic HTML (`article`, `header`, `footer`) and meaningful headings.
+- **Customizable** – Support optional actions, variants, loading states, and styling overrides.
+
+Typical architecture:
+
+```text
+App
+│
+├── UserCard
+│      └── Card
+│
+├── ProductCard
+│      └── Card
+│
+├── BlogCard
+│      └── Card
+│
+└── DashboardCard
+       └── Card
+```
+
+Instead of creating separate layouts for each use case, all specialized cards reuse the same base component.
+
+---
+
+### Component API
+
+A flexible API might look like:
+
+```ts
+type CardProps = {
+  title?: string;
+  subtitle?: string;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+};
+```
+
+Using `children` allows any JSX to be rendered:
+
+```tsx
+<Card title="Product">
+  <img />
+  <p>Description</p>
+  <button>Buy</button>
+</Card>
+```
+
+This is more scalable than defining props like:
+
+```tsx
+<Card
+  image=""
+  description=""
+  buttonText=""
+  price=""
+  rating=""
+  stock=""
+  ...
+/>
+```
+
+---
+
+### React 18 considerations
+
+React 18 doesn't change how cards are built, but it improves rendering performance:
+
+- **Automatic batching** reduces renders when multiple state updates affect cards.
+- **Concurrent rendering** keeps the UI responsive when rendering many cards.
+- **Server Components** (Next.js App Router) can render static card content on the server while keeping interactive elements as client components.
+
+---
+
+### State management trade-offs
+
+- **Stateless cards** are preferred—they simply render props.
+- If a card has local UI (e.g., "Expand", "Like"), manage that with `useState`.
+- Shared card state (favorites, selection) should be managed via Context, Zustand, Redux Toolkit, or TanStack Query depending on the application's architecture.
+
+---
+
+# Example
+
+Using **Vite + React + TypeScript**.
+
+## Scaffold
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `Card.tsx`
+
+```tsx
+import { ReactNode } from "react";
+
+type CardProps = {
+  title?: string;
+  subtitle?: string;
+  footer?: ReactNode;
+  children: ReactNode;
+};
+
+export function Card({ title, subtitle, footer, children }: CardProps) {
+  return (
+    <article
+      style={{
+        border: "1px solid #ddd",
+        borderRadius: 8,
+        padding: 16,
+        maxWidth: 320,
+      }}
+    >
+      {(title || subtitle) && (
+        <header>
+          {title && <h2>{title}</h2>}
+          {subtitle && <p>{subtitle}</p>}
+        </header>
+      )}
+
+      <section>{children}</section>
+
+      {footer && <footer>{footer}</footer>}
+    </article>
+  );
+}
+```
+
+### Usage
+
+```tsx
+import { Card } from "./Card";
+
+export default function App() {
+  return (
+    <Card
+      title="React Handbook"
+      subtitle="Frontend Guide"
+      footer={<button>Read More</button>}
+    >
+      <p>
+        Learn modern React with Hooks, TypeScript, and performance optimization.
+      </p>
+    </Card>
+  );
+}
+```
+
+This implementation demonstrates:
+
+- Reusable layout
+- Dynamic content via `children`
+- Optional header and footer
+- Strong typing with TypeScript
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** Vite + React + TypeScript.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite (fast development server with HMR, Rollup for production builds).
+- **Module system:** Prefer **ES Modules (ESM)**. CommonJS is mainly used for legacy Node.js projects.
+- **Alternatives:** Next.js (SSR, App Router, Server Components), Remix (nested routing and data loading), or Turbopack for Next.js development.
+
+For larger design systems, consider pairing reusable cards with component libraries like Material UI, Chakra UI, or Radix UI primitives.
+
+---
+
+# Performance
+
+- Wrap expensive card components with `React.memo` if their props rarely change.
+- Use `useMemo` for expensive derived values (e.g., formatting large datasets).
+- Use `useCallback` when passing event handlers to memoized child components.
+- Lazy-load heavy card content (e.g., charts, media) with `React.lazy()` and `Suspense`.
+- Virtualize large card grids using libraries such as `@tanstack/react-virtual` or `react-window`.
+- Use the React DevTools **Profiler** to verify that only cards with changed props re-render.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example tests should verify:
+
+- Header renders only when `title` or `subtitle` is provided.
+- `children` are rendered correctly.
+- Footer is optional.
+- User interactions (e.g., footer button click) work as expected.
+
+For end-to-end testing, use **Playwright** to validate card rendering and interactions in real user flows.
+
+---
+
+# Ops & Deployment
+
+- Keep the base card component presentational and free of business logic.
+- Wrap interactive card sections with an **Error Boundary** if they load remote or complex components.
+- Log rendering or interaction errors using tools like Sentry.
+- In Next.js, render static card data on the server when possible and hydrate only interactive elements.
+- Minimize bundle size by sharing the base card component across the application and code-splitting feature-specific content.
+
+---
+
+# Pitfalls
+
+- **Don't overload the component with dozens of props**—prefer `children` and composable slots.
+- **Avoid embedding business logic** inside the card; keep it reusable and presentation-focused.
+- **Use semantic HTML** (`article`, `header`, `section`, `footer`) to improve accessibility and maintainability.
 
 ## Question 6. How do you implement keyboard navigation for interactive elements?
 
