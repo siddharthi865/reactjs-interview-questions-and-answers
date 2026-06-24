@@ -912,7 +912,666 @@ For end-to-end tests, verify login, logout, token/session expiration, and protec
 
 ## Question 4. Explain JWT-based authentication in React apps
 
+# Short answer
+
+JWT-based authentication in React apps means the backend issues a **JSON Web Token (JWT)** after login, and the React app uses that token to **authenticate API requests and control access to protected routes**, typically via **Authorization headers or (preferably) HttpOnly cookies**.
+
+---
+
+# Explanation
+
+## 1. What JWT is (in practice)
+
+A **JWT (JSON Web Token)** is a signed token containing user identity + claims:
+
+```text
+header.payload.signature
+```
+
+Typical payload:
+
+```json
+{
+  "sub": "userId123",
+  "email": "user@example.com",
+  "role": "admin",
+  "exp": 1710000000
+}
+```
+
+Important properties:
+
+- **Stateless** (no session stored on server in basic setups)
+- **Signed** (cannot be tampered with)
+- **Time-limited** (expires via `exp`)
+
+---
+
+## 2. JWT authentication flow in React apps
+
+### Step-by-step lifecycle
+
+```text id="jwt-flow"
+Login request
+   ↓
+Backend validates credentials
+   ↓
+Backend returns JWT (access token ± refresh token)
+   ↓
+React stores token (memory or cookie)
+   ↓
+React attaches token to API requests
+   ↓
+Backend verifies JWT signature
+   ↓
+Returns protected data
+```
+
+---
+
+## 3. Where JWT is stored (critical decision)
+
+### Option A: HttpOnly Cookies (Recommended)
+
+- Token stored in cookie set by backend
+- Not accessible via JavaScript
+
+Pros:
+
+- Protected from XSS
+- Automatically sent with requests
+- Industry best practice for browser apps
+
+Cons:
+
+- Requires CSRF protection (SameSite, CSRF tokens)
+
+---
+
+### Option B: localStorage (Less secure)
+
+```ts
+localStorage.setItem("token", jwt);
+```
+
+Pros:
+
+- Simple
+
+Cons:
+
+- Vulnerable to XSS
+- Manual header injection
+- Harder to secure at scale
+
+---
+
+### Option C: In-memory storage
+
+- Stored in React state or Context
+- Lost on refresh
+
+Pros:
+
+- Safer than localStorage
+
+Cons:
+
+- Requires re-auth on refresh unless refresh token exists
+
+---
+
+## 4. Sending JWT in requests
+
+### If using Authorization header:
+
+```ts
+fetch("/api/profile", {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
+```
+
+### If using cookies (preferred):
+
+```ts
+fetch("/api/profile", {
+  credentials: "include",
+});
+```
+
+---
+
+## 5. Backend verification (important context)
+
+Backend must:
+
+- Verify signature using secret/public key
+- Check expiration (`exp`)
+- Validate issuer/audience (optional but recommended)
+
+If invalid:
+
+```http
+401 Unauthorized
+```
+
+---
+
+## 6. Access token vs refresh token
+
+Production systems usually use:
+
+### Access token
+
+- Short-lived (5–15 min)
+- Used for API calls
+
+### Refresh token
+
+- Long-lived (days/weeks)
+- Used to get new access tokens
+
+Flow:
+
+```text
+Access token expires
+   ↓
+React calls refresh endpoint
+   ↓
+Backend issues new access token
+```
+
+---
+
+## 7. React architecture for JWT auth
+
+A scalable structure:
+
+```text
+src/
+ ├── auth/
+ │    ├── AuthProvider.tsx
+ │    ├── useAuth.ts
+ │    ├── authAPI.ts
+ │    └── types.ts
+ ├── api/
+ │    ├── client.ts
+ │    └── interceptors.ts
+ ├── routes/
+ │    ├── ProtectedRoute.tsx
+ │    └── PublicRoute.tsx
+```
+
+---
+
+## 8. Protected route example
+
+```tsx id="protected-route"
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../auth/useAuth";
+
+export function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const { user } = useAuth();
+
+  return user ? children : <Navigate to="/login" replace />;
+}
+```
+
+---
+
+## 9. Auth provider example (JWT stored in memory)
+
+```tsx id="jwt-auth-provider"
+import { createContext, useContext, useState } from "react";
+
+type User = { id: string; email: string };
+
+type AuthContextType = {
+  user: User | null;
+  login: (token: string) => Promise<void>;
+  logout: () => void;
+};
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: any) {
+  const [user, setUser] = useState<User | null>(null);
+
+  const login = async (token: string) => {
+    // decode token or fetch /me endpoint
+    const res = await fetch("/api/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await res.json();
+    setUser(data.user);
+  };
+
+  const logout = () => {
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext)!;
+```
+
+---
+
+## 10. React 18 considerations
+
+JWT auth systems must handle:
+
+- **Concurrent rendering** → avoid duplicate login requests
+- **Automatic batching** → multiple state updates (login + profile fetch) are batched
+- **Suspense integration** → fetch `/me` during app initialization
+- **startTransition** → avoid blocking UI during auth hydration
+
+---
+
+# Tooling & Setup
+
+Modern stack:
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+Recommended tools:
+
+- React Router v6
+- Axios or fetch wrapper
+- TanStack Query for `/me` and token refresh flows
+- Optional: Redux Toolkit if global state is large
+
+Why Vite:
+
+- Fast ESM-based dev server
+- Minimal configuration
+- Better than CRA (deprecated)
+
+---
+
+# Performance
+
+- Cache authenticated user state (`/me`) using **TanStack Query**
+- Avoid re-parsing JWT on every render
+- Use `React.memo` for auth-dependent UI (navbar, profile menu)
+- Use lazy-loaded protected routes:
+
+```tsx
+const Dashboard = React.lazy(() => import("./Dashboard"));
+```
+
+- Prevent redundant refresh token calls (single-flight pattern)
+
+---
+
+# Testing
+
+Tools:
+
+- Vitest + React Testing Library
+- MSW (Mock Service Worker) for API mocking
+- Playwright for E2E auth flows
+
+Example:
+
+```ts id="jwt-test"
+import { render } from "@testing-library/react";
+
+test("redirects when not authenticated", () => {
+  render(<ProtectedRoute><div>Dashboard</div></ProtectedRoute>);
+});
+```
+
+E2E example:
+
+- login → store cookie/token → access protected route → logout
+
+---
+
+# Ops & Deployment
+
+- Always use **HTTPS**
+- Prefer **HttpOnly cookies** in production
+- Rotate refresh tokens (prevent replay attacks)
+- Implement rate limiting on login endpoints
+- Add centralized logging (failed login attempts, token refresh failures)
+- Use CDN for frontend, but secure API separately
+- Add CORS configuration carefully when using cookies
+
+---
+
+# Pitfalls
+
+- Storing JWT in `localStorage` → XSS risk
+- Not handling token expiration → broken UX
+- Mixing cookie + localStorage strategies inconsistently
+- Allowing multiple refresh requests → race conditions
+
 ## Question 5. How do you implement route guards in React Router?
+
+# Short answer
+
+Route guards in React Router are implemented by wrapping routes with a **protective component** (e.g., `ProtectedRoute`) that checks authentication/authorization state and either renders the requested route or redirects the user using `<Navigate />`.
+
+---
+
+# Explanation
+
+In React Router (v6+), there is no built-in “guard” feature like Angular. Instead, route protection is implemented declaratively using composition.
+
+A **route guard is just a conditional render layer around routes** based on:
+
+- Authentication state (logged in or not)
+- Authorization (roles/permissions)
+- Feature flags or app state
+
+---
+
+## Core patterns for route guarding
+
+### 1. Protected Route (authentication guard)
+
+Used for restricting access to logged-in users.
+
+```text id="guard-flow"
+User navigates route
+   ↓
+Guard checks auth state
+   ↓
+If authenticated → render page
+If not → redirect to /login
+```
+
+---
+
+### 2. Role-based Route Guard (authorization)
+
+Used for admin-only or role-specific access.
+
+Example:
+
+- `/admin` → only admins
+- `/dashboard` → authenticated users
+
+---
+
+### 3. Public-only Route
+
+Prevents logged-in users from accessing login/register pages.
+
+---
+
+# Example
+
+## 1. Setup (React Router v6 + Vite)
+
+```bash id="setup-router"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install react-router-dom
+npm run dev
+```
+
+---
+
+## 2. Auth context (simplified)
+
+```tsx id="auth-context"
+import { createContext, useContext, useState } from "react";
+
+type AuthContextType = {
+  user: { id: string; role: string } | null;
+};
+
+const AuthContext = createContext<AuthContextType>({ user: null });
+
+export const AuthProvider = ({ children }: any) => {
+  const [user] = useState<{ id: string; role: string } | null>({
+    id: "1",
+    role: "user",
+  });
+
+  return (
+    <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
+```
+
+---
+
+## 3. Protected Route (Auth Guard)
+
+```tsx id="protected-route"
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+
+export function ProtectedRoute() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}
+```
+
+### Key idea:
+
+- `Outlet` renders nested routes
+- `Navigate` performs redirect
+
+---
+
+## 4. Role-based Route Guard
+
+```tsx id="role-guard"
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+
+export function RoleRoute({ allowedRoles }: { allowedRoles: string[] }) {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  return <Outlet />;
+}
+```
+
+---
+
+## 5. Router configuration
+
+```tsx id="router-config"
+import { createBrowserRouter } from "react-router-dom";
+import { ProtectedRoute } from "./guards/ProtectedRoute";
+import { RoleRoute } from "./guards/RoleRoute";
+
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Admin from "./pages/Admin";
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Home />,
+  },
+  {
+    path: "/login",
+    element: <Login />,
+  },
+
+  // Protected routes
+  {
+    element: <ProtectedRoute />,
+    children: [
+      {
+        path: "/dashboard",
+        element: <Dashboard />,
+      },
+    ],
+  },
+
+  // Role-based routes
+  {
+    element: <RoleRoute allowedRoles={["admin"]} />,
+    children: [
+      {
+        path: "/admin",
+        element: <Admin />,
+      },
+    ],
+  },
+]);
+```
+
+---
+
+## 6. App entry
+
+```tsx id="app-entry"
+import { RouterProvider } from "react-router-dom";
+import { router } from "./router";
+import { AuthProvider } from "./auth/AuthProvider";
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  );
+}
+```
+
+---
+
+# React 18 considerations
+
+Route guards should work with:
+
+- **Concurrent rendering** → auth state might initially be unknown
+- **Suspense** → delay route rendering until auth state resolves
+- **Automatic batching** → login/logout updates propagate efficiently
+
+### Important improvement (real apps)
+
+Instead of assuming `user` synchronously, use:
+
+- `loading` state
+- `/me` API hydration
+- or TanStack Query caching
+
+---
+
+# Tooling & Setup
+
+Modern routing stack:
+
+- React Router v6.4+ (data routers)
+- Vite + TypeScript (preferred)
+- Optional: Next.js App Router for SSR-based route protection
+
+Why React Router v6:
+
+- Nested routes via `Outlet`
+- Data APIs (loaders/actions)
+- Better composition model than v5
+
+---
+
+# Performance
+
+- Lazy-load protected routes:
+
+```tsx id="lazy-route"
+const Dashboard = React.lazy(() => import("./pages/Dashboard"));
+```
+
+- Wrap route groups in guards instead of per-route checks (reduces duplication)
+- Avoid unnecessary re-renders by memoizing auth context
+- Use **TanStack Query** or similar for caching `/me` request
+- Split route bundles using dynamic imports
+
+---
+
+# Testing
+
+Tools:
+
+- Vitest + React Testing Library
+- MSW for API mocking
+- Playwright for end-to-end route validation
+
+Example:
+
+```tsx id="route-test"
+import { render } from "@testing-library/react";
+
+test("redirects unauthenticated users", () => {
+  render(<ProtectedRoute />);
+});
+```
+
+E2E test flow:
+
+- Visit protected URL
+- Assert redirect to login
+- Login
+- Assert access granted
+
+Install:
+
+```bash id="test-install"
+npm install -D vitest @testing-library/react jsdom
+```
+
+---
+
+# Ops & Deployment
+
+- Ensure auth state is resolved before rendering routes (avoid flicker)
+- Use error boundaries for route-level failures
+- Log unauthorized access attempts for security monitoring
+- Use HTTPS and secure cookies if using JWT/session-based auth
+- Handle refresh token/session renewal before route evaluation
+- In SSR frameworks (Next.js), enforce guards on server + client
+
+---
+
+# Common pitfalls and best practices
+
+- ❌ Checking auth directly inside every page instead of centralized guards
+- ❌ Not handling loading state → UI flicker or incorrect redirects
+- ❌ Mixing role logic in components instead of route-level abstraction
+
+Best practices:
+
+- Use wrapper guard routes (`Outlet` pattern)
+- Separate auth vs authorization guards
+- Centralize auth state (Context/Zustand/Redux Toolkit)
 
 ## Question 6. Explain Progressive Web App (PWA) features in React
 
