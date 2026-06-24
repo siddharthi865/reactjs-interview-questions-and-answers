@@ -739,7 +739,463 @@ it("does not re-render ProductCard when unrelated parent state changes", () => {
 
 ## Question 4. How do you implement a multi-select dropdown with checkboxes?
 
+# Short answer
+
+Implement a multi-select dropdown by maintaining an array (or `Set`) of selected values in state, rendering each option with a checkbox, and updating the selection when a checkbox is toggled. Build it as a reusable, controlled component and optimize large option lists with memoization or virtualization.
+
+---
+
+# Explanation
+
+A multi-select dropdown lets users choose multiple options without closing the dropdown after every selection.
+
+A reusable component typically consists of:
+
+```text
+MultiSelect
+├── Trigger Button
+├── Selected Values / Chips
+├── Search (optional)
+├── Dropdown Menu
+│   ├── Checkbox Item
+│   ├── Checkbox Item
+│   └── Checkbox Item
+└── Footer (Clear / Select All)
+```
+
+## State management
+
+The component usually tracks:
+
+- Whether the dropdown is open
+- Selected options
+- Optional search query
+
+```ts
+const [isOpen, setIsOpen] = useState(false);
+const [selectedIds, setSelectedIds] = useState<number[]>([]);
+```
+
+For very large datasets, using a `Set<number>` provides faster membership checks (`O(1)`), though you'll typically convert it to an array when exposing values to parent components.
+
+## Toggle selection
+
+When a checkbox is clicked:
+
+- If already selected → remove it.
+- Otherwise → add it.
+
+Use a functional state update to avoid stale state:
+
+```ts
+setSelectedIds((prev) =>
+  prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+);
+```
+
+## React 18 considerations
+
+- Automatic batching groups multiple state updates occurring in the same event.
+- Keep the component **controlled** by accepting `value` and `onChange` props when integrating into larger forms.
+- Use `startTransition` if filtering thousands of options causes noticeable UI lag.
+
+---
+
+# Example
+
+**Scaffold (Vite + React + TypeScript)**
+
+```bash
+npm create vite@latest multi-select-demo -- --template react-ts
+cd multi-select-demo
+npm install
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+type Option = {
+  id: number;
+  label: string;
+};
+
+const options: Option[] = [
+  { id: 1, label: "React" },
+  { id: 2, label: "Angular" },
+  { id: 3, label: "Vue" },
+  { id: 4, label: "Svelte" },
+];
+
+export default function MultiSelect() {
+  const [selected, setSelected] = useState<number[]>([]);
+
+  const toggleOption = (id: number) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
+
+  return (
+    <div style={{ width: 250 }}>
+      <h3>Frameworks</h3>
+
+      {options.map((option) => (
+        <label key={option.id} style={{ display: "block", marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={selected.includes(option.id)}
+            onChange={() => toggleOption(option.id)}
+          />{" "}
+          {option.label}
+        </label>
+      ))}
+
+      <p>
+        Selected:{" "}
+        {options
+          .filter((o) => selected.includes(o.id))
+          .map((o) => o.label)
+          .join(", ") || "None"}
+      </p>
+    </div>
+  );
+}
+```
+
+### Production enhancements
+
+A production-ready multi-select often adds:
+
+- Search/filter input
+- Select All / Clear All
+- Keyboard navigation (↑ ↓ Enter Esc)
+- Click outside to close
+- ARIA roles (`listbox`, `option`, `aria-selected`)
+- Selected chips/tags
+- Async option loading
+- Virtualized rendering for large lists
+
+---
+
+# Tooling & Setup
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+Recommended stacks:
+
+- **Vite** – Fast HMR, native ESM, ideal for SPAs.
+- **Next.js** – App Router with SSR, Server Components, and streaming.
+- **Remix** – Excellent nested routing and data loading.
+
+### ESM vs CommonJS
+
+Modern React applications use **ES Modules (ESM)**:
+
+```ts
+import { useState } from "react";
+```
+
+ESM enables tree shaking, faster startup, and better optimization with bundlers such as Vite.
+
+---
+
+# Performance
+
+For large option lists:
+
+- Memoize individual option rows with `React.memo`.
+- Memoize filtered results using `useMemo`.
+- Memoize event handlers with `useCallback`.
+- Use virtualization (`@tanstack/react-virtual` or `react-window`) to render only visible options.
+- Lazy-load the dropdown component with `React.lazy` if it's not immediately needed.
+- Use the React DevTools Profiler to confirm that only affected option rows re-render when selections change.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit/integration tests and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test idea:
+
+```tsx
+it("toggles a checkbox and updates the selected values", () => {
+  // Render the component, click a checkbox,
+  // and assert that the selected label is displayed.
+});
+```
+
+Also test:
+
+- Select All / Clear All
+- Keyboard navigation
+- Search filtering
+- Accessibility attributes
+- Click-outside behavior
+
+---
+
+# Ops & Deployment
+
+- Wrap async option loading in an Error Boundary if it depends on remote data.
+- Log option-loading failures with observability tools such as Sentry or OpenTelemetry.
+- If options come from an API, cache them with TanStack Query or SWR to reduce repeated requests.
+- Split large UI libraries (if used) into separate chunks to keep the initial bundle small.
+- Monitor interaction latency (e.g., INP) to ensure the dropdown remains responsive under heavy datasets.
+
+---
+
+# Pitfalls
+
+- **Using array indexes as keys:** Always use stable unique IDs to avoid incorrect checkbox state after reordering.
+- **Mutating state directly:** Always return a new array or `Set` when updating selections.
+- **Ignoring accessibility:** Support keyboard navigation, focus management, ARIA roles, and labels for an accessible experience.
+
 ## Question 5. How do you implement conditional animations in React?
+
+# Short answer
+
+Conditional animations in React are implemented by changing **state or props** and conditionally applying CSS classes, inline styles, or animation components. For simple transitions, use CSS transitions/animations. For complex enter/exit animations, layout transitions, and gesture support, use a library like **Framer Motion** (now Motion for React).
+
+---
+
+# Explanation
+
+Animations in React should be driven by **state**, not direct DOM manipulation.
+
+Typical flow:
+
+```text
+User Action
+      │
+      ▼
+State changes
+      │
+      ▼
+Conditional render / className change
+      │
+      ▼
+CSS Transition or Animation Library
+```
+
+For example:
+
+- Toggle a modal
+- Expand/collapse an accordion
+- Fade a notification
+- Slide a sidebar
+- Animate list items
+- Show/hide a loading spinner
+
+## Approaches
+
+### 1. CSS Transitions (Recommended for simple animations)
+
+Ideal for:
+
+- Fade
+- Scale
+- Slide
+- Hover effects
+- Color changes
+
+React only changes the class or style.
+
+CSS performs the animation.
+
+### 2. CSS Keyframes
+
+Useful for:
+
+- Bounce
+- Pulse
+- Rotate
+- Infinite loading animations
+
+### 3. Motion for React (Framer Motion)
+
+Best for:
+
+- Enter/exit animations
+- Shared layout transitions
+- Drag & gesture animations
+- Page transitions
+- Complex sequencing
+
+## React 18 considerations
+
+- Automatic batching reduces unnecessary renders when multiple state updates occur during animation triggers.
+- Use `startTransition` for non-urgent state updates if animations coincide with expensive rendering.
+- Avoid forcing synchronous layout reads (`getBoundingClientRect`) during every render, as they can hurt animation performance.
+
+---
+
+# Example
+
+**Scaffold (Vite + React + TypeScript)**
+
+```bash
+npm create vite@latest animation-demo -- --template react-ts
+cd animation-demo
+npm install
+npm run dev
+```
+
+### Component
+
+```tsx
+import { useState } from "react";
+import "./App.css";
+
+export default function App() {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setVisible((v) => !v)}>Toggle</button>
+
+      <div className={`box ${visible ? "show" : "hide"}`}>Hello React</div>
+    </>
+  );
+}
+```
+
+### CSS
+
+```css
+.box {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 300ms ease;
+}
+
+.box.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.box.hide {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+```
+
+When the button is clicked:
+
+- State changes.
+- `className` changes.
+- CSS animates the transition smoothly.
+
+### Motion for React example
+
+For enter/exit animations:
+
+```tsx
+import { AnimatePresence, motion } from "motion/react";
+
+<AnimatePresence>
+  {visible && (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+    >
+      Hello React
+    </motion.div>
+  )}
+</AnimatePresence>;
+```
+
+This handles mounting and unmounting animations automatically.
+
+---
+
+# Tooling & Setup
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+Recommended stacks:
+
+- **Vite** – Fast HMR, native ESM, ideal for SPAs.
+- **Next.js** – SSR, App Router, Server Components, and route transitions.
+- **Remix** – Great for nested routing and progressive enhancement.
+
+### Animation libraries
+
+- **Motion for React** (formerly Framer Motion) – Recommended for production React applications.
+- **React Transition Group** – Lightweight option for enter/exit transitions.
+- **GSAP** – Excellent for timeline-based and advanced animations.
+
+### ESM vs CommonJS
+
+Modern React applications use **ES Modules (ESM)**:
+
+```ts
+import { motion } from "motion/react";
+```
+
+ESM enables tree shaking and efficient bundling with tools like Vite.
+
+---
+
+# Performance
+
+- Prefer animating **`transform`** and **`opacity`**, as they are GPU-accelerated and avoid layout recalculations.
+- Avoid animating layout-affecting properties such as `width`, `height`, `top`, and `left` unless necessary.
+- Memoize animated child components with `React.memo` if parent re-renders are frequent.
+- Use `useMemo` and `useCallback` to stabilize expensive props passed into animated components.
+- Lazy-load large animation libraries using `React.lazy` or dynamic imports.
+- Use the React DevTools Profiler and browser Performance tools to identify dropped frames and unnecessary renders.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit/integration tests and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+it("shows the animated element after clicking the toggle button", () => {
+  // Render component
+  // Click the button
+  // Assert the element is present and has the expected class
+});
+```
+
+For E2E, use Playwright to verify visibility, transitions, and accessibility during animations.
+
+---
+
+# Ops & Deployment
+
+- Respect the user's **`prefers-reduced-motion`** setting to reduce or disable non-essential animations for accessibility.
+- Wrap animated sections with Error Boundaries if they depend on async data.
+- Keep animation libraries out of the initial bundle when possible through code splitting.
+- In SSR frameworks (e.g., Next.js), ensure initial server-rendered markup matches the first client render to avoid hydration mismatches.
+- Monitor Core Web Vitals (especially INP and CLS) to ensure animations don't negatively affect user experience.
+
+---
+
+# Pitfalls
+
+- **Animating layout properties:** Prefer `transform` and `opacity` for smoother, GPU-accelerated animations.
+- **Unmounting immediately:** If using conditional rendering, use an animation library (e.g., Motion for React or React Transition Group) to allow exit animations before removal.
+- **Ignoring accessibility:** Honor `prefers-reduced-motion` and avoid excessive or distracting animations.
 
 ## Question 6. How do you share state between deeply nested components without props drilling?
 
