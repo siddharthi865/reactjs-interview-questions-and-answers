@@ -720,7 +720,528 @@ For end-to-end testing, use **Playwright** to verify theme changes, authenticati
 
 ## Question 4. How do you implement tab navigation in React?
 
+# Short answer
+
+Tab navigation in React is implemented by maintaining an **active tab state** and conditionally rendering tab panels based on that state. For scalable apps, you structure tabs as a **controlled component**, optionally sync them with the URL (React Router), and optimize rendering by memoizing tab panels or lazy-loading them.
+
+---
+
+# Explanation
+
+At its core, tab navigation is a **state-driven UI pattern**:
+
+- A tab bar sets a `selectedTab` state.
+- Clicking a tab updates that state.
+- The UI renders only the matching panel.
+
+### Component architecture
+
+A clean tab system typically has:
+
+- `Tabs` (state container)
+- `TabList` (navigation UI)
+- `Tab` (individual trigger)
+- `TabPanels` (content area)
+- `TabPanel` (individual content section)
+
+```text id="tab-arch"
+Tabs (state: activeTab)
+│
+├── TabList
+│     ├── Tab "Profile"
+│     ├── Tab "Settings"
+│     └── Tab "Billing"
+│
+└── TabPanels
+      ├── Panel Profile
+      ├── Panel Settings
+      └── Panel Billing
+```
+
+### React 18 behavior
+
+- Tab switching triggers re-render of the Tabs component.
+- Only the active panel should be rendered or visible.
+- With concurrent rendering, React may pause/resume rendering of tab transitions, so avoid expensive computations inside render paths.
+- Automatic batching ensures multiple state updates (e.g., analytics + tab change) are grouped efficiently.
+
+### State management trade-offs
+
+- **useState (local state)** → simplest, best for isolated tabs.
+- **Context** → useful if tabs need to be shared across deeply nested components.
+- **URL state (React Router)** → best for persistence, deep linking, back/forward navigation.
+- **State machines (XState)** → best for complex multi-step/tab workflows.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create project:
+
+```bash id="vite-tab"
+npm create vite@latest react-tabs -- --template react-ts
+cd react-tabs
+npm install
+npm run dev
+```
+
+## Basic tab system (local state)
+
+```tsx id="tabs1"
+import { useState } from "react";
+
+type TabKey = "home" | "profile" | "settings";
+
+export default function Tabs() {
+  const [activeTab, setActiveTab] = useState<TabKey>("home");
+
+  return (
+    <div>
+      {/* Tab Buttons */}
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button onClick={() => setActiveTab("home")}>Home</button>
+        <button onClick={() => setActiveTab("profile")}>Profile</button>
+        <button onClick={() => setActiveTab("settings")}>Settings</button>
+      </div>
+
+      {/* Tab Panels */}
+      <div style={{ marginTop: "16px" }}>
+        {activeTab === "home" && <div>🏠 Home Content</div>}
+        {activeTab === "profile" && <div>👤 Profile Content</div>}
+        {activeTab === "settings" && <div>⚙️ Settings Content</div>}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## Scalable reusable tab component
+
+```tsx id="tabs2"
+import { ReactNode, useState } from "react";
+
+type Tab = {
+  id: string;
+  label: string;
+  content: ReactNode;
+};
+
+export function Tabs({ tabs }: { tabs: Tab[] }) {
+  const [active, setActive] = useState(tabs[0]?.id);
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "10px" }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActive(tab.id)}
+            style={{
+              fontWeight: active === tab.id ? "bold" : "normal",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ marginTop: "16px" }}>
+        {tabs.find((t) => t.id === active)?.content}
+      </div>
+    </div>
+  );
+}
+```
+
+### Usage
+
+```tsx id="tabs3"
+import { Tabs } from "./Tabs";
+
+export default function App() {
+  return (
+    <Tabs
+      tabs={[
+        { id: "home", label: "Home", content: <div>Home Page</div> },
+        { id: "profile", label: "Profile", content: <div>User Profile</div> },
+        {
+          id: "settings",
+          label: "Settings",
+          content: <div>Settings Panel</div>,
+        },
+      ]}
+    />
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** → fast HMR, simple setup, modern ESM-based bundling.
+- **Next.js App Router** → best if tabs represent routes (e.g., `/account/profile`, `/account/settings`).
+- **Remix** → good for data-driven tab routes.
+
+Avoid **Create React App (CRA)** (deprecated).
+
+### ESM vs CommonJS
+
+- Modern tab components use **ESM imports/exports**.
+- Vite supports native ESM for faster dev reloads.
+
+---
+
+# Performance
+
+Tab navigation can become expensive if all tab content mounts at once.
+
+### Optimizations
+
+- **Conditional rendering**: render only active tab.
+- **Lazy loading tabs**:
+
+  ```tsx
+  const Settings = React.lazy(() => import("./Settings"));
+  ```
+
+- Wrap tabs with **React.memo** to prevent unnecessary re-renders.
+- Use **useMemo** for tab definitions if they are static.
+- Use **useCallback** for tab click handlers in large lists.
+- Use **React Profiler** to detect unnecessary re-renders during tab switches.
+- Consider **virtualization** if tabs contain large lists.
+
+### Advanced optimization
+
+- Keep inactive tabs unmounted to avoid DOM memory usage.
+- Or keep mounted but hidden if you need state persistence.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**:
+
+```bash id="test-tabs"
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+### Example test
+
+```tsx id="test1"
+import { render, screen, fireEvent } from "@testing-library/react";
+import Tabs from "./Tabs";
+
+test("switches tabs on click", () => {
+  render(<Tabs />);
+
+  fireEvent.click(screen.getByText("Profile"));
+
+  expect(screen.getByText("👤 Profile Content")).toBeInTheDocument();
+});
+```
+
+For E2E:
+
+- Use **Playwright** to verify URL sync, keyboard navigation, and accessibility.
+
+---
+
+# Ops & Deployment
+
+- Ensure tab state resets correctly on route change (if not URL-driven).
+- If tabs are route-based, use React Router or Next.js App Router for SSR consistency.
+- Use Error Boundaries to isolate failures in tab panels.
+- Monitor performance regressions using tools like Sentry or Datadog.
+- Ensure hydration consistency if using SSR frameworks (Next.js).
+
+---
+
+# Pitfalls
+
+- ❌ Rendering all tab panels at once (bad for performance).
+- ❌ Mixing tab state with unrelated global state.
+- ❌ Not preserving state when switching tabs (if UX expects persistence).
+- ❌ Using index as key for dynamic tabs (can cause UI bugs).
+- ❌ Not handling accessibility (keyboard navigation, ARIA roles).
+
 ## Question 5. How do you implement a modal component with portals?
+
+# Short answer
+
+A modal in React is best implemented using **React Portals** to render it outside the normal DOM hierarchy (usually into `document.body`), while still maintaining React state and context. This avoids CSS issues like `overflow: hidden`, stacking context problems, and z-index conflicts.
+
+---
+
+# Explanation
+
+A modal has two key requirements:
+
+1. **UI separation from layout flow**
+   - It should visually overlay everything.
+   - It should not be constrained by parent containers.
+
+2. **Logical integration with React tree**
+   - It should still receive props, state, and context.
+   - It should respond to React lifecycle events.
+
+React Portals solve this by rendering a component into a DOM node outside the parent hierarchy:
+
+```text id="portal-arch"
+React Tree
+   │
+   ├── App
+   │     ├── Page
+   │     │     └── Button (opens modal)
+   │
+   └── Portal Root (document.body)
+         └── Modal
+```
+
+### React 18 behavior
+
+- Portals are fully compatible with concurrent rendering.
+- Modal state updates are batched automatically.
+- Event bubbling still works through React’s synthetic event system (even across portals).
+- Focus management becomes critical due to concurrent UI updates.
+
+---
+
+### Why not just CSS overlays?
+
+Without portals, modals often break due to:
+
+- `overflow: hidden` clipping
+- z-index stacking context issues
+- parent `transform` creating new stacking contexts
+- layout shifts affecting positioning
+
+Portals bypass all of that by rendering at the root level.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create project:
+
+```bash id="modal-vite"
+npm create vite@latest react-modal-portal -- --template react-ts
+cd react-modal-portal
+npm install
+npm run dev
+```
+
+---
+
+## Step 1: Add portal root
+
+In `index.html`:
+
+```html id="html-root"
+<body>
+  <div id="root"></div>
+  <div id="modal-root"></div>
+</body>
+```
+
+---
+
+## Step 2: Modal component using portal
+
+```tsx id="modal1"
+import { ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
+
+type ModalProps = {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+};
+
+export default function Modal({ open, onClose, children }: ModalProps) {
+  if (!open) return null;
+
+  const modalRoot = document.getElementById("modal-root");
+  if (!modalRoot) return null;
+
+  // Close on ESC
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "8px",
+          minWidth: "300px",
+        }}
+      >
+        {children}
+        <button onClick={onClose}>Close</button>
+      </div>
+    </div>,
+    modalRoot,
+  );
+}
+```
+
+---
+
+## Step 3: Usage
+
+```tsx id="modal2"
+import { useState } from "react";
+import Modal from "./Modal";
+
+export default function App() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <h1>Portal Modal Example</h1>
+      <button onClick={() => setOpen(true)}>Open Modal</button>
+
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <h2>Hello Modal</h2>
+        <p>This is rendered using React Portal</p>
+      </Modal>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** → fast dev server, native ESM, simple DOM control for portals.
+- **Next.js App Router** → useful if modal needs SSR-safe rendering patterns (use `use client` and dynamic imports).
+- **Remix** → route-aware modals (modals as nested routes).
+
+Avoid **Create React App (CRA)** (deprecated).
+
+### ESM vs CommonJS
+
+- Portals rely on browser DOM APIs (`document.getElementById`)
+- Modern apps use **ESM-based bundlers (Vite, Next.js, Turbopack)** for optimal tree-shaking.
+
+---
+
+# Performance
+
+Portals themselves are lightweight, but modals can become expensive due to:
+
+### Optimization strategies
+
+- **Conditional rendering**
+  - Don’t mount modal when closed (`if (!open) return null`)
+
+- **React.memo**
+  - Prevent unnecessary re-renders of modal content
+
+- **useCallback**
+  - Stabilize `onClose` handlers
+
+- **Focus management**
+  - Prevent layout thrashing on open/close
+
+- **Lazy load heavy modal content**
+
+  ```tsx
+  const SettingsModal = React.lazy(() => import("./SettingsModal"));
+  ```
+
+- Use **React Profiler** to ensure modal open/close is not triggering cascading re-renders
+- Avoid unnecessary global state updates when modal opens
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**:
+
+```bash id="modal-test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+### Example test
+
+```tsx id="modal-test-1"
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("opens and closes modal", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Open Modal"));
+  expect(screen.getByText("Hello Modal")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByText("Close"));
+  expect(screen.queryByText("Hello Modal")).not.toBeInTheDocument();
+});
+```
+
+For E2E testing:
+
+- Use **Playwright** to test:
+  - ESC key close behavior
+  - click-outside behavior
+  - focus trap behavior
+
+---
+
+# Ops & Deployment
+
+- Ensure modal root (`#modal-root`) exists in production HTML.
+- Use **Error Boundaries** to isolate modal rendering failures.
+- Log modal-related runtime errors to observability tools like Sentry or Datadog.
+- In SSR frameworks (Next.js):
+  - ensure portals only render on client
+  - avoid accessing `document` during server render
+
+- Be careful with z-index layering in design systems (modals often conflict with dropdowns, tooltips, etc.)
+
+---
+
+# Pitfalls
+
+- ❌ Forgetting to add a portal root (`#modal-root`)
+- ❌ Accessing `document` during SSR (breaks Next.js server rendering)
+- ❌ Not handling focus trapping (accessibility issue)
+- ❌ Leaving event listeners (e.g., ESC key) without cleanup
+- ❌ Allowing background scroll when modal is open (UX issue)
 
 ## Question 6. How do you handle multiple async API calls simultaneously in React?
 
