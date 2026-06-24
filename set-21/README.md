@@ -784,7 +784,593 @@ When testing custom Hooks, verify their observable behavior through components o
 
 ## Question 4. How do you handle events with parameters in functional components?
 
+# Short answer
+
+To pass parameters to an event handler in a functional component, wrap the handler in an **arrow function** (or use `Function.prototype.bind`, though it's less common today).
+
+Example:
+
+```tsx
+<button onClick={() => handleDelete(id)}>Delete</button>
+```
+
+The arrow function delays the execution until the event occurs while allowing you to pass custom parameters.
+
+---
+
+# Explanation
+
+In React, event handlers receive the event object automatically:
+
+```tsx
+<button onClick={handleClick}>Click</button>
+```
+
+```tsx
+function handleClick() {
+  console.log("Clicked");
+}
+```
+
+However, when you need to pass additional data (such as an `id`, `user`, or `index`), you cannot write:
+
+```tsx
+<button onClick={handleDelete(id)}>Delete</button>
+```
+
+This **immediately invokes** `handleDelete` during rendering instead of waiting for the click.
+
+Instead, wrap the call in an arrow function:
+
+```tsx
+<button onClick={() => handleDelete(id)}>Delete</button>
+```
+
+Now the function executes **only when the button is clicked**.
+
+---
+
+## Passing Multiple Parameters
+
+```tsx
+<button onClick={() => handleEdit(user.id, user.name)}>Edit</button>
+```
+
+```tsx
+function handleEdit(id: number, name: string) {
+  console.log(id, name);
+}
+```
+
+---
+
+## Passing the Event Object Along with Parameters
+
+If you also need the event object:
+
+```tsx
+<button onClick={(event) => handleClick(event, id)}>Click</button>
+```
+
+```tsx
+function handleClick(event: React.MouseEvent<HTMLButtonElement>, id: number) {
+  console.log(event.currentTarget);
+  console.log(id);
+}
+```
+
+---
+
+## Handling Events in a List
+
+A common pattern is rendering buttons with `map()`:
+
+```tsx
+{
+  users.map((user) => (
+    <button key={user.id} onClick={() => selectUser(user.id)}>
+      {user.name}
+    </button>
+  ));
+}
+```
+
+Each button passes its own `user.id` when clicked.
+
+---
+
+## Using `bind` (Less Common)
+
+You can also use `bind`:
+
+```tsx
+<button onClick={handleDelete.bind(null, id)}>Delete</button>
+```
+
+While valid, the arrow function syntax is generally preferred because it is more readable and aligns with modern React style.
+
+---
+
+## Rendering Behavior (React 18)
+
+In React 18:
+
+- Clicking a button triggers the event handler.
+- State updates inside the handler are **automatically batched**, reducing unnecessary re-renders.
+- React re-executes the affected component, creates a new tree of React elements, and updates only the changed DOM nodes.
+- Creating an inline arrow function is usually **not a performance problem**. Optimize only if profiling shows unnecessary re-renders in memoized child components.
+
+If a callback is passed to a memoized child (`React.memo`), consider using `useCallback` to provide a stable function reference.
+
+---
+
+# Example
+
+**Modern setup (Vite + React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`src/App.tsx`**
+
+```tsx
+import { useCallback, useState } from "react";
+
+type Product = {
+  id: number;
+  name: string;
+};
+
+const products: Product[] = [
+  { id: 1, name: "Laptop" },
+  { id: 2, name: "Phone" },
+  { id: 3, name: "Tablet" },
+];
+
+export default function App() {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const handleSelect = useCallback((id: number) => {
+    setSelectedId(id);
+  }, []);
+
+  return (
+    <main>
+      <h2>Selected: {selectedId ?? "None"}</h2>
+
+      {products.map((product) => (
+        <button key={product.id} onClick={() => handleSelect(product.id)}>
+          {product.name}
+        </button>
+      ))}
+    </main>
+  );
+}
+```
+
+This example demonstrates:
+
+- Passing parameters with an arrow function.
+- Using `useCallback` to keep the handler stable if it's passed to memoized child components.
+- Functional state updates managed by React.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA):** It is deprecated.
+- **Prefer Vite** for fast development with native ESM and Hot Module Replacement (HMR).
+- Use **Next.js** for SSR, SSG, or React Server Components.
+- Modern React projects use **ES Modules (ESM)**; CommonJS is primarily found in legacy Node.js projects.
+- Enable ESLint with the React Hooks plugin to catch common mistakes.
+
+---
+
+# Performance
+
+- Use the **React DevTools Profiler** before optimizing.
+- Use `React.memo` to avoid unnecessary child re-renders.
+- Use `useCallback` when passing callbacks to memoized components.
+- Use `useMemo` for expensive derived values.
+- Split large bundles with `React.lazy` and `Suspense`.
+- Cache server data with libraries such as TanStack Query instead of repeatedly fetching the same data.
+- Don't avoid inline arrow functions prematurely—measure first.
+
+---
+
+# Testing
+
+Use:
+
+- **Vitest** + **React Testing Library** for unit and integration testing.
+- **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+import { fireEvent, render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("selects a product on click", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Laptop"));
+
+  expect(screen.getByText("Selected: 1")).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors in component trees.
+- Add structured logging (e.g., Sentry or OpenTelemetry) for production diagnostics.
+- Choose **CSR** for interactive dashboards and **SSR/SSG** (Next.js) when SEO or faster initial page loads are important.
+- Monitor bundle size and use lazy loading for large feature modules.
+- Deploy Vite builds to a CDN, or deploy SSR applications to edge/server platforms.
+
+---
+
+# Pitfalls
+
+- **Don't call the handler directly** (`onClick={handleDelete(id)}`); wrap it in a function.
+- **Avoid creating new callback props for deeply memoized child components** unless necessary—use `useCallback` when profiling indicates it's beneficial.
+- **Prefer `event.currentTarget` over `event.target`** when working with the element that owns the event handler.
+
 ## Question 5. How do you render text, numbers, and expressions in JSX?
+
+# Short answer
+
+In JSX:
+
+- **Text (strings)** can be written directly between tags.
+- **Numbers, variables, JavaScript expressions, and function calls** are rendered using **curly braces `{}`**.
+- JSX can evaluate any valid JavaScript expression inside `{}`, but **statements** like `if`, `for`, or `switch` are not allowed directly.
+
+Examples:
+
+```tsx
+<h1>Hello React</h1>          // Text
+<p>{42}</p>                   // Number
+<p>{2 + 3}</p>                // Expression
+<p>{user.name}</p>            // Variable
+<p>{getGreeting()}</p>        // Function call
+```
+
+---
+
+# Explanation
+
+JSX is a syntax extension for JavaScript that lets you write HTML-like code inside your components.
+
+There are two ways to render content:
+
+### 1. Render Plain Text
+
+Static text is written directly.
+
+```tsx
+function App() {
+  return <h1>Welcome to React</h1>;
+}
+```
+
+Output:
+
+```text
+Welcome to React
+```
+
+---
+
+### 2. Render Numbers
+
+Numbers are JavaScript values, so they go inside curly braces.
+
+```tsx
+function App() {
+  return <h1>{100}</h1>;
+}
+```
+
+Output:
+
+```text
+100
+```
+
+---
+
+### 3. Render Variables
+
+```tsx
+function App() {
+  const name = "Alice";
+
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+Output:
+
+```text
+Hello, Alice
+```
+
+---
+
+### 4. Render Expressions
+
+Any valid JavaScript expression can be evaluated inside `{}`.
+
+```tsx
+function App() {
+  return (
+    <>
+      <p>{10 + 20}</p>
+      <p>{5 * 8}</p>
+      <p>{Math.max(5, 10)}</p>
+    </>
+  );
+}
+```
+
+Output:
+
+```text
+30
+40
+10
+```
+
+---
+
+### 5. Render Function Results
+
+```tsx
+function greet(name: string) {
+  return `Hello ${name}`;
+}
+
+function App() {
+  return <h1>{greet("John")}</h1>;
+}
+```
+
+Output:
+
+```text
+Hello John
+```
+
+---
+
+### 6. Render Boolean Expressions
+
+Booleans themselves are **not rendered**.
+
+```tsx
+<p>{true}</p>
+<p>{false}</p>
+```
+
+Nothing appears.
+
+Instead, use them for conditional rendering:
+
+```tsx
+const isLoggedIn = true;
+
+return <div>{isLoggedIn && <h2>Welcome!</h2>}</div>;
+```
+
+---
+
+### 7. Render Objects
+
+Objects cannot be rendered directly.
+
+❌ Incorrect:
+
+```tsx
+const user = {
+  name: "Alice",
+};
+
+return <p>{user}</p>;
+```
+
+This throws:
+
+```text
+Objects are not valid as a React child
+```
+
+Correct:
+
+```tsx
+return <p>{user.name}</p>;
+```
+
+---
+
+### 8. Render Arrays
+
+Arrays of renderable values are supported.
+
+```tsx
+const fruits = ["Apple", "Banana", "Orange"];
+
+return <p>{fruits}</p>;
+```
+
+Output:
+
+```text
+Apple,Banana,Orange
+```
+
+For UI lists, use `map()`:
+
+```tsx
+<ul>
+  {fruits.map((fruit) => (
+    <li key={fruit}>{fruit}</li>
+  ))}
+</ul>
+```
+
+---
+
+### What Can Be Rendered?
+
+| Value                               | Can JSX Render It? | Example            |
+| ----------------------------------- | ------------------ | ------------------ |
+| String                              | ✅ Yes             | `{"Hello"}`        |
+| Number                              | ✅ Yes             | `{42}`             |
+| Expression                          | ✅ Yes             | `{5 + 5}`          |
+| Variable                            | ✅ Yes             | `{name}`           |
+| Function result                     | ✅ Yes             | `{getTitle()}`     |
+| React element                       | ✅ Yes             | `{<Button />}`     |
+| Array of renderable values/elements | ✅ Yes             | `{items.map(...)}` |
+| Boolean                             | ⚠️ Ignored         | `{true}`           |
+| `null` / `undefined`                | ⚠️ Ignored         | `{null}`           |
+| Plain object                        | ❌ No              | `{user}`           |
+
+---
+
+## Rendering Behavior (React 18)
+
+Every time state or props change:
+
+1. React re-executes the component.
+2. JSX expressions are evaluated again.
+3. A new tree of React elements is created.
+4. React compares it with the previous tree (reconciliation).
+5. Only the necessary DOM updates are applied.
+
+React 18 also provides:
+
+- **Automatic batching** to combine multiple state updates into a single render.
+- **Concurrent rendering** to prioritize urgent UI updates while keeping the interface responsive.
+
+---
+
+# Example
+
+**Modern setup (Vite + React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`src/App.tsx`**
+
+```tsx
+function App() {
+  const name = "Alice";
+  const age = 25;
+  const score = 90;
+
+  function grade(mark: number) {
+    return mark >= 50 ? "Pass" : "Fail";
+  }
+
+  return (
+    <main>
+      <h1>Hello React</h1>
+      <p>Name: {name}</p>
+      <p>Age: {age}</p>
+      <p>Next Year: {age + 1}</p>
+      <p>Score: {score}</p>
+      <p>Status: {grade(score)}</p>
+      <p>Highest: {Math.max(90, 75, 88)}</p>
+    </main>
+  );
+}
+
+export default App;
+```
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA):** It is deprecated.
+- **Prefer Vite** for modern React development because of its fast startup, native **ESM**, and Hot Module Replacement (HMR).
+- Use **Next.js** when you need SSR, SSG, or React Server Components.
+- **Remix** is another production-ready choice for route-based data loading.
+- Modern React tooling is ESM-first; CommonJS is primarily encountered in older Node.js projects.
+
+---
+
+# Performance
+
+- Use the **React DevTools Profiler** to identify unnecessary renders.
+- Avoid expensive calculations directly in JSX; memoize them with `useMemo` if needed.
+- Use `React.memo` for components receiving stable props.
+- Use `useCallback` when passing callbacks to memoized child components.
+- Split large bundles with `React.lazy` and `Suspense`.
+- Cache server data with libraries like TanStack Query rather than recalculating or refetching unnecessarily.
+
+---
+
+# Testing
+
+Use:
+
+- **Vitest** + **React Testing Library** for unit and integration testing.
+- **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders the user's name", () => {
+  render(<App />);
+  expect(screen.getByText("Name: Alice")).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures in component trees.
+- Add production logging and monitoring (e.g., Sentry or OpenTelemetry).
+- Choose **CSR** for highly interactive apps, and **SSR/SSG** (Next.js) for SEO and faster initial page loads.
+- Monitor bundle size and use code splitting for large applications.
+- Deploy Vite builds as static assets behind a CDN, or deploy SSR apps to server/edge platforms.
+
+---
+
+# Pitfalls
+
+- **Always wrap JavaScript expressions in `{}`**; writing `name` instead of `{name}` renders the literal text `"name"`.
+- **Don't render plain objects directly**; render their properties instead.
+- **Remember that booleans, `null`, and `undefined` are ignored** by JSX, which is useful for conditional rendering but can be surprising.
 
 ## Question 6. How do you pass multiple children to a component?
 
