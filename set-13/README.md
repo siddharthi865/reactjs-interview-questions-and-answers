@@ -804,7 +804,491 @@ For end-to-end testing, use **Playwright** to verify keyboard navigation and tab
 
 ## Question 4. How do you optimize component rendering with `React.memo`?
 
+# How do you optimize component rendering with `React.memo`?
+
+## Short answer
+
+`React.memo` is a **Higher-Order Component (HOC)** that memoizes a functional component. It skips re-rendering when its **props have not changed** (using a shallow comparison by default). Use it for components that render frequently with the same props and are relatively expensive to render.
+
+> `React.memo` optimizes **re-renders**, not the initial render.
+
+---
+
+# Explanation
+
+By default, when a parent component re-renders, **all of its children also re-render**, even if their props haven't changed.
+
+Without `React.memo`:
+
+```text
+Parent (re-renders)
+├── Header
+├── Sidebar
+├── UserCard
+└── Footer
+```
+
+Every child renders again.
+
+With `React.memo`:
+
+```text
+Parent (re-renders)
+├── Header      ✓ skipped
+├── Sidebar     ✓ skipped
+├── UserCard    ✓ skipped
+└── Footer      ✓ skipped
+```
+
+React compares the previous and current props:
+
+- If props are equal (shallow comparison), React reuses the previous rendered output.
+- If any prop changes, React re-renders that component.
+
+### How `React.memo` works
+
+Internally, it performs a shallow comparison similar to:
+
+```ts
+prevProps === nextProps;
+```
+
+For primitive values (`number`, `string`, `boolean`), this works well.
+
+For reference types (`object`, `array`, `function`), a new reference causes a re-render even if the contents are identical.
+
+```tsx
+// New object every render → Child re-renders
+<Child user={{ name: "Alice" }} />
+```
+
+To benefit from `React.memo`, stabilize references using `useMemo` and `useCallback`.
+
+---
+
+## React 18 Rendering Behavior
+
+With React 18:
+
+1. Parent state changes.
+2. Automatic batching groups multiple updates occurring in the same event or async context.
+3. Parent re-renders.
+4. React compares memoized child props.
+5. Children with unchanged props are skipped.
+6. Only components with changed props are reconciled and updated.
+
+This reduces CPU work for large component trees.
+
+---
+
+## Component Architecture
+
+A common pattern:
+
+```text
+Dashboard
+├── SearchBar
+├── Filters
+├── ProductList
+│   ├── ProductCard (memo)
+│   ├── ProductCard (memo)
+│   └── ProductCard (memo)
+└── Footer
+```
+
+Only the affected `ProductCard` components re-render when their props change.
+
+Another example:
+
+```text
+App
+├── Header (memo)
+├── Sidebar (memo)
+├── Content
+└── Footer (memo)
+```
+
+If only `Content` changes, the other components can skip rendering.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+```tsx
+import { memo, useCallback, useState } from "react";
+
+type CounterProps = {
+  count: number;
+};
+
+const Counter = memo(({ count }: CounterProps) => {
+  console.log("Counter rendered");
+  return <h2>Count: {count}</h2>;
+});
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  const [theme, setTheme] = useState("light");
+
+  const increment = useCallback(() => {
+    setCount((c) => c + 1);
+  }, []);
+
+  return (
+    <>
+      <Counter count={count} />
+
+      <button onClick={increment}>Increment</button>
+
+      <button
+        onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
+      >
+        Toggle Theme ({theme})
+      </button>
+    </>
+  );
+}
+```
+
+**What happens?**
+
+- Clicking **Increment** changes `count`, so `Counter` re-renders.
+- Clicking **Toggle Theme** only changes `theme`; `Counter` receives the same `count` prop, so `React.memo` skips its re-render.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Use **Vite** for fast startup, native **ES Modules (ESM)** support, and optimized production builds.
+- Use **Next.js App Router** when SSR, streaming, or React Server Components are required. Client-side interactive components that use `React.memo` must be Client Components (`"use client"`).
+- Modern bundlers (Vite with Rollup, Next.js with Turbopack/Webpack) provide tree-shaking and efficient production builds.
+
+---
+
+# Performance
+
+Use `React.memo` only after identifying a real rendering bottleneck.
+
+Combine it with:
+
+- **`useCallback`** to stabilize function props.
+- **`useMemo`** to stabilize object or array props and cache expensive computations.
+- **`React.lazy`** and `Suspense` for code splitting.
+- Virtualization libraries (e.g., `react-window`) for long lists.
+- **React DevTools Profiler** to measure render frequency and duration before and after optimization.
+
+Example:
+
+```tsx
+const user = useMemo(() => ({ name: "Alice" }), []);
+const onSave = useCallback(() => {
+  // save logic
+}, []);
+
+<ProfileCard user={user} onSave={onSave} />;
+```
+
+Without `useMemo` and `useCallback`, `ProfileCard` would receive new object/function references on every parent render, defeating `React.memo`.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example strategy:
+
+- Render a memoized component.
+- Trigger unrelated parent state updates.
+- Verify the UI remains correct.
+- Optionally spy on render calls (e.g., `console.log` or a mock) to confirm unnecessary re-renders are skipped.
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Profile production builds instead of relying solely on development mode, where extra checks (such as Strict Mode) can make rendering behavior appear different.
+- Use **Error Boundaries** to isolate rendering failures.
+- Keep JavaScript bundles small with route-level code splitting and tree-shaking.
+- Monitor runtime performance using browser performance tools or application monitoring.
+- Balance SSR and CSR based on SEO, interactivity, and time-to-first-byte requirements.
+
+---
+
+# Pitfalls
+
+- **Using `React.memo` everywhere**, adding comparison overhead without measurable benefit.
+- **Passing new object, array, or function props** on every render, which defeats memoization unless stabilized with `useMemo` or `useCallback`.
+- **Using expensive custom comparison functions** as the second argument to `React.memo`; they can cost more than the render they avoid.
+
 ## Question 5. How do you use `useEffect` to listen to window resize events?
+
+# How do you use `useEffect` to listen to window resize events?
+
+## Short answer
+
+You use `useEffect` to **attach a `resize` event listener on `window` when the component mounts**, update state on resize, and **clean it up when the component unmounts** to avoid memory leaks.
+
+---
+
+# Explanation
+
+`useEffect` is used for side effects like:
+
+- DOM event listeners
+- subscriptions
+- timers
+- API calls
+
+For window resize handling:
+
+### Lifecycle flow
+
+```text id="xq2k8d"
+Component mounts
+   ↓
+useEffect runs
+   ↓
+window.addEventListener("resize", handler)
+   ↓
+User resizes window → handler runs → state updates
+   ↓
+Component unmounts
+   ↓
+cleanup runs → removeEventListener
+```
+
+---
+
+## React 18 behavior
+
+In React 18:
+
+- Effects run after render (commit phase)
+- State updates from resize events trigger re-renders
+- React automatically batches state updates (even in async event handlers in some cases)
+- Cleanup runs before re-running effect or unmounting
+
+Key implication:
+👉 Frequent resize events can cause performance issues if not throttled/debounced.
+
+---
+
+## Component architecture
+
+A clean pattern separates concerns:
+
+```text id="c1n9kp"
+Component
+ ├── state (width, height)
+ ├── effect (resize listener)
+ └── UI (uses dimensions)
+```
+
+For large apps:
+
+- Extract logic into a **custom hook**: `useWindowSize()`
+- Keep UI components pure and reusable
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash id="v9x2ld"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+## Basic implementation
+
+```tsx id="r8k3jd"
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [size, setSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    // cleanup
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return (
+    <div>
+      <h2>Window Size</h2>
+      <p>Width: {size.width}</p>
+      <p>Height: {size.height}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## Production-grade improvement (with custom hook)
+
+```tsx id="m4q9tp"
+import { useEffect, useState } from "react";
+
+function useWindowSize() {
+  const [size, setSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return size;
+}
+
+export default function App() {
+  const { width, height } = useWindowSize();
+
+  return (
+    <div>
+      <h2>Responsive Hook</h2>
+      <p>
+        {width} × {height}
+      </p>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** (deprecated).
+- Use **Vite** for fast HMR and ESM-native development.
+- For SSR apps, use **Next.js App Router** where window access must be guarded (since `window` is undefined on server).
+- In Next.js, wrap access in `useEffect` or check `typeof window !== "undefined"`.
+
+---
+
+# Performance
+
+Resize events can fire **dozens of times per second**, so optimization matters:
+
+### 1. Debounce or throttle
+
+```tsx id="t3k8sd"
+const handleResize = () => {
+  // update state
+};
+```
+
+Better:
+
+- Use `requestAnimationFrame`
+- Or lodash `throttle`
+
+### 2. Avoid unnecessary re-renders
+
+- Only store needed values (e.g., width only if height unused)
+- Split components so only dependent UI re-renders
+
+### 3. Memoize heavy UI
+
+```tsx id="p1k2sd"
+const Chart = React.memo(({ width }: { width: number }) => {
+  return <div>Chart width: {width}</div>;
+});
+```
+
+### 4. Avoid inline state objects if possible
+
+Frequent object creation can cause extra reconciliation work.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**
+
+```bash id="v2m8sd"
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+### Test strategy:
+
+- Mock `window.innerWidth`
+- Dispatch resize event
+- Assert UI updates
+
+Example:
+
+```tsx id="k8x3sd"
+window.innerWidth = 500;
+window.dispatchEvent(new Event("resize"));
+```
+
+For E2E:
+
+- Use **Playwright** to test responsive layouts at different viewport sizes.
+
+---
+
+# Ops & Deployment
+
+- Ensure SSR safety: avoid direct `window` access outside `useEffect`
+- Use Error Boundaries for UI safety
+- Monitor performance with browser dev tools (Performance tab)
+- Prefer CSS media queries when possible (better than JS resize listeners for layout changes)
+- For large apps, consider a centralized responsive state (context or Zustand) if multiple components depend on window size
+
+---
+
+# Pitfalls
+
+- ❌ Forgetting cleanup → memory leaks and duplicate listeners
+- ❌ Directly using `window` in SSR (Next.js crash)
+- ❌ Updating state too frequently without throttling → performance degradation
 
 ## Question 6. How do you implement theme switching using context and hooks?
 
