@@ -687,7 +687,577 @@ For integration tests, simulate mouse movement with `fireEvent.mouseMove`. For e
 
 ## Question 4. Difference between render props and higher-order components
 
+## Short answer
+
+**Render Props** pass logic via a function prop to control rendering, while **Higher-Order Components (HOCs)** wrap a component and inject props into it. Render Props give UI control to the consumer; HOCs return a new enhanced component.
+
+---
+
+# Explanation
+
+Both patterns solve the same problem: **reusing stateful logic across components before Hooks existed**.
+
+## 1. Render Props
+
+A component exposes state/logic by accepting a function that returns UI.
+
+```tsx id="rp1"
+<DataProvider>{(data) => <Child data={data} />}</DataProvider>
+```
+
+### Key idea:
+
+- “I will give you data, you decide how to render it.”
+
+### Flow:
+
+```
+DataProvider (logic owner)
+   ↓
+calls function prop
+   ↓
+Parent defines UI
+```
+
+---
+
+## 2. Higher-Order Components (HOC)
+
+A function takes a component and returns a new component with extra props.
+
+```tsx id="hoc1"
+const withData = (Component) => {
+  return function EnhancedComponent(props) {
+    return <Component {...props} data="hello" />;
+  };
+};
+```
+
+Usage:
+
+```tsx id="hoc2"
+const Enhanced = withData(MyComponent);
+```
+
+### Key idea:
+
+- “I will wrap your component and inject logic into it.”
+
+### Flow:
+
+```
+MyComponent
+   ↓
+wrapped by HOC
+   ↓
+EnhancedComponent (with injected props)
+```
+
+---
+
+# Key Differences (Interview Core)
+
+| Feature           | Render Props                            | HOC                               |
+| ----------------- | --------------------------------------- | --------------------------------- |
+| Pattern type      | Component composition via function prop | Function returning component      |
+| Control of UI     | Consumer controls rendering             | HOC controls structure            |
+| Prop injection    | Via function arguments                  | Via props injection               |
+| Readability       | More explicit but can be verbose        | Cleaner JSX but abstract wrapping |
+| Nesting issue     | Less wrapper nesting                    | Can cause “wrapper hell”          |
+| Debugging         | Easier to trace                         | Harder due to multiple wrappers   |
+| Naming collisions | Rare                                    | Possible (prop conflicts)         |
+| Hooks replacement | Largely replaced                        | Largely replaced                  |
+
+---
+
+# React 18 behavior considerations
+
+Both patterns:
+
+- Re-render when parent re-renders unless memoized
+- Are fully compatible with concurrent rendering
+- Benefit from:
+  - `React.memo` (HOCs especially)
+  - `useCallback` (Render Props to stabilize function identity)
+
+- Can cause unnecessary renders if not optimized:
+  - HOC recreates wrapper component
+  - Render Props create new function each render
+
+---
+
+# Example (React + TypeScript)
+
+## 1. Render Props example
+
+```tsx id="rp3"
+import { useState } from "react";
+
+type Props = {
+  children: (count: number, inc: () => void) => React.ReactNode;
+};
+
+export function CounterRenderProps({ children }: Props) {
+  const [count, setCount] = useState(0);
+
+  return children(count, () => setCount((c) => c + 1));
+}
+
+// usage
+export default function App() {
+  return (
+    <CounterRenderProps>
+      {(count, inc) => (
+        <div>
+          <p>{count}</p>
+          <button onClick={inc}>Increment</button>
+        </div>
+      )}
+    </CounterRenderProps>
+  );
+}
+```
+
+---
+
+## 2. HOC example
+
+```tsx id="hoc3"
+import React, { useState } from "react";
+
+type InjectedProps = {
+  count: number;
+  increment: () => void;
+};
+
+function withCounter<P extends object>(
+  Component: React.ComponentType<P & InjectedProps>,
+) {
+  return function WrappedComponent(props: P) {
+    const [count, setCount] = useState(0);
+
+    const increment = () => setCount((c) => c + 1);
+
+    return <Component {...props} count={count} increment={increment} />;
+  };
+}
+
+// base component
+type Props = {
+  title: string;
+} & InjectedProps;
+
+function Counter({ title, count, increment }: Props) {
+  return (
+    <div>
+      <h3>{title}</h3>
+      <p>{count}</p>
+      <button onClick={increment}>Increment</button>
+    </div>
+  );
+}
+
+export default withCounter(Counter);
+```
+
+---
+
+# Tooling & Setup
+
+Use modern tooling:
+
+```bash id="setup1"
+npm create vite@latest react-patterns -- --template react-ts
+cd react-patterns
+npm install
+npm run dev
+```
+
+### Why Vite over CRA
+
+- Faster dev server (native ESM)
+- Better HMR performance
+- Modern build pipeline (Rollup-based)
+- CRA is deprecated
+
+### When to choose frameworks:
+
+- **Next.js**: Prefer Hooks; HOCs used in legacy auth wrappers
+- **Remix**: Prefer loaders/actions instead of both patterns
+
+---
+
+# Performance
+
+## Render Props issues
+
+- Function recreation causes child re-renders
+- Inline functions break memoization
+
+### Fix:
+
+```tsx
+const render = useCallback((count) => <div>{count}</div>, []);
+```
+
+## HOC issues
+
+- Wrapper components add React tree depth
+- Can break `displayName` debugging if not set
+
+### Optimization strategies
+
+- `React.memo` for wrapped components
+- Stable prop injection
+- Avoid unnecessary re-wrapping inside render
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react jsdom
+```
+
+### Render Props test
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders counter UI", () => {
+  render(<App />);
+  expect(screen.getByText(/Increment/i)).toBeInTheDocument();
+});
+```
+
+### HOC test
+
+- Test both:
+  - Base component separately
+  - Wrapped component behavior
+
+---
+
+# Ops & Deployment
+
+- Both patterns are **client-side abstractions only**
+- No special deployment concerns
+- Prefer Hooks in new systems for:
+  - Better tree-shaking
+  - Less wrapper overhead
+
+- Avoid deep HOC chains (debugging complexity)
+- Ensure error boundaries wrap enhanced components
+
+---
+
+# Pitfalls
+
+- ❌ HOC nesting (“wrapper hell”)
+- ❌ Render Props inline functions causing re-renders
+- ❌ Forgetting to forward refs in HOCs (`forwardRef`)
+- ❌ Losing component display name in HOCs (bad debugging)
+
 ## Question 5. How do you implement infinite scroll using IntersectionObserver in React?
+
+## Short answer
+
+Infinite scroll with `IntersectionObserver` in React is implemented by placing a **sentinel (trigger) element at the bottom of a list** and observing it. When it becomes visible in the viewport, you fetch the next page of data and append it to the list.
+
+---
+
+# Explanation
+
+## Core idea
+
+Instead of listening to scroll events (which is expensive and prone to performance issues), you use the browser’s **IntersectionObserver API** to efficiently detect when the user reaches the bottom of a list.
+
+### Why IntersectionObserver?
+
+- Runs off the main scroll event loop (more performant)
+- Batch-friendly with React 18 automatic batching
+- Avoids manual throttling/debouncing
+- Works well with virtualization and pagination
+
+---
+
+## Architecture
+
+```text
+List items
+   ↓
+Rendered UI
+   ↓
+Sentinel div (bottom trigger)
+   ↓
+IntersectionObserver watches sentinel
+   ↓
+When visible → fetch next page → append data
+```
+
+---
+
+## React 18 behavior notes
+
+- State updates triggered by observer callbacks are **batched automatically**
+- Multiple triggers may occur in concurrent rendering → must guard against duplicate fetches
+- Strict Mode in dev may run effects twice → requires cleanup logic
+
+---
+
+# Example (React + TypeScript)
+
+## Setup
+
+```bash
+npm create vite@latest infinite-scroll -- --template react-ts
+cd infinite-scroll
+npm install
+npm run dev
+```
+
+---
+
+## Infinite Scroll Component
+
+```tsx
+import { useEffect, useRef, useState, useCallback } from "react";
+
+type Item = {
+  id: number;
+  title: string;
+};
+
+const fetchItems = async (page: number): Promise<Item[]> => {
+  // Simulated API
+  await new Promise((res) => setTimeout(res, 800));
+
+  return Array.from({ length: 10 }, (_, i) => ({
+    id: page * 10 + i,
+    title: `Item ${page * 10 + i}`,
+  }));
+};
+
+export default function InfiniteScroll() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return;
+
+    setLoading(true);
+
+    const newItems = await fetchItems(page);
+
+    setItems((prev) => [...prev, ...newItems]);
+    setPage((prev) => prev + 1);
+
+    if (newItems.length === 0) {
+      setHasMore(false);
+    }
+
+    setLoading(false);
+  }, [page, loading, hasMore]);
+
+  useEffect(() => {
+    loadMore(); // initial load
+  }, []);
+
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const target = entries[0];
+
+        if (target.isIntersecting) {
+          loadMore();
+        }
+      },
+      {
+        root: null, // viewport
+        rootMargin: "200px", // prefetch before reaching bottom
+        threshold: 0,
+      },
+    );
+
+    observerRef.current.observe(sentinelRef.current);
+
+    return () => {
+      observerRef.current?.disconnect();
+    };
+  }, [loadMore]);
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Infinite Scroll</h2>
+
+      {items.map((item) => (
+        <div
+          key={item.id}
+          style={{ padding: 10, borderBottom: "1px solid #ddd" }}
+        >
+          {item.title}
+        </div>
+      ))}
+
+      {loading && <p>Loading...</p>}
+      {!hasMore && <p>No more items</p>}
+
+      {/* Sentinel element */}
+      <div ref={sentinelRef} style={{ height: 20 }} />
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+### Recommended stack
+
+- **Vite + React + TypeScript**
+- Optional:
+  - React Query (TanStack Query) for pagination caching
+  - Axios or fetch wrapper for API layer
+
+### Why not CRA?
+
+- Slower dev server
+- Deprecated ecosystem
+- Poor ESM optimization
+
+---
+
+# Performance
+
+## Key optimizations
+
+### 1. Use `rootMargin` prefetching
+
+```js
+rootMargin: "200px";
+```
+
+Fetches data before user hits bottom → smoother UX
+
+---
+
+### 2. Prevent duplicate calls
+
+Guard against concurrent triggers:
+
+```tsx
+if (loading || !hasMore) return;
+```
+
+---
+
+### 3. Memoize callback
+
+```tsx
+const loadMore = useCallback(...)
+```
+
+Prevents observer recreation on every render.
+
+---
+
+### 4. Disconnect observer properly
+
+Avoid memory leaks:
+
+```tsx
+return () => observer.disconnect();
+```
+
+---
+
+### 5. Consider virtualization for large lists
+
+Use:
+
+- `react-window`
+- `react-virtualized`
+
+---
+
+### 6. React Profiler usage
+
+Track:
+
+- Re-renders on scroll
+- Expensive DOM updates
+- Network-trigger frequency
+
+---
+
+# Testing
+
+## Vitest + React Testing Library
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+### Example test
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import InfiniteScroll from "./InfiniteScroll";
+
+test("renders initial items", () => {
+  render(<InfiniteScroll />);
+  expect(screen.getByText(/Infinite Scroll/i)).toBeInTheDocument();
+});
+```
+
+### Advanced testing
+
+Mock IntersectionObserver:
+
+```tsx
+class MockObserver {
+  observe = vi.fn();
+  disconnect = vi.fn();
+  unobserve = vi.fn();
+}
+```
+
+---
+
+# Ops & Deployment
+
+- Use CDN-backed APIs for fast pagination
+- Combine with caching layer (React Query recommended)
+- Handle API rate limits (debounce or throttle fallback)
+- Add error boundaries for failed fetches
+- SSR considerations:
+  - Infinite scroll is client-only (disable on server render)
+
+- Use logging for:
+  - page index
+  - fetch failures
+  - observer triggers
+
+---
+
+# Pitfalls
+
+- ❌ Not disconnecting IntersectionObserver → memory leaks
+- ❌ Missing dependency array in `useEffect` → duplicate observers
+- ❌ Triggering multiple fetches due to rapid intersection events
+- ❌ Not handling “no more data” state
+- ❌ Using scroll events instead of IntersectionObserver (less performant)
 
 ## Question 6. How do you handle memoization of components with dynamic props?
 
