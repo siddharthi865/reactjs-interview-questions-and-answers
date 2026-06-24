@@ -949,7 +949,646 @@ For integration tests, verify selection state updates correctly. Use **Playwrigh
 
 ## Question 4. How do you implement a sortable table with dynamic columns?
 
+# How do you implement a sortable table with dynamic columns?
+
+## Short answer
+
+A **sortable table with dynamic columns** is implemented by:
+
+- Defining columns through a configuration object.
+- Rendering headers and cells dynamically using `map()`.
+- Tracking the active sort column and direction in state.
+- Sorting data with `useMemo()` to avoid unnecessary computations.
+- Keeping the table as a reusable, controlled component that accepts `columns`, `data`, and optional sorting callbacks.
+
+---
+
+# Explanation
+
+Instead of hardcoding table columns:
+
+```tsx
+<th>Name</th>
+<th>Age</th>
+<th>Department</th>
+```
+
+define them using configuration.
+
+```tsx
+const columns = [
+  { key: "name", title: "Name", sortable: true },
+  { key: "age", title: "Age", sortable: true },
+  { key: "department", title: "Department", sortable: false },
+];
+```
+
+This allows:
+
+- ✅ Dynamic column rendering
+- ✅ Reusable table component
+- ✅ Easily adding/removing columns
+- ✅ Server-side or client-side sorting
+- ✅ Custom cell renderers
+- ✅ Better maintainability
+
+### Architecture
+
+```text
+                Parent Component
+                      │
+      ┌───────────────┴───────────────┐
+      ▼                               ▼
+ Columns Config                   Data Array
+      │                               │
+      └───────────────┬───────────────┘
+                      ▼
+               SortableTable
+                      │
+      ┌───────────────┴───────────────┐
+      ▼                               ▼
+ Dynamic Headers               Dynamic Rows
+      │
+Click Header
+      │
+      ▼
+Update Sort State
+      │
+      ▼
+useMemo() Sorted Data
+      │
+      ▼
+Re-render Table
+```
+
+### React 18 Considerations
+
+- **Automatic batching** reduces unnecessary renders when multiple state updates occur together.
+- **`useMemo`** prevents sorting on every render.
+- **`useCallback`** helps stabilize header click handlers if passed to memoized children.
+- For extremely large datasets, pair sorting with **virtualization** (`react-window` or `@tanstack/react-virtual`).
+
+---
+
+# Example (React + TypeScript + Vite)
+
+### Create project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `SortableTable.tsx`
+
+```tsx
+import { useMemo, useState } from "react";
+
+type Column<T> = {
+  key: keyof T;
+  title: string;
+  sortable?: boolean;
+};
+
+type Props<T> = {
+  columns: Column<T>[];
+  data: T[];
+};
+
+export default function SortableTable<T extends Record<string, unknown>>({
+  columns,
+  data,
+}: Props<T>) {
+  const [sortKey, setSortKey] = useState<keyof T | null>(null);
+  const [ascending, setAscending] = useState(true);
+
+  const sortedData = useMemo(() => {
+    if (!sortKey) return data;
+
+    return [...data].sort((a, b) => {
+      const first = a[sortKey];
+      const second = b[sortKey];
+
+      if (first === second) return 0;
+
+      if (ascending) {
+        return first > second ? 1 : -1;
+      }
+
+      return first < second ? 1 : -1;
+    });
+  }, [data, sortKey, ascending]);
+
+  const handleSort = (key: keyof T) => {
+    if (sortKey === key) {
+      setAscending((prev) => !prev);
+    } else {
+      setSortKey(key);
+      setAscending(true);
+    }
+  };
+
+  return (
+    <table border={1} cellPadding={8}>
+      <thead>
+        <tr>
+          {columns.map((column) => (
+            <th
+              key={String(column.key)}
+              onClick={() => column.sortable && handleSort(column.key)}
+              style={{
+                cursor: column.sortable ? "pointer" : "default",
+              }}
+            >
+              {column.title}
+              {sortKey === column.key && (ascending ? " ▲" : " ▼")}
+            </th>
+          ))}
+        </tr>
+      </thead>
+
+      <tbody>
+        {sortedData.map((row, index) => (
+          <tr key={index}>
+            {columns.map((column) => (
+              <td key={String(column.key)}>{String(row[column.key])}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+```
+
+### `App.tsx`
+
+```tsx
+import SortableTable from "./SortableTable";
+
+const employees = [
+  { id: 1, name: "Alice", age: 28, department: "HR" },
+  { id: 2, name: "Bob", age: 35, department: "Engineering" },
+  { id: 3, name: "Charlie", age: 24, department: "Finance" },
+];
+
+export default function App() {
+  return (
+    <SortableTable
+      columns={[
+        { key: "name", title: "Name", sortable: true },
+        { key: "age", title: "Age", sortable: true },
+        { key: "department", title: "Department" },
+      ]}
+      data={employees}
+    />
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+**Recommended stack**
+
+- **Vite + React + TypeScript** for fast development, native ESM, and excellent TypeScript support.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Use **Next.js** for SSR, SEO, or Server Components.
+- Use **Remix** for nested routing and server-driven data loading.
+
+**ESM vs CommonJS**
+
+- Vite uses **ES Modules (ESM)** for fast startup and on-demand loading.
+- CommonJS is mainly used in legacy Node.js projects; modern React applications should prefer ESM.
+
+---
+
+# Performance
+
+### 1. Memoize sorting
+
+```tsx
+const sortedData = useMemo(() => {
+  // sort logic
+}, [data, sortKey, ascending]);
+```
+
+Avoids sorting on every render.
+
+### 2. Memoize handlers
+
+```tsx
+const handleSort = useCallback(
+  (key: keyof T) => {
+    // update sort state
+  },
+  [sortKey],
+);
+```
+
+Useful when passing callbacks to memoized header components.
+
+### 3. Memoize rows
+
+```tsx
+const TableRow = React.memo(Row);
+```
+
+Reduces re-renders when only sort state changes.
+
+### 4. Virtualize large datasets
+
+For thousands of rows, use:
+
+- `react-window`
+- `@tanstack/react-virtual`
+
+This renders only the visible rows, significantly improving performance.
+
+### 5. Server-side sorting
+
+For very large datasets, send the sort field and direction to the backend instead of sorting on the client:
+
+```text
+GET /employees?sort=name&order=asc
+```
+
+This avoids transferring and processing unnecessary data in the browser.
+
+### 6. React Profiler
+
+Use the React DevTools Profiler to ensure that sorting only re-renders the necessary table components.
+
+### 7. Code splitting
+
+Lazy-load advanced table features (e.g., column resizing, export functionality) with `React.lazy` if they are not needed initially.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { fireEvent, render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("sorts by age", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Age"));
+
+  expect(screen.getAllByRole("row")[1]).toHaveTextContent("Charlie");
+});
+```
+
+For integration tests, verify sorting across multiple columns and directions. Use **Playwright** for end-to-end testing of user interactions, keyboard navigation, and responsive layouts.
+
+---
+
+# Ops & Deployment
+
+- **Logging:** Record unexpected client-side errors using services such as Sentry or Datadog.
+- **Error Boundaries:** Wrap table views in an Error Boundary to isolate rendering failures (event handler errors still require `try/catch`).
+- **SSR/CSR:** For Next.js, consider server-side sorting when working with paginated datasets or SEO-sensitive pages.
+- **Bundle size:** Avoid importing large table libraries if a simple custom table is sufficient. Use tree-shaking and lazy loading where possible.
+- **Accessibility:** Use semantic `<table>` elements, `scope="col"` on headers, and `aria-sort` on sortable columns to improve screen reader support.
+- **Caching:** Cache server responses using tools like TanStack Query or HTTP cache headers for frequently accessed datasets.
+
+---
+
+# Pitfalls
+
+- **Sorting the original array directly**, which mutates props. Always sort a copied array (`[...data]`).
+- **Using array indexes as row keys**, which can lead to incorrect UI updates after sorting. Prefer stable unique IDs (e.g., `row.id`).
+- **Recomputing sorting on every render**, causing unnecessary work. Memoize the sorted result with `useMemo`.
+
 ## Question 5. How do you implement infinite scrolling with API pagination?
+
+# How do you implement infinite scrolling with API pagination?
+
+## Short answer
+
+Infinite scrolling with API pagination is typically implemented by:
+
+- Fetching data in **pages** from the backend.
+- Using the **Intersection Observer API** to detect when the user reaches the bottom.
+- Maintaining state for the current page, accumulated items, loading status, and whether more data exists.
+- Appending new items instead of replacing existing ones.
+- Preventing duplicate requests and cancelling stale requests when necessary.
+
+---
+
+# Explanation
+
+Infinite scrolling loads additional data automatically as the user approaches the end of the current list.
+
+A production-ready implementation should handle:
+
+- ✅ API pagination
+- ✅ Loading indicators
+- ✅ Duplicate request prevention
+- ✅ End-of-list detection
+- ✅ Request cancellation
+- ✅ Error handling
+- ✅ Scroll position preservation
+- ✅ Virtualization for large datasets
+
+### Architecture
+
+```text
+                User Scrolls
+                      │
+                      ▼
+            Intersection Observer
+                      │
+         Sentinel enters viewport?
+              │               │
+             No              Yes
+              │               ▼
+              │        Fetch Next Page
+              │               │
+              │               ▼
+              │        API Response
+              │               │
+              │               ▼
+              │      Append New Items
+              │               │
+              └───────────────┘
+                      │
+              More pages available?
+              │               │
+             Yes             No
+              │               ▼
+              └───────── Stop Observing
+```
+
+### Typical API Response
+
+```json
+{
+  "data": [{ "id": 1, "name": "Alice" }],
+  "page": 2,
+  "pageSize": 20,
+  "hasMore": true
+}
+```
+
+Instead of replacing data:
+
+```ts
+setUsers(response.data);
+```
+
+append it:
+
+```ts
+setUsers((prev) => [...prev, ...response.data]);
+```
+
+### React 18 Considerations
+
+- **Automatic batching** reduces re-renders when updating multiple state variables.
+- Use **functional state updates** when appending paginated data.
+- Cancel stale requests with **AbortController**.
+- Use **Suspense** or **TanStack Query** for more advanced data fetching patterns when appropriate.
+
+---
+
+# Example (React + TypeScript + Vite)
+
+### Create project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `InfiniteList.tsx`
+
+```tsx
+import { useCallback, useEffect, useRef, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function InfiniteList() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    if (loading || !hasMore) return;
+
+    setLoading(true);
+
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(
+        `https://example.com/api/users?page=${page}`,
+        { signal: controller.signal },
+      );
+
+      const result = await response.json();
+
+      setUsers((prev) => [...prev, ...result.data]);
+      setHasMore(result.hasMore);
+    } finally {
+      setLoading(false);
+    }
+
+    return () => controller.abort();
+  }, [page, loading, hasMore]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const lastItemRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (loading || !hasMore) return;
+
+      observer.current?.disconnect();
+
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          setPage((prev) => prev + 1);
+        }
+      });
+
+      if (node) observer.current.observe(node);
+    },
+    [loading, hasMore],
+  );
+
+  return (
+    <>
+      {users.map((user, index) => {
+        if (index === users.length - 1) {
+          return (
+            <div ref={lastItemRef} key={user.id}>
+              {user.name}
+            </div>
+          );
+        }
+
+        return <div key={user.id}>{user.name}</div>;
+      })}
+
+      {loading && <p>Loading...</p>}
+      {!hasMore && <p>No more users.</p>}
+    </>
+  );
+}
+```
+
+> **Note:** In a production application, create the `AbortController` inside a `useEffect` (or use a data-fetching library) so cleanup runs correctly. Returning a cleanup function from an async callback does **not** register it as a React effect cleanup.
+
+---
+
+# Tooling & Setup
+
+**Recommended stack**
+
+- **Vite + React + TypeScript** for fast HMR, native ESM support, and strong type safety.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- **Next.js App Router** is recommended when SSR, SEO, or React Server Components are required.
+- **Remix** is another excellent option for nested routing and server-driven data loading.
+
+**ESM vs CommonJS**
+
+- Vite uses **ES Modules (ESM)** in development for faster startup and efficient module loading.
+- CommonJS is primarily used in legacy Node.js environments; prefer ESM for modern React projects.
+
+---
+
+# Performance
+
+### 1. Use Intersection Observer
+
+Avoid listening to every scroll event:
+
+```tsx
+new IntersectionObserver(callback);
+```
+
+This is more efficient than repeatedly checking `scrollY`.
+
+### 2. Memoize callbacks
+
+```tsx
+const fetchUsers = useCallback(async () => {
+  // fetch logic
+}, [page]);
+```
+
+### 3. Functional state updates
+
+```tsx
+setUsers((prev) => [...prev, ...newUsers]);
+```
+
+Prevents stale state bugs when multiple updates occur.
+
+### 4. Prevent duplicate requests
+
+Use a loading flag or request ID:
+
+```tsx
+if (loading) return;
+```
+
+### 5. Virtualize long lists
+
+When rendering thousands of items, use:
+
+- `react-window`
+- `@tanstack/react-virtual`
+
+Virtualization minimizes DOM nodes and improves rendering performance.
+
+### 6. React Profiler
+
+Use the React DevTools Profiler to ensure only newly appended rows render and to identify unnecessary re-renders.
+
+### 7. Code splitting
+
+Lazy-load heavy list item components if they contain charts, images, or rich content.
+
+### 8. Caching
+
+Libraries like **TanStack Query** (`useInfiniteQuery`) provide:
+
+- Page caching
+- Automatic retries
+- Background refetching
+- Request deduplication
+- Cursor-based pagination support
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import InfiniteList from "./InfiniteList";
+
+test("renders loading state", () => {
+  render(<InfiniteList />);
+
+  expect(screen.getByText(/Loading/i)).toBeInTheDocument();
+});
+```
+
+For integration tests, mock paginated API responses with **MSW (Mock Service Worker)**. Use **Playwright** for end-to-end testing to verify scrolling, loading additional pages, and end-of-list behavior.
+
+---
+
+# Ops & Deployment
+
+- **Logging:** Capture API failures and client-side exceptions with services like Sentry or Datadog.
+- **Error Boundaries:** Wrap list views in an Error Boundary for rendering failures. Handle network errors separately with `try/catch`.
+- **SSR/CSR:** Infinite scrolling is generally a client-side interaction. In Next.js, consider server-rendering the first page for SEO and loading subsequent pages on the client.
+- **Bundle size:** Lazy-load complex item components and avoid unnecessary dependencies.
+- **Network optimization:** Compress API responses, paginate efficiently, and use cursor-based pagination for frequently changing datasets.
+- **CDN & Caching:** Cache static assets on a CDN and leverage HTTP caching or TanStack Query's cache for repeated API requests.
+
+---
+
+# Pitfalls
+
+- **Using scroll events instead of Intersection Observer**, resulting in more frequent work and reduced performance.
+- **Not cancelling or ignoring stale requests**, which can cause race conditions and duplicate data.
+- **Rendering thousands of DOM nodes without virtualization**, leading to slow scrolling and high memory usage.
 
 ## Question 6. How do you implement sticky footers in React layouts?
 
