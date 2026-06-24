@@ -1183,7 +1183,869 @@ Typical async tests verify:
 
 ## Question 4. How do you integrate React with GraphQL?
 
+# How do you integrate React with GraphQL?
+
+## Short answer
+
+React integrates with GraphQL primarily using a client like **Apollo Client**, **Relay**, or **urql**. The most common approach is **Apollo Client + React hooks (`useQuery`, `useMutation`)**, which manages caching, networking, and state synchronization between the GraphQL server and React UI.
+
+---
+
+# Explanation
+
+GraphQL integration in React replaces traditional REST calls with **declarative data fetching**:
+
+```text id="gql_flow_1"
+React Component
+      ↓
+GraphQL Query (useQuery)
+      ↓
+GraphQL Client (Apollo / Relay / urql)
+      ↓
+GraphQL Server
+      ↓
+Normalized Cache
+      ↓
+React re-renders automatically
+```
+
+Unlike REST:
+
+- You fetch **exact data you need**
+- You avoid over-fetching/under-fetching
+- You rely heavily on **client caching**
+- UI is tightly coupled with data requirements
+
+---
+
+## Core Concepts in React + GraphQL
+
+### 1. Query (Read data)
+
+```graphql id="gql_q1"
+query GetUsers {
+  users {
+    id
+    name
+  }
+}
+```
+
+### 2. Mutation (Write data)
+
+```graphql id="gql_m1"
+mutation AddUser {
+  addUser(name: "John") {
+    id
+    name
+  }
+}
+```
+
+### 3. Subscription (Real-time updates)
+
+```graphql id="gql_s1"
+subscription OnUserAdded {
+  userAdded {
+    id
+    name
+  }
+}
+```
+
+---
+
+## Apollo Client Architecture (Most common)
+
+```text id="apollo_arch"
+React UI
+   ↓
+Apollo Hooks
+   ↓
+Apollo Client
+   ↓
+GraphQL Server
+   ↓
+Normalized Cache (InMemoryCache)
+   ↓
+UI updates automatically
+```
+
+Key features:
+
+- Intelligent caching (normalized)
+- Automatic request deduplication
+- Pagination support
+- SSR support (Next.js)
+- DevTools integration
+
+---
+
+# React 18 Behavior with GraphQL
+
+With React 18:
+
+- Concurrent rendering improves perceived loading UX
+- Suspense can delay rendering until GraphQL data is ready
+- Automatic batching reduces re-renders from multiple cache updates
+
+Apollo + React can integrate with:
+
+- **Suspense mode (experimental/modern setups)**
+- Streaming SSR in frameworks like Next.js
+
+---
+
+# Example (Apollo Client + React + TypeScript)
+
+## Create project (Vite recommended)
+
+```bash id="setup_graphql"
+npm create vite@latest graphql-react -- --template react-ts
+cd graphql-react
+
+npm install
+npm install @apollo/client graphql
+npm run dev
+```
+
+---
+
+## 1. Setup Apollo Client
+
+```ts id="apollo_client"
+import { ApolloClient, InMemoryCache, ApolloProvider } from "@apollo/client";
+
+export const client = new ApolloClient({
+  uri: "https://example.com/graphql",
+  cache: new InMemoryCache(),
+});
+```
+
+---
+
+## 2. Wrap App with Provider
+
+```tsx id="apollo_provider"
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { ApolloProvider } from "@apollo/client";
+import App from "./App";
+import { client } from "./apolloClient";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <ApolloProvider client={client}>
+    <App />
+  </ApolloProvider>,
+);
+```
+
+---
+
+## 3. Query data using `useQuery`
+
+```tsx id="use_query_example"
+import { gql, useQuery } from "@apollo/client";
+
+const GET_USERS = gql`
+  query GetUsers {
+    users {
+      id
+      name
+    }
+  }
+`;
+
+type User = {
+  id: string;
+  name: string;
+};
+
+export default function App() {
+  const { data, loading, error } = useQuery(GET_USERS);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error occurred</p>;
+
+  return (
+    <ul>
+      {data.users.map((user: User) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## 4. Mutation using `useMutation`
+
+```tsx id="mutation_example"
+import { gql, useMutation } from "@apollo/client";
+
+const ADD_USER = gql`
+  mutation AddUser($name: String!) {
+    addUser(name: $name) {
+      id
+      name
+    }
+  }
+`;
+
+export default function AddUserButton() {
+  const [addUser, { loading }] = useMutation(ADD_USER);
+
+  const handleClick = async () => {
+    await addUser({
+      variables: { name: "Alice" },
+      refetchQueries: ["GetUsers"], // simple cache update strategy
+    });
+  };
+
+  return (
+    <button onClick={handleClick} disabled={loading}>
+      Add User
+    </button>
+  );
+}
+```
+
+---
+
+## 5. Cache-based update (preferred over refetch)
+
+Instead of refetching:
+
+```ts id="cache_update"
+update(cache, { data }) {
+  cache.modify({
+    fields: {
+      users(existingUsers = []) {
+        return [...existingUsers, data.addUser];
+      },
+    },
+  });
+}
+```
+
+This avoids network round-trips and improves UX.
+
+---
+
+# State Management Trade-offs
+
+GraphQL changes how you think about state:
+
+### Server state (GraphQL handles this)
+
+- Users
+- Posts
+- Products
+- API data
+- Caching
+- Syncing
+
+### Client state (React/Redux/Zustand)
+
+- Modal open/close
+- Theme
+- Local UI state
+- Form inputs
+
+👉 Best practice:
+
+> Do NOT store GraphQL server data in Redux unless necessary.
+
+Instead:
+
+- Apollo Client cache replaces Redux for server state
+- Redux/Zustand remains for UI state only
+
+---
+
+# Tooling & Setup
+
+## Recommended Stack
+
+### 1. Apollo Client (most popular)
+
+- Best caching system
+- Large ecosystem
+- Works well with React + Next.js
+
+### 2. urql (lightweight alternative)
+
+- Smaller bundle
+- Flexible exchanges
+- Good for simple apps
+
+### 3. Relay (Meta)
+
+- Highly optimized
+- Strict conventions
+- Best for large-scale apps with complex data graphs
+
+---
+
+## Vite vs Next.js
+
+### Vite (CSR)
+
+- Fast development
+- Simple SPA apps
+- No SSR by default
+
+### Next.js (recommended for production GraphQL apps)
+
+- SSR / SSG / ISR
+- Better SEO
+- Server Components
+- Streaming support
+
+---
+
+# Performance
+
+### 1. Normalize cache (critical)
+
+Apollo uses:
+
+```text id="norm_cache"
+__typename + id
+```
+
+This avoids duplicate fetches and enables automatic updates.
+
+---
+
+### 2. Avoid over-fetching queries
+
+Only request needed fields:
+
+```graphql id="bad_good"
+# BAD
+query {
+  users {
+    id
+    name
+    email
+    address
+    posts { ... }
+  }
+}
+
+# GOOD
+query {
+  users {
+    id
+    name
+  }
+}
+```
+
+---
+
+### 3. Use pagination strategies
+
+- Cursor-based pagination (preferred)
+- Offset-based pagination (simple but less scalable)
+
+---
+
+### 4. Optimize re-renders
+
+- `React.memo` for list components
+- Split queries into smaller fragments
+- Use `@client` fields carefully (Apollo local state)
+
+---
+
+### 5. Use Suspense (advanced)
+
+Apollo supports experimental Suspense:
+
+```tsx id="suspense"
+const { data } = useSuspenseQuery(GET_USERS);
+```
+
+This improves loading orchestration in concurrent React.
+
+---
+
+# Testing
+
+Use:
+
+- Vitest or Jest
+- React Testing Library
+- MockedProvider (Apollo)
+
+Install:
+
+```bash id="test_setup"
+npm install -D vitest @testing-library/react @apollo/client @testing-library/jest-dom
+```
+
+Example:
+
+```tsx id="mock_apollo_test"
+import { MockedProvider } from "@apollo/client/testing";
+
+const mocks = [
+  {
+    request: {
+      query: GET_USERS,
+    },
+    result: {
+      data: {
+        users: [{ id: "1", name: "Test User" }],
+      },
+    },
+  },
+];
+```
+
+Run:
+
+```bash id="test_run"
+npx vitest
+```
+
+---
+
+# Ops & Deployment
+
+- Use persisted queries to reduce payload size
+- Enable CDN caching for static queries
+- Use GraphQL gateway (Apollo Federation) for microservices
+- Monitor query complexity (prevent expensive nested queries)
+- Use error boundaries for UI-level GraphQL failures
+- Use environment-based endpoints (`.env`) for dev/staging/prod
+
+---
+
+# Pitfalls
+
+- Storing GraphQL server data in Redux unnecessarily
+- Over-fetching deeply nested fields
+- Not handling cache invalidation correctly after mutations
+- Ignoring loading/error states in UI
+- Creating too many small Apollo clients instead of a single shared instance
+
 ## Question 5. How do you handle caching with Apollo Client?
+
+# How do you handle caching with Apollo Client?
+
+## Short answer
+
+Apollo Client handles caching using a **normalized in-memory cache (`InMemoryCache`)**. You control caching behavior using **cache policies (`fetchPolicy`)**, **cache updates after mutations**, and **manual cache manipulation (`cache.readQuery`, `cache.writeQuery`, `cache.modify`)**. The goal is to avoid unnecessary network requests while keeping UI data consistent.
+
+---
+
+# Explanation
+
+Apollo’s caching system is one of its most important features. It works in three layers:
+
+```text id="cache_flow"
+GraphQL Server
+      ↓
+Apollo Client Network Layer
+      ↓
+InMemoryCache (Normalized Cache)
+      ↓
+React UI (useQuery/useMutation)
+```
+
+## 1. Normalized Cache (Core Concept)
+
+Apollo stores data like a database instead of raw responses.
+
+Example response:
+
+```json id="cache_example"
+{
+  "users": [
+    { "id": "1", "name": "A" },
+    { "id": "2", "name": "B" }
+  ]
+}
+```
+
+Stored internally as:
+
+```text id="normalized_cache"
+User:1 → { id: "1", name: "A" }
+User:2 → { id: "2", name: "B" }
+Query.users → [User:1, User:2]
+```
+
+### Why normalization matters:
+
+- Prevents duplicate data
+- Enables automatic UI updates
+- Efficient mutation propagation
+- Shared references across queries
+
+---
+
+## 2. Cache Policies (`fetchPolicy`)
+
+Apollo controls when to use cache vs network.
+
+### Common policies:
+
+| Policy              | Behavior                          |
+| ------------------- | --------------------------------- |
+| `cache-first`       | Uses cache if available (default) |
+| `network-only`      | Always fetch from server          |
+| `cache-and-network` | Cache first, then refresh         |
+| `no-cache`          | Always bypass cache               |
+| `standby`           | Skip automatic updates            |
+
+Example:
+
+```ts id="fetch_policy"
+useQuery(GET_USERS, {
+  fetchPolicy: "cache-first",
+});
+```
+
+---
+
+## 3. Reading & Writing Cache Manually
+
+### Read from cache
+
+```ts id="read_cache"
+const data = client.readQuery({
+  query: GET_USERS,
+});
+```
+
+---
+
+### Write to cache
+
+```ts id="write_cache"
+client.writeQuery({
+  query: GET_USERS,
+  data: {
+    users: [{ id: "3", name: "New User" }],
+  },
+});
+```
+
+---
+
+## 4. Updating Cache After Mutations
+
+This is the most important real-world use case.
+
+### Option 1: `refetchQueries` (simple but less efficient)
+
+```ts id="refetch_mutation"
+useMutation(ADD_USER, {
+  refetchQueries: ["GetUsers"],
+});
+```
+
+✔ Easy
+❌ Extra network call
+
+---
+
+### Option 2: Manual cache update (preferred)
+
+```ts id="cache_modify"
+update(cache, { data: { addUser } }) {
+  cache.modify({
+    fields: {
+      users(existingUsers = []) {
+        const newUserRef = cache.writeFragment({
+          data: addUser,
+          fragment: gql`
+            fragment NewUser on User {
+              id
+              name
+            }
+          `,
+        });
+
+        return [...existingUsers, newUserRef];
+      },
+    },
+  });
+}
+```
+
+✔ No network call
+✔ Fast UI updates
+✔ Best practice
+
+---
+
+### Option 3: Direct `cache.writeQuery`
+
+```ts id="write_query_update"
+update(cache, { data: { addUser } }) {
+  const existing = cache.readQuery({ query: GET_USERS });
+
+  cache.writeQuery({
+    query: GET_USERS,
+    data: {
+      users: [...existing.users, addUser],
+    },
+  });
+}
+```
+
+---
+
+## 5. Cache Invalidation Strategy
+
+Apollo does NOT auto-invalidate like React Query. You must design updates.
+
+### Common strategies:
+
+### A. Normalized ID-based updates (best)
+
+If your schema includes:
+
+```graphql
+id
+__typename
+```
+
+Apollo automatically updates related queries.
+
+---
+
+### B. Manual field eviction
+
+```ts id="evict_cache"
+cache.evict({ id: "User:1" });
+cache.gc();
+```
+
+---
+
+### C. Field-level modification
+
+```ts id="cache_field_update"
+cache.modify({
+  fields: {
+    users(existing) {
+      return existing.filter((userRef) => userRef.__ref !== "User:1");
+    },
+  },
+});
+```
+
+---
+
+## 6. Type Policies (Advanced Cache Control)
+
+Define how Apollo identifies and merges data:
+
+```ts id="type_policies"
+const cache = new InMemoryCache({
+  typePolicies: {
+    User: {
+      keyFields: ["id"],
+    },
+    Query: {
+      fields: {
+        users: {
+          merge(existing = [], incoming) {
+            return [...existing, ...incoming];
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+### Why this matters:
+
+- Controls pagination merging
+- Avoids duplicate lists
+- Enables fine-grained cache behavior
+
+---
+
+## 7. Pagination Caching
+
+Apollo supports cursor-based pagination using `merge`.
+
+```ts id="pagination_cache"
+fields: {
+  posts: {
+    keyArgs: false,
+    merge(existing = [], incoming) {
+      return [...existing, ...incoming];
+    },
+  },
+}
+```
+
+Used for:
+
+- Infinite scroll
+- Feed loading
+- Chat messages
+
+---
+
+## React 18 Behavior with Apollo Cache
+
+- Cache updates trigger **batched re-renders**
+- Multiple query updates are grouped (automatic batching)
+- Only components using affected cache references re-render
+
+```text id="react_cache_render"
+Mutation
+  ↓
+Cache update
+  ↓
+Reactive query invalidation
+  ↓
+Minimal component re-render
+```
+
+---
+
+## Example (Full Setup)
+
+### Create project
+
+```bash id="apollo_cache_setup"
+npm create vite@latest apollo-cache-demo -- --template react-ts
+cd apollo-cache-demo
+
+npm install
+npm install @apollo/client graphql
+npm run dev
+```
+
+---
+
+### Apollo Client setup
+
+```ts id="apollo_cache_client"
+import { ApolloClient, InMemoryCache } from "@apollo/client";
+
+export const client = new ApolloClient({
+  uri: "https://example.com/graphql",
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          users: {
+            merge(existing = [], incoming) {
+              return [...incoming];
+            },
+          },
+        },
+      },
+    },
+  }),
+});
+```
+
+---
+
+### Mutation with cache update
+
+```ts id="mutation_cache_update"
+const ADD_USER = gql`
+  mutation AddUser($name: String!) {
+    addUser(name: $name) {
+      id
+      name
+    }
+  }
+`;
+
+const [addUser] = useMutation(ADD_USER, {
+  update(cache, { data }) {
+    cache.modify({
+      fields: {
+        users(existing = []) {
+          return [...existing, data.addUser];
+        },
+      },
+    });
+  },
+});
+```
+
+---
+
+# Performance Considerations
+
+- Prefer **normalized cache updates** over refetching
+- Avoid deeply nested cache writes when possible
+- Use `cache.modify` instead of full `writeQuery` for large datasets
+- Use `cache-first` for static data, `network-only` for real-time sensitive data
+- Split large queries into fragments to improve cache reuse
+- Use pagination merge functions to avoid memory bloat
+- Monitor cache size in Apollo DevTools
+
+---
+
+# Testing
+
+Use **MockedProvider** from Apollo Client testing utilities.
+
+```bash id="apollo_test_install"
+npm install -D @apollo/client @testing-library/react vitest
+```
+
+Example:
+
+```ts id="cache_test"
+import { MockedProvider } from "@apollo/client/testing";
+
+const mocks = [
+  {
+    request: { query: GET_USERS },
+    result: {
+      data: {
+        users: [{ id: "1", name: "Test" }],
+      },
+    },
+  },
+];
+```
+
+Test cache updates by:
+
+- Triggering mutations
+- Asserting UI re-renders
+- Verifying cache state via `client.cache.extract()`
+
+---
+
+# Ops & Deployment
+
+- Enable Apollo DevTools for cache inspection
+- Use persisted queries to reduce payload size
+- Implement cache persistence (localStorage) for offline support
+- Configure error handling for stale cache states
+- Use CDN caching at GraphQL gateway level where appropriate
+- Avoid overly aggressive caching for real-time data (use `no-cache` or `network-only`)
+
+---
+
+# Pitfalls
+
+- Not including `id` and `__typename` → breaks normalization
+- Overusing `refetchQueries` instead of cache updates
+- Mutating cache incorrectly (breaking referential integrity)
+- Not defining `typePolicies` for pagination
+- Storing UI state in Apollo cache instead of React state
 
 ## Question 6. How do you implement WebSocket-based real-time updates?
 
