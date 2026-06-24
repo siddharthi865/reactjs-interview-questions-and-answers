@@ -651,7 +651,522 @@ Reducer functions are easy to unit test because they are pure functions.
 
 ## Question 4. Difference between useState and useReducer
 
+## Short answer
+
+`useState` is a simple state management hook for **independent or straightforward state updates**, while `useReducer` is used for **complex state logic with multiple transitions**, where state changes are better managed through dispatched actions and a reducer function.
+
+---
+
+## Explanation
+
+### Core conceptual difference
+
+#### `useState`
+
+- Direct state updates
+- Best for simple values (boolean, string, number, small objects)
+- You set state explicitly
+
+```ts
+setCount(count + 1);
+```
+
+#### `useReducer`
+
+- Action-driven state updates
+- Centralized state transition logic
+- You dispatch actions instead of directly setting state
+
+```ts
+dispatch({ type: "increment" });
+```
+
+---
+
+### Mental model
+
+| Hook         | Mental Model                                         |
+| ------------ | ---------------------------------------------------- |
+| `useState`   | “Set this value directly”                            |
+| `useReducer` | “Tell me what happened, I’ll compute the next state” |
+
+---
+
+### When React 18 updates state
+
+Both hooks:
+
+- Trigger re-render when state changes
+- Use automatic batching (React 18+)
+- Work with concurrent rendering
+
+But:
+
+- `useState` → updates are inline and local
+- `useReducer` → updates go through a **pure reducer function**
+
+---
+
+## Key differences
+
+### 1. Complexity of state logic
+
+- `useState` → simple updates
+- `useReducer` → complex transitions, multiple actions
+
+Example:
+
+- Counter → `useState`
+- Form with validation + multiple fields → `useReducer`
+
+---
+
+### 2. State structure
+
+| useState                | useReducer                        |
+| ----------------------- | --------------------------------- |
+| Independent values      | Structured state machine          |
+| Multiple useState calls | Single reducer managing all state |
+
+---
+
+### 3. Update logic location
+
+- `useState`: logic scattered in event handlers
+- `useReducer`: logic centralized in reducer function
+
+---
+
+### 4. Scalability
+
+- `useState`: can become messy as logic grows
+- `useReducer`: scales better for complex flows
+
+---
+
+### 5. Testability
+
+- `useState`: harder to test logic (embedded in component)
+- `useReducer`: reducer is a pure function → easy unit testing
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+### Side-by-side comparison
+
+#### 1. useState version
+
+```tsx id="ustate_ex"
+import { useState } from "react";
+
+export default function CounterState() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <h2>Count: {count}</h2>
+
+      <button onClick={() => setCount(count + 1)}>+</button>
+      <button onClick={() => setCount(count - 1)}>-</button>
+      <button onClick={() => setCount(0)}>Reset</button>
+    </div>
+  );
+}
+```
+
+---
+
+#### 2. useReducer version
+
+```tsx id="ureducer_ex"
+import { useReducer } from "react";
+
+type State = { count: number };
+
+type Action = { type: "increment" } | { type: "decrement" } | { type: "reset" };
+
+const initialState: State = { count: 0 };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "increment":
+      return { count: state.count + 1 };
+    case "decrement":
+      return { count: state.count - 1 };
+    case "reset":
+      return initialState;
+    default:
+      return state;
+  }
+}
+
+export default function CounterReducer() {
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  return (
+    <div>
+      <h2>Count: {state.count}</h2>
+
+      <button onClick={() => dispatch({ type: "increment" })}>+</button>
+      <button onClick={() => dispatch({ type: "decrement" })}>-</button>
+      <button onClick={() => dispatch({ type: "reset" })}>Reset</button>
+    </div>
+  );
+}
+```
+
+---
+
+## Tooling & Setup
+
+- Use **Vite + React + TypeScript** (preferred modern setup)
+- Avoid CRA (deprecated, slower, less flexible)
+- Use **Next.js** when:
+  - SSR is required
+  - SEO matters
+  - Server Components or API routes are needed
+
+---
+
+## Performance considerations
+
+### `useState`
+
+- Faster for simple updates
+- Less abstraction overhead
+
+### `useReducer`
+
+- Better for complex state transitions
+- Avoids scattered logic, improving maintainability
+
+### Optimization strategies
+
+- Use `useReducer` to avoid prop drilling of multiple setters
+- Combine with `React.memo` for preventing re-renders
+- Use `useMemo` for derived state
+- Use `useCallback` for stable dispatch handlers
+- Profile with React DevTools Profiler before optimizing
+
+---
+
+## Testing
+
+### `useState`
+
+- Test behavior through UI interactions
+
+### `useReducer`
+
+- Test reducer directly (pure function)
+
+```ts id="test_reducer"
+import { expect, test } from "vitest";
+
+test("increment action", () => {
+  const state = { count: 0 };
+
+  const newState = reducer(state, { type: "increment" });
+
+  expect(newState.count).toBe(1);
+});
+```
+
+---
+
+## Ops & Deployment
+
+- Keep `useState` for local UI state (toggles, inputs)
+- Use `useReducer` for:
+  - form state
+  - multi-step workflows
+  - complex UI state machines
+
+- Avoid mixing both unnecessarily in large components
+- Ensure predictable state transitions for SSR hydration (Next.js)
+
+---
+
+## Pitfalls
+
+- Using `useReducer` for trivial state (adds unnecessary complexity)
+- Using `useState` for complex multi-action workflows (becomes unmaintainable)
+- Duplicating logic across multiple `setState` calls instead of centralizing it
+
 ## Question 5. What is context API? How is it used?
+
+## Short answer
+
+The **Context API** in React is a built-in feature for sharing data **globally across a component tree** without prop drilling. It is commonly used for app-wide state like theme, authentication, language, or user settings.
+
+---
+
+## Explanation
+
+### What problem Context solves
+
+Without Context:
+
+```txt
+App → Layout → Header → Navbar → Button
+           (props passed through many levels)
+```
+
+This is called **prop drilling**, where intermediate components receive props they don’t actually use.
+
+With Context:
+
+```txt
+App → Provider → Any nested component can directly access state
+```
+
+---
+
+### Core pieces of Context API
+
+1. **createContext** → creates a context object
+2. **Provider** → supplies the value
+3. **useContext** → consumes the value
+
+---
+
+### How it works internally
+
+- React stores context value at the nearest Provider above the component.
+- When the Provider value changes:
+  - All consuming components re-render
+  - React re-evaluates context dependencies during render phase (React 18 concurrent rendering supports interruptible updates)
+
+⚠️ Important: Context is **not a state manager like Redux**—it is a **dependency injection mechanism**.
+
+---
+
+### When to use Context API
+
+Good use cases:
+
+- Theme (dark/light mode)
+- Authentication state (user info, tokens)
+- Localization (i18n)
+- Global UI state (modal visibility, sidebar state)
+
+Avoid:
+
+- High-frequency updates (mouse position, animations)
+- Large complex state trees (better: Redux, Zustand, TanStack Query)
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite recommended)
+
+```bash id="ctx_setup"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+### 1. Create Context
+
+```tsx id="ctx_1"
+import { createContext, useContext, useState, ReactNode } from "react";
+
+type AuthContextType = {
+  user: string | null;
+  login: (name: string) => void;
+  logout: () => void;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+```
+
+---
+
+### 2. Provider Component
+
+```tsx id="ctx_2"
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<string | null>(null);
+
+  const login = (name: string) => setUser(name);
+  const logout = () => setUser(null);
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+```
+
+---
+
+### 3. Custom Hook (best practice)
+
+```tsx id="ctx_3"
+export function useAuth() {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+
+  return context;
+}
+```
+
+---
+
+### 4. Consuming Context
+
+```tsx id="ctx_4"
+import { useAuth } from "./AuthContext";
+
+export default function Navbar() {
+  const { user, login, logout } = useAuth();
+
+  return (
+    <div>
+      {user ? (
+        <>
+          <p>Welcome, {user}</p>
+          <button onClick={logout}>Logout</button>
+        </>
+      ) : (
+        <button onClick={() => login("John")}>Login</button>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+### 5. Wrap App
+
+```tsx id="ctx_5"
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import { AuthProvider } from "./AuthContext";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </React.StrictMode>,
+);
+```
+
+---
+
+## Tooling & Setup
+
+- Preferred stack:
+  - **Vite + React + TypeScript**
+
+- Avoid CRA (deprecated)
+- For large apps:
+  - Next.js App Router if SSR or server-side auth is needed
+
+Context works in both:
+
+- CSR (Vite)
+- SSR (Next.js) — but initial hydration must match server state
+
+---
+
+## Performance
+
+### Key performance insight
+
+Context updates cause **all consumers to re-render**, even if only part of the value changed.
+
+### Optimization strategies
+
+- **Split contexts**
+  - e.g. AuthContext, ThemeContext separately
+
+- Memoize provider value:
+
+```tsx id="ctx_perf"
+const value = useMemo(() => ({ user, login, logout }), [user]);
+```
+
+- Use `React.memo` for consumers
+- Avoid putting frequently changing state in Context
+- Combine with:
+  - `useReducer` for structured updates
+  - Zustand or Redux for large-scale apps
+
+### React 18 behavior
+
+- Context updates are **batched automatically**
+- Concurrent rendering may interrupt renders but ensures consistency
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**
+
+```bash id="ctx_test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx id="ctx_test_ex"
+import { render, screen } from "@testing-library/react";
+import { AuthProvider } from "./AuthContext";
+import Navbar from "./Navbar";
+
+test("renders login button", () => {
+  render(
+    <AuthProvider>
+      <Navbar />
+    </AuthProvider>,
+  );
+
+  expect(screen.getByText("Login")).toBeInTheDocument();
+});
+```
+
+---
+
+## Ops & Deployment
+
+- Avoid storing sensitive tokens directly in Context (use secure storage or server sessions)
+- Use SSR frameworks (Next.js) for authenticated initial render
+- Keep Context value minimal to reduce rerenders
+- Add Error Boundaries around provider consumers for resilience
+- Monitor unnecessary re-renders using React DevTools Profiler
+- Deploy via CDN (Vercel/Netlify/Cloudflare Pages)
+
+---
+
+## Pitfalls
+
+- ❌ Using Context for everything (leads to performance issues)
+- ❌ Not memoizing provider value → unnecessary re-renders
+- ❌ Large monolithic context objects (hard to maintain + slow updates)
 
 ## Question 6. How do you handle side effects in React?
 
