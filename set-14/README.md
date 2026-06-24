@@ -787,7 +787,521 @@ Use **Playwright** for end-to-end testing to validate loading, success, and erro
 
 ## Question 4. How do you implement a toast notification system?
 
+# How do you implement a toast notification system?
+
+## Short answer
+
+A toast notification system is typically implemented using **React Context + a custom hook** (or a library like **React Hot Toast** or **Sonner**) to provide a global API such as `showToast()`. Toasts are rendered from a single provider, automatically dismiss after a timeout, support multiple notification types (success, error, info), and are usually rendered via a **Portal** to avoid layout issues.
+
+---
+
+# Explanation
+
+A production-ready toast system has four main parts:
+
+1. **Toast Provider** – Stores the list of active toasts.
+2. **Toast Context** – Exposes methods like `showToast()` and `removeToast()`.
+3. **Toast Container** – Renders all active toasts, usually fixed to a screen corner.
+4. **Toast Component** – Displays an individual notification with optional auto-dismiss and animations.
+
+Architecture:
+
+```text
+User Action
+     │
+     ▼
+showToast("Saved!", "success")
+     │
+     ▼
+Toast Context
+     │
+     ▼
+Add Toast to State
+     │
+     ▼
+Toast Container
+     │
+     ▼
+Toast Component
+     │
+     ▼
+Auto-dismiss → Remove Toast
+```
+
+### Why Context?
+
+Instead of passing notification callbacks through props, Context provides a global API:
+
+```tsx
+const { showToast } = useToast();
+
+showToast("Profile updated", "success");
+```
+
+This avoids prop drilling and allows any component to trigger notifications.
+
+### React 18 considerations
+
+- **Automatic batching** ensures adding/removing multiple toasts results in fewer re-renders.
+- Keep toast state localized inside the provider rather than a global Redux store unless notifications need to interact with broader application state.
+- Use stable callbacks (`useCallback`) to avoid unnecessary re-renders of consumers.
+
+---
+
+# Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Toast Provider
+
+```tsx
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  ReactNode,
+} from "react";
+
+type Toast = {
+  id: number;
+  message: string;
+  type: "success" | "error";
+};
+
+type ToastContextType = {
+  showToast: (message: string, type: Toast["type"]) => void;
+};
+
+const ToastContext = createContext<ToastContextType | null>(null);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: Toast["type"]) => {
+    const id = Date.now();
+
+    setToasts((prev) => [...prev, { id, message, type }]);
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 3000);
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ showToast }}>
+      {children}
+
+      <div
+        style={{
+          position: "fixed",
+          top: 20,
+          right: 20,
+        }}
+      >
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            style={{
+              marginBottom: 10,
+              padding: 12,
+              color: "#fff",
+              background: toast.type === "success" ? "green" : "crimson",
+            }}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+
+  if (!context) {
+    throw new Error("useToast must be used inside ToastProvider");
+  }
+
+  return context;
+}
+```
+
+### Usage
+
+```tsx
+import { ToastProvider, useToast } from "./ToastProvider";
+
+function Dashboard() {
+  const { showToast } = useToast();
+
+  return (
+    <button onClick={() => showToast("Saved successfully!", "success")}>
+      Save
+    </button>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <Dashboard />
+    </ToastProvider>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for modern React applications. Avoid Create React App because it is deprecated.
+- For production applications, many teams use:
+  - **React Hot Toast** (lightweight, simple API)
+  - **Sonner** (modern, accessible, highly customizable)
+  - **Notistack** (great with Material UI)
+
+- In **Next.js App Router**, place the toast provider in the root layout so all Client Components can access it.
+- Vite uses **ES Modules (ESM)** for development and Rollup for optimized production builds. CommonJS is primarily for legacy Node.js packages.
+
+---
+
+# Performance
+
+### 1. Memoize context functions
+
+```tsx
+const showToast = useCallback(() => {}, []);
+```
+
+Prevents unnecessary consumer re-renders.
+
+### 2. Keep provider state isolated
+
+Only the toast container should re-render when notifications change.
+
+### 3. Render through a Portal
+
+Use `createPortal` to render the toast container into `document.body`. This avoids clipping by parent containers with `overflow: hidden` and simplifies positioning.
+
+### 4. Limit active toasts
+
+Avoid rendering dozens of notifications simultaneously. Queue or cap visible toasts (e.g., maximum of 3–5).
+
+### 5. Animate efficiently
+
+Use CSS transitions or animation libraries (e.g., Framer Motion) with transform/opacity animations to minimize layout work.
+
+### 6. Profile rendering
+
+Use the React DevTools **Profiler** to verify:
+
+- only the toast container updates
+- unrelated components do not re-render
+- context updates remain localized
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Typical tests:
+
+- toast appears after `showToast()`
+- auto-dismiss removes the toast
+- multiple toasts render correctly
+- close button removes a toast immediately
+- correct styling for success/error variants
+
+For end-to-end testing, use **Playwright** to verify notifications appear after user actions.
+
+---
+
+# Ops & Deployment
+
+- Log important events (e.g., failed API calls) separately from user-facing toasts; don't rely on notifications for observability.
+- Use **Error Boundaries** for rendering errors, but surface recoverable issues (e.g., API failures) via toasts.
+- Ensure accessibility with `role="status"` or `aria-live="polite"` (or `assertive` for critical errors) so screen readers announce notifications.
+- Keep the toast provider mounted at the application root for consistent behavior across routes.
+- Lazy-load animation libraries if they are only used for notifications to keep the initial bundle small.
+
+---
+
+# Pitfalls
+
+- **Don't create multiple toast providers.** Use a single global provider to avoid inconsistent behavior.
+- **Don't use array indexes as toast IDs.** Use stable unique IDs so React reconciles correctly.
+- **Don't forget to clean up timers.** If you manage timers manually, clear them on unmount to avoid memory leaks or state updates after unmount.
+
 ## Question 5. How do you implement drag-and-drop lists in React?
+
+# How do you implement drag-and-drop lists in React?
+
+## Short answer
+
+Implement drag-and-drop lists using a dedicated library such as **@dnd-kit** (recommended) or **Pragmatic Drag and Drop**. Store the list in React state, update the order when a drag operation completes, and render items with stable IDs. For large lists, combine drag-and-drop with virtualization.
+
+> **Note:** **react-beautiful-dnd** is archived and no longer maintained. For new projects, prefer **@dnd-kit**.
+
+---
+
+# Explanation
+
+A drag-and-drop list consists of four parts:
+
+1. **Draggable items** – Elements users can drag.
+2. **Droppable container** – Area where items can be reordered.
+3. **Drag context** – Tracks the active drag operation.
+4. **State update** – Reorders the list after dropping.
+
+Architecture:
+
+```text
+User drags item
+       │
+       ▼
+Drag starts
+       │
+       ▼
+Drag Context tracks active item
+       │
+       ▼
+Drop occurs
+       │
+       ▼
+Calculate new index
+       │
+       ▼
+Update React state
+       │
+       ▼
+React re-renders reordered list
+```
+
+### Why use a library?
+
+Implementing drag-and-drop with the HTML5 Drag and Drop API is possible but becomes difficult when handling:
+
+- touch devices
+- keyboard accessibility
+- collision detection
+- smooth animations
+- nested lists
+- sortable grids
+
+Libraries like **@dnd-kit** solve these problems while remaining flexible and performant.
+
+### React 18 considerations
+
+- **Automatic batching** minimizes renders when updating drag state.
+- Use immutable updates when reordering arrays.
+- Keep list items memoized if they contain expensive UI.
+
+---
+
+# Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+npm run dev
+```
+
+### Sortable list
+
+```tsx
+import { useState } from "react";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableItem({ id }: { id: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    padding: "12px",
+    marginBottom: "8px",
+    border: "1px solid #ccc",
+    background: "#fff",
+    cursor: "grab",
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {id}
+    </div>
+  );
+}
+
+export default function App() {
+  const [items, setItems] = useState(["React", "Vue", "Angular", "Svelte"]);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    setItems((items) => {
+      const oldIndex = items.indexOf(active.id as string);
+      const newIndex = items.indexOf(over.id as string);
+
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  }
+
+  return (
+    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={items} strategy={verticalListSortingStrategy}>
+        {items.map((item) => (
+          <SortableItem key={item} id={item} />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+```
+
+### How it works
+
+1. User drags an item.
+2. `DndContext` tracks the drag operation.
+3. `handleDragEnd()` receives the source and destination.
+4. `arrayMove()` creates a reordered array.
+5. React re-renders the list with the new order.
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for new React projects. Avoid Create React App because it is deprecated.
+- Recommended libraries:
+  - **@dnd-kit** – Modern, accessible, flexible, actively maintained.
+  - **Pragmatic Drag and Drop** – Well-suited for complex enterprise interactions.
+
+- **Next.js App Router** works well for SSR applications; drag-and-drop components should be Client Components because they rely on browser events.
+- Vite uses **ES Modules (ESM)** for development and Rollup for optimized production builds. CommonJS is mainly relevant for older Node.js packages.
+
+---
+
+# Performance
+
+### 1. Memoize list items
+
+```tsx
+const Item = React.memo(ItemComponent);
+```
+
+Avoid re-rendering every row during a drag.
+
+### 2. Stable callbacks
+
+```tsx
+const handleDragEnd = useCallback((event: DragEndEvent) => {
+  // reorder items
+}, []);
+```
+
+Prevents unnecessary re-renders of child components.
+
+### 3. Use stable IDs
+
+Avoid array indexes as keys.
+
+```tsx
+key={item.id}
+```
+
+Stable IDs ensure React reconciliation works correctly.
+
+### 4. Virtualize large lists
+
+For thousands of items, combine drag-and-drop with:
+
+- **@tanstack/react-virtual**
+- **react-window**
+
+Only visible rows are rendered.
+
+### 5. Minimize state updates
+
+Only update state on **drop**, not on every pointer movement, unless your UX specifically requires live reordering.
+
+### 6. Profile rendering
+
+Use the React DevTools **Profiler** to confirm:
+
+- only affected items re-render
+- drag interactions remain smooth
+- expensive children are memoized appropriately
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Test cases:
+
+- list renders correctly
+- drag completion updates item order
+- keyboard drag interactions (if supported)
+- accessibility attributes are present
+- drop outside a valid target leaves the order unchanged
+
+Use **Playwright** for end-to-end testing because real pointer interactions are best validated in a browser.
+
+---
+
+# Ops & Deployment
+
+- Wrap drag-and-drop areas with **Error Boundaries** to isolate rendering failures.
+- Log drag-related errors for debugging complex workflows.
+- Ensure keyboard accessibility and screen reader announcements for reorder operations.
+- Code-split drag-and-drop libraries if they are only used on specific routes to reduce the initial bundle size.
+- Deploy optimized production builds behind a CDN or edge network for faster asset delivery.
+
+---
+
+# Pitfalls
+
+- **Don't use array indexes as keys.** Always use stable unique IDs.
+- **Don't mutate the original array.** Return a new array when reordering to preserve React's immutable state model.
+- **Don't build new projects with archived drag-and-drop libraries.** Prefer actively maintained solutions such as **@dnd-kit**.
 
 ## Question 6. How do you implement collapsible panels or accordions?
 
