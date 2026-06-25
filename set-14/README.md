@@ -1305,13 +1305,1211 @@ Use **Playwright** for end-to-end testing because real pointer interactions are 
 
 ## Question 6. How do you implement collapsible panels or accordions?
 
+# How do you implement collapsible panels or accordions?
+
+## Short answer
+
+A collapsible panel (accordion) is typically implemented by tracking the **expanded panel(s)** in React state and conditionally rendering or animating the content. For accessibility, use semantic `<button>` elements with `aria-expanded`, `aria-controls`, and unique IDs. Depending on the UX, support either **single-expand** (only one panel open) or **multi-expand** (multiple panels open).
+
+---
+
+# Explanation
+
+An accordion consists of:
+
+1. **Header** – Clickable button that toggles the panel.
+2. **Content** – Expandable/collapsible section.
+3. **State** – Tracks which panel(s) are open.
+4. **Animation** _(optional)_ – Smooth expand/collapse transition.
+
+Architecture:
+
+```text
+User clicks header
+        │
+        ▼
+Toggle state
+        │
+        ▼
+Update expanded panel(s)
+        │
+        ▼
+React re-renders
+        │
+        ▼
+Content expands/collapses
+```
+
+### Single-expand accordion
+
+Only one panel can be open.
+
+```tsx
+expandedId = 2;
+```
+
+```text
+▶ Panel 1
+▼ Panel 2
+▶ Panel 3
+```
+
+---
+
+### Multi-expand accordion
+
+Multiple panels can be open simultaneously.
+
+```tsx
+expandedIds = [1, 3];
+```
+
+```text
+▼ Panel 1
+▶ Panel 2
+▼ Panel 3
+```
+
+### React 18 considerations
+
+- **Automatic batching** ensures state updates are efficiently grouped.
+- Keep each accordion item independent to minimize re-renders.
+- For complex accordions, split each panel into a memoized component.
+
+---
+
+# Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Single-expand accordion
+
+```tsx
+import { useState } from "react";
+
+type Section = {
+  id: number;
+  title: string;
+  content: string;
+};
+
+const sections: Section[] = [
+  {
+    id: 1,
+    title: "React",
+    content: "A JavaScript library for building UIs.",
+  },
+  {
+    id: 2,
+    title: "TypeScript",
+    content: "JavaScript with static typing.",
+  },
+  {
+    id: 3,
+    title: "Vite",
+    content: "A fast frontend build tool.",
+  },
+];
+
+export default function App() {
+  const [openId, setOpenId] = useState<number | null>(null);
+
+  const toggle = (id: number) => {
+    setOpenId((current) => (current === id ? null : id));
+  };
+
+  return (
+    <div>
+      {sections.map((section) => (
+        <div
+          key={section.id}
+          style={{ border: "1px solid #ccc", marginBottom: 8 }}
+        >
+          <button
+            onClick={() => toggle(section.id)}
+            aria-expanded={openId === section.id}
+            aria-controls={`panel-${section.id}`}
+            id={`header-${section.id}`}
+            style={{
+              width: "100%",
+              padding: "12px",
+              textAlign: "left",
+            }}
+          >
+            {section.title}
+          </button>
+
+          {openId === section.id && (
+            <div
+              id={`panel-${section.id}`}
+              role="region"
+              aria-labelledby={`header-${section.id}`}
+              style={{ padding: "12px" }}
+            >
+              {section.content}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### How it works
+
+1. Clicking a header calls `toggle(id)`.
+2. If the panel is already open, it closes.
+3. Otherwise, it becomes the active panel.
+4. React conditionally renders the corresponding content.
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for modern React development. Avoid Create React App because it is deprecated.
+- For SSR applications, **Next.js App Router** is an excellent choice. Accordions with client-side interactivity should be implemented as Client Components.
+- Vite uses **ES Modules (ESM)** for development with fast HMR and Rollup for optimized production builds. CommonJS is mainly relevant for legacy Node.js tooling.
+- For headless, accessible components, consider libraries like **Radix UI**, **Headless UI**, or **React Aria** if you don't want to build accessibility behavior yourself.
+
+---
+
+# Performance
+
+### 1. Memoize accordion items
+
+```tsx
+const AccordionItem = React.memo(AccordionItemComponent);
+```
+
+Useful when panel content is expensive to render.
+
+### 2. Lazy-load heavy content
+
+```tsx
+const SettingsPanel = React.lazy(() => import("./SettingsPanel"));
+```
+
+Wrap with `Suspense` so large panels are only loaded when opened.
+
+### 3. Memoize callbacks
+
+```tsx
+const toggle = useCallback((id: number) => {
+  setOpenId((current) => (current === id ? null : id));
+}, []);
+```
+
+Helps avoid unnecessary re-renders of memoized children.
+
+### 4. Avoid unnecessary mounting
+
+For lightweight content, conditional rendering is fine. For expensive components where preserving state is important, keep them mounted and toggle visibility instead.
+
+### 5. Profile rendering
+
+Use the **React DevTools Profiler** to verify:
+
+- only the toggled panel re-renders
+- heavy panel content isn't unnecessarily recreated
+- callback memoization is effective where needed
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test scenarios:
+
+- clicking a header expands the panel
+- clicking again collapses it
+- only one panel is open in single-expand mode
+- keyboard interaction (`Enter`/`Space`) toggles panels
+- `aria-expanded` and `aria-controls` are updated correctly
+
+Use **Playwright** for end-to-end testing to verify real keyboard navigation and animations.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** around complex accordion content that loads dynamic components or remote data.
+- Log errors from lazy-loaded panels separately from UI interactions.
+- Ensure accessibility by using semantic buttons, `aria-expanded`, `aria-controls`, and `role="region"` for panel content.
+- Code-split large accordion content when appropriate to reduce the initial bundle size.
+- Deploy optimized production builds behind a CDN or edge network for faster asset delivery.
+
+---
+
+# Pitfalls
+
+- **Don't use `<div>` as the clickable header.** Use a semantic `<button>` for built-in keyboard support and accessibility.
+- **Don't use array indexes as keys.** Use stable unique IDs to preserve component state correctly.
+- **Don't forget accessibility attributes.** Always update `aria-expanded` and associate headers with panels using `aria-controls` and `aria-labelledby`.
+
 ## Question 7. How do you manage state for multiple modals?
+
+# How do you manage state for multiple modals?
+
+## Short answer
+
+Manage multiple modals by using a **single source of truth** instead of separate boolean flags. Store either the **active modal ID** (when only one modal can be open) or a **map of modal states** (when multiple modals can be open simultaneously). For large applications, encapsulate modal logic in a **Context** or use a state management library like **Redux Toolkit**, **Zustand**, or **Jotai**.
+
+---
+
+# Explanation
+
+There are several approaches depending on your requirements.
+
+### 1. Single active modal (Recommended)
+
+If only one modal should be open at a time, store the active modal identifier.
+
+```tsx
+const [activeModal, setActiveModal] = useState<string | null>(null);
+```
+
+Example:
+
+```text
+activeModal = "editUser"
+
+Login Modal    ❌ Closed
+Delete Modal   ❌ Closed
+Edit Modal     ✅ Open
+```
+
+Advantages:
+
+- Easy to manage
+- Prevents multiple modals from overlapping
+- Scales well as the number of modals grows
+
+---
+
+### 2. Multiple independent modals
+
+If multiple modals can be open simultaneously:
+
+```tsx
+const [modals, setModals] = useState({
+  login: false,
+  delete: true,
+  settings: false,
+});
+```
+
+Example:
+
+```text
+Login Modal      ❌
+Delete Modal     ✅
+Settings Modal   ❌
+```
+
+---
+
+### 3. Modal Context (Large applications)
+
+Instead of prop drilling:
+
+```text
+App
+ │
+ ├── Header
+ ├── Sidebar
+ ├── Dashboard
+ │      │
+ │      ▼
+ │   showModal("delete")
+ │
+ ▼
+ModalProvider
+       │
+       ▼
+Global Modal
+```
+
+Any component can open or close a modal using a custom hook:
+
+```tsx
+const { openModal, closeModal } = useModal();
+```
+
+---
+
+### React 18 considerations
+
+- **Automatic batching** combines multiple modal state updates into a single render.
+- Keep modal state centralized to avoid synchronization issues.
+- Use portals so modals render outside the normal DOM hierarchy.
+
+---
+
+# Example (React + TypeScript using Vite)
+
+### Create the project
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### Single active modal example
+
+```tsx
+import { useState } from "react";
+
+type ModalType = "login" | "delete" | "settings" | null;
+
+export default function App() {
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
+
+  return (
+    <>
+      <button onClick={() => setActiveModal("login")}>Login</button>
+
+      <button onClick={() => setActiveModal("delete")}>Delete</button>
+
+      <button onClick={() => setActiveModal("settings")}>Settings</button>
+
+      {activeModal === "login" && (
+        <Modal title="Login" onClose={() => setActiveModal(null)} />
+      )}
+
+      {activeModal === "delete" && (
+        <Modal title="Delete User" onClose={() => setActiveModal(null)} />
+      )}
+
+      {activeModal === "settings" && (
+        <Modal title="Settings" onClose={() => setActiveModal(null)} />
+      )}
+    </>
+  );
+}
+
+function Modal({ title, onClose }: { title: string; onClose: () => void }) {
+  return (
+    <div
+      style={{
+        border: "1px solid black",
+        padding: 20,
+        marginTop: 20,
+      }}
+    >
+      <h2>{title}</h2>
+
+      <button onClick={onClose}>Close</button>
+    </div>
+  );
+}
+```
+
+### Why this works
+
+- Only one modal can be active.
+- Opening a new modal automatically replaces the previous one.
+- The state is simple and scalable.
+
+---
+
+# Tooling & Setup
+
+- **Use Vite** for modern React development. Avoid Create React App because it is deprecated.
+- For SSR applications, **Next.js App Router** is a strong choice. Interactive modals should be implemented as Client Components.
+- Render modals with **`createPortal`** into `document.body` to avoid clipping and stacking context issues.
+- Vite uses **ES Modules (ESM)** during development with fast HMR and Rollup for optimized production builds. CommonJS is mainly relevant for legacy Node.js tooling.
+
+---
+
+# Performance
+
+### 1. Memoize modal components
+
+```tsx
+const SettingsModal = React.memo(SettingsModalComponent);
+```
+
+Avoid re-rendering expensive modal content unnecessarily.
+
+### 2. Lazy-load infrequently used modals
+
+```tsx
+const SettingsModal = React.lazy(() => import("./SettingsModal"));
+```
+
+Load large modal content only when needed.
+
+### 3. Stable handlers
+
+```tsx
+const openModal = useCallback((modal: ModalType) => {
+  setActiveModal(modal);
+}, []);
+```
+
+Useful when passing callbacks to memoized child components.
+
+### 4. Portal rendering
+
+Use `createPortal` so modals are rendered outside the app root. This simplifies z-index management and avoids issues with `overflow: hidden`.
+
+### 5. Profile rendering
+
+Use the **React DevTools Profiler** to verify:
+
+- opening a modal only re-renders the necessary components
+- heavy modal content is memoized or lazy-loaded
+- context updates are scoped appropriately
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Typical tests:
+
+- opening the correct modal
+- closing a modal via the close button
+- ensuring only one modal is visible in single-active mode
+- keyboard support (`Escape` closes the modal)
+- focus moves into the modal and returns to the trigger when it closes
+
+For end-to-end testing, use **Playwright** to validate focus management, overlays, and user interactions in a real browser.
+
+---
+
+# Ops & Deployment
+
+- Render modals with **`createPortal`** to avoid stacking context issues.
+- Use **Error Boundaries** around complex modal content that performs data fetching or lazy loading.
+- Ensure accessibility with `role="dialog"` or `role="alertdialog"`, `aria-modal="true"`, and proper `aria-labelledby`/`aria-describedby` attributes.
+- Implement **focus trapping** and restore focus to the triggering element when the modal closes.
+- Keep the initial bundle small by lazy-loading rarely used modals and serving optimized assets through a CDN or edge network.
+
+---
+
+# Pitfalls
+
+- **Don't create multiple boolean state variables** (`isLoginOpen`, `isDeleteOpen`, `isSettingsOpen`) when only one modal can be open. Use a single `activeModal` state instead.
+- **Don't forget focus management.** Users navigating with a keyboard or assistive technologies should remain within the modal until it closes.
+- **Don't render modals inside containers with `overflow: hidden`.** Use a portal to avoid clipping and z-index problems.
 
 ## Question 8. How do you implement sorting functionality in a table?
 
+Sorting in a React table is typically implemented by:
+
+1. Storing the current sort column and direction in state.
+2. Updating the state when a column header is clicked.
+3. Sorting the data before rendering.
+4. Optionally toggling between ascending and descending order.
+
+### Example
+
+```jsx
+import { useState, useMemo } from "react";
+
+const employees = [
+  { id: 1, name: "Alice", age: 28, salary: 50000 },
+  { id: 2, name: "John", age: 35, salary: 65000 },
+  { id: 3, name: "Bob", age: 24, salary: 45000 },
+];
+
+function SortableTable() {
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: "asc",
+  });
+
+  const sortedData = useMemo(() => {
+    const sortableItems = [...employees];
+
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === "asc" ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === "asc" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return sortableItems;
+  }, [sortConfig]);
+
+  const requestSort = (key) => {
+    let direction = "asc";
+
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+
+    setSortConfig({ key, direction });
+  };
+
+  return (
+    <table border="1" cellPadding="8">
+      <thead>
+        <tr>
+          <th onClick={() => requestSort("name")}>
+            Name{" "}
+            {sortConfig.key === "name" &&
+              (sortConfig.direction === "asc" ? "▲" : "▼")}
+          </th>
+
+          <th onClick={() => requestSort("age")}>
+            Age{" "}
+            {sortConfig.key === "age" &&
+              (sortConfig.direction === "asc" ? "▲" : "▼")}
+          </th>
+
+          <th onClick={() => requestSort("salary")}>
+            Salary{" "}
+            {sortConfig.key === "salary" &&
+              (sortConfig.direction === "asc" ? "▲" : "▼")}
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {sortedData.map((emp) => (
+          <tr key={emp.id}>
+            <td>{emp.name}</td>
+            <td>{emp.age}</td>
+            <td>${emp.salary}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export default SortableTable;
+```
+
+---
+
+## How it works
+
+1. **Track sorting state**
+
+```jsx
+const [sortConfig, setSortConfig] = useState({
+  key: null,
+  direction: "asc",
+});
+```
+
+- `key`: column currently being sorted.
+- `direction`: `"asc"` or `"desc"`.
+
+---
+
+2. **Sort the data**
+
+```jsx
+const sortedData = useMemo(() => {
+  const items = [...employees];
+
+  items.sort((a, b) => {
+    if (a[key] < b[key]) return direction === "asc" ? -1 : 1;
+    if (a[key] > b[key]) return direction === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  return items;
+}, [sortConfig]);
+```
+
+- Creates a copy of the original array.
+- Prevents mutating state.
+- `useMemo` avoids unnecessary sorting on every render.
+
+---
+
+3. **Toggle sorting direction**
+
+```jsx
+const requestSort = (key) => {
+  let direction = "asc";
+
+  if (sortConfig.key === key && sortConfig.direction === "asc") {
+    direction = "desc";
+  }
+
+  setSortConfig({ key, direction });
+};
+```
+
+Clicking the same header repeatedly switches:
+
+```
+Ascending → Descending → Ascending
+```
+
+---
+
+4. **Trigger sorting**
+
+```jsx
+<th onClick={() => requestSort("age")}>Age</th>
+```
+
+---
+
+## Sorting strings (case-insensitive)
+
+```jsx
+items.sort((a, b) => a.name.localeCompare(b.name));
+```
+
+Or:
+
+```jsx
+items.sort((a, b) =>
+  a.name.localeCompare(b.name, undefined, {
+    sensitivity: "base",
+  }),
+);
+```
+
+---
+
+## Sorting numbers
+
+```jsx
+items.sort((a, b) => a.salary - b.salary);
+```
+
+Descending:
+
+```jsx
+items.sort((a, b) => b.salary - a.salary);
+```
+
+---
+
+## Sorting dates
+
+```jsx
+items.sort((a, b) => new Date(a.joined) - new Date(b.joined));
+```
+
+---
+
+## Reusable sorting helper
+
+```jsx
+const sortData = (data, key, direction) => {
+  return [...data].sort((a, b) => {
+    if (a[key] < b[key]) {
+      return direction === "asc" ? -1 : 1;
+    }
+
+    if (a[key] > b[key]) {
+      return direction === "asc" ? 1 : -1;
+    }
+
+    return 0;
+  });
+};
+```
+
+Usage:
+
+```jsx
+const sorted = sortData(employees, "salary", "desc");
+```
+
+---
+
+## Best practices
+
+- Never mutate the original array; use a copy (`[...data]`).
+- Use `useMemo` for large datasets to avoid repeated sorting.
+- Keep the current sort column and direction in state.
+- Use `localeCompare()` for reliable string sorting.
+- Show a visual indicator (▲/▼) so users know the active sort order.
+- For very large datasets, consider server-side sorting instead of sorting all rows in the browser.
+
 ## Question 9. How do you implement a multi-select dropdown in React?
 
+A multi-select dropdown allows users to select multiple options from a list. In React, you can implement it by maintaining an array of selected values in state and updating it whenever a checkbox is checked or unchecked.
+
+## Example: Custom Multi-Select Dropdown
+
+```jsx
+import { useState } from "react";
+
+const options = ["React", "Angular", "Vue", "Svelte", "Next.js"];
+
+function MultiSelectDropdown() {
+  const [selected, setSelected] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleSelect = (option) => {
+    setSelected((prev) =>
+      prev.includes(option)
+        ? prev.filter((item) => item !== option)
+        : [...prev, option],
+    );
+  };
+
+  return (
+    <div style={{ width: "250px", position: "relative" }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ width: "100%", padding: "10px" }}
+      >
+        {selected.length ? selected.join(", ") : "Select Technologies"}
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            border: "1px solid gray",
+            padding: "10px",
+            marginTop: "5px",
+            background: "#fff",
+          }}
+        >
+          {options.map((option) => (
+            <label
+              key={option}
+              style={{
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => handleSelect(option)}
+              />{" "}
+              {option}
+            </label>
+          ))}
+        </div>
+      )}
+
+      <h4>Selected:</h4>
+      <p>{selected.join(", ") || "None"}</p>
+    </div>
+  );
+}
+
+export default MultiSelectDropdown;
+```
+
+---
+
+## How it works
+
+### 1. Store selected values
+
+```jsx
+const [selected, setSelected] = useState([]);
+```
+
+The selected options are stored in an array.
+
+---
+
+### 2. Toggle selection
+
+```jsx
+const handleSelect = (option) => {
+  setSelected((prev) =>
+    prev.includes(option)
+      ? prev.filter((item) => item !== option)
+      : [...prev, option],
+  );
+};
+```
+
+- If the option is already selected, remove it.
+- Otherwise, add it.
+
+---
+
+### 3. Render checkboxes
+
+```jsx
+<input
+  type="checkbox"
+  checked={selected.includes(option)}
+  onChange={() => handleSelect(option)}
+/>
+```
+
+Each checkbox reflects whether its option is selected.
+
+---
+
+### 4. Display selected items
+
+```jsx
+selected.join(", ");
+```
+
+Example output:
+
+```
+React, Vue, Next.js
+```
+
+---
+
+## Using a native HTML `<select multiple>`
+
+React also supports the built-in multiple select element.
+
+```jsx
+import { useState } from "react";
+
+function MultiSelect() {
+  const [selected, setSelected] = useState([]);
+
+  const handleChange = (e) => {
+    const values = Array.from(
+      e.target.selectedOptions,
+      (option) => option.value,
+    );
+    setSelected(values);
+  };
+
+  return (
+    <>
+      <select multiple value={selected} onChange={handleChange}>
+        <option value="React">React</option>
+        <option value="Vue">Vue</option>
+        <option value="Angular">Angular</option>
+        <option value="Svelte">Svelte</option>
+      </select>
+
+      <p>{selected.join(", ")}</p>
+    </>
+  );
+}
+
+export default MultiSelect;
+```
+
+---
+
+## Using a `Set` for efficient lookups
+
+For large lists, a `Set` provides faster membership checks.
+
+```jsx
+const [selected, setSelected] = useState(new Set());
+
+const toggle = (item) => {
+  setSelected((prev) => {
+    const next = new Set(prev);
+
+    if (next.has(item)) {
+      next.delete(item);
+    } else {
+      next.add(item);
+    }
+
+    return next;
+  });
+};
+```
+
+Convert the set to an array when displaying or submitting data:
+
+```jsx
+const selectedArray = [...selected];
+```
+
+---
+
+## Best practices
+
+- Store selected items as an array (or `Set` for large datasets).
+- Keep the dropdown component controlled by React state.
+- Use checkboxes for custom multi-select UIs.
+- Close the dropdown when clicking outside (using `useEffect` and a `ref`).
+- Add keyboard navigation and ARIA attributes for accessibility.
+- For large option lists, consider search/filter functionality and list virtualization for better performance.
+
 ## Question 10. How do you handle errors globally using an ErrorBoundary component?
+
+An **Error Boundary** is a React component that catches JavaScript errors in its child component tree, logs them, and displays a fallback UI instead of crashing the entire application.
+
+> **Note:** Error Boundaries only work with **class components**. There is currently no Hook equivalent.
+
+## What Error Boundaries Catch
+
+They catch errors during:
+
+- Rendering
+- Lifecycle methods
+- Constructors of child components
+
+They **do not** catch errors in:
+
+- Event handlers
+- Asynchronous code (`setTimeout`, `fetch`, `async/await`)
+- Server-side rendering
+- Errors thrown inside the Error Boundary itself
+
+---
+
+## Basic ErrorBoundary Component
+
+```jsx
+import React from "react";
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      hasError: false,
+    };
+  }
+
+  static getDerivedStateFromError(error) {
+    return {
+      hasError: true,
+    };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Error caught:", error);
+    console.error("Component stack:", errorInfo.componentStack);
+
+    // Send error to logging service
+    // logError(error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <h2>Something went wrong.</h2>;
+    }
+
+    return this.props.children;
+  }
+}
+
+export default ErrorBoundary;
+```
+
+---
+
+## Using the Error Boundary
+
+Wrap the components you want to protect.
+
+```jsx
+import ErrorBoundary from "./ErrorBoundary";
+import Dashboard from "./Dashboard";
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <Dashboard />
+    </ErrorBoundary>
+  );
+}
+
+export default App;
+```
+
+If `Dashboard` or any of its descendants throws an error while rendering, the fallback UI is displayed instead of a blank screen.
+
+---
+
+## Example Component That Throws an Error
+
+```jsx
+function BuggyComponent() {
+  throw new Error("Unexpected error!");
+
+  return <h1>Hello</h1>;
+}
+```
+
+```jsx
+function App() {
+  return (
+    <ErrorBoundary>
+      <BuggyComponent />
+    </ErrorBoundary>
+  );
+}
+```
+
+Output:
+
+```
+Something went wrong.
+```
+
+---
+
+## Custom Fallback UI
+
+Instead of a simple message, provide a more user-friendly interface.
+
+```jsx
+render() {
+  if (this.state.hasError) {
+    return (
+      <div>
+        <h2>Oops!</h2>
+        <p>Something unexpected happened.</p>
+        <button onClick={() => window.location.reload()}>
+          Reload Page
+        </button>
+      </div>
+    );
+  }
+
+  return this.props.children;
+}
+```
+
+---
+
+## Wrapping Individual Sections
+
+Rather than wrapping the entire app, you can isolate failures.
+
+```jsx
+<>
+  <Header />
+
+  <ErrorBoundary>
+    <Sidebar />
+  </ErrorBoundary>
+
+  <ErrorBoundary>
+    <MainContent />
+  </ErrorBoundary>
+
+  <Footer />
+</>
+```
+
+If `Sidebar` crashes, `MainContent` and the rest of the application continue working.
+
+---
+
+## Logging Errors
+
+Use `componentDidCatch` to send errors to monitoring services.
+
+```jsx
+componentDidCatch(error, errorInfo) {
+  console.log(error);
+  console.log(errorInfo.componentStack);
+
+  // Example:
+  // Sentry.captureException(error);
+}
+```
+
+This is commonly used with services like Sentry, Bugsnag, or LogRocket.
+
+---
+
+## Resetting an Error Boundary
+
+Allow users to recover by resetting the error state.
+
+```jsx
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  reset = () => {
+    this.setState({ hasError: false });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <>
+          <h2>Something went wrong.</h2>
+          <button onClick={this.reset}>Try Again</button>
+        </>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+---
+
+## Handling Async Errors
+
+Error Boundaries do **not** catch asynchronous errors.
+
+Instead, handle them explicitly.
+
+```jsx
+function Users() {
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/users")
+      .then((res) => res.json())
+      .catch((err) => setError(err));
+  }, []);
+
+  if (error) {
+    return <p>Failed to load users.</p>;
+  }
+
+  return <div>Users loaded</div>;
+}
+```
+
+---
+
+## Best Practices
+
+- Wrap major sections of your application with Error Boundaries instead of relying on a single global boundary.
+- Display a clear, user-friendly fallback UI rather than exposing technical error details.
+- Log errors to a monitoring service from `componentDidCatch`.
+- Remember that Error Boundaries do **not** catch errors in event handlers or asynchronous code—handle those with `try...catch` or promise error handling.
+- Keep fallback UIs simple and provide a way for users to retry or recover when appropriate.
+- In production applications, combine Error Boundaries with centralized logging and monitoring to quickly identify and fix issues.
 
 ## Question 11. How do you implement server-side rendering with data fetching?
 
