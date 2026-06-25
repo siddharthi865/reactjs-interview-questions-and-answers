@@ -1338,13 +1338,1244 @@ For deeper verification:
 
 ## Question 6. What are the rules of JSX syntax?
 
+# Short answer
+
+JSX (JavaScript XML) is a syntax extension for JavaScript that lets you write HTML-like code inside React components. The main rules are:
+
+- Return a **single parent element** (or a Fragment).
+- Close all tags.
+- Use **camelCase** for DOM attributes and event handlers.
+- Embed JavaScript using **`{}`**.
+- Use `className` instead of `class` and `htmlFor` instead of `for`.
+- Components must start with a **capital letter**.
+- Every item rendered in a list needs a unique **`key`** prop.
+
+---
+
+# Explanation
+
+JSX is **syntactic sugar** for `React.createElement()`. During compilation (e.g., by Vite + Babel or SWC), JSX is transformed into JavaScript function calls.
+
+Example:
+
+```tsx
+const element = <h1>Hello</h1>;
+```
+
+Compiles approximately to:
+
+```tsx
+import { jsx as _jsx } from "react/jsx-runtime";
+
+const element = _jsx("h1", {
+  children: "Hello",
+});
+```
+
+React then uses these element objects to build the Virtual DOM.
+
+---
+
+## 1. Return a single parent element
+
+❌ Invalid
+
+```tsx
+<h1>Hello</h1>
+<p>World</p>
+```
+
+✅ Valid
+
+```tsx
+<div>
+  <h1>Hello</h1>
+  <p>World</p>
+</div>
+```
+
+or use a Fragment:
+
+```tsx
+<>
+  <h1>Hello</h1>
+  <p>World</p>
+</>
+```
+
+Fragments avoid adding unnecessary DOM nodes.
+
+---
+
+## 2. Close all tags
+
+Unlike HTML, every JSX tag must be closed.
+
+✅
+
+```tsx
+<img src="/logo.png" alt="Logo" />
+<input />
+<br />
+```
+
+❌
+
+```tsx
+<img>
+```
+
+---
+
+## 3. Use camelCase for attributes
+
+JSX uses JavaScript property names.
+
+```tsx
+<button onClick={handleClick}>
+  Save
+</button>
+
+<div tabIndex={0} />
+
+<input maxLength={20} />
+```
+
+Common examples:
+
+| HTML        | JSX         |
+| ----------- | ----------- |
+| `onclick`   | `onClick`   |
+| `tabindex`  | `tabIndex`  |
+| `maxlength` | `maxLength` |
+
+---
+
+## 4. Use `className` and `htmlFor`
+
+Because `class` and `for` are reserved JavaScript keywords:
+
+```tsx
+<label htmlFor="email">
+  Email
+</label>
+
+<input id="email" />
+
+<div className="container">
+  Hello
+</div>
+```
+
+---
+
+## 5. Embed JavaScript with `{}`
+
+Anything inside `{}` is evaluated as JavaScript.
+
+```tsx
+const name = "Alice";
+
+<h1>Hello {name}</h1>;
+```
+
+Expressions are allowed:
+
+```tsx
+<p>{2 + 3}</p>
+```
+
+Method calls:
+
+```tsx
+<p>{name.toUpperCase()}</p>
+```
+
+Conditional expressions:
+
+```tsx
+{
+  isLoggedIn ? <Dashboard /> : <Login />;
+}
+```
+
+---
+
+## 6. Components start with a capital letter
+
+React distinguishes HTML elements from React components by capitalization.
+
+```tsx
+function UserCard() {
+  return <h2>User</h2>;
+}
+
+<UserCard />;
+```
+
+Lowercase names are treated as native HTML elements:
+
+```tsx
+<usercard />
+```
+
+React interprets this as a custom HTML tag rather than a React component.
+
+---
+
+## 7. Lists require `key`
+
+```tsx
+users.map((user) => <UserCard key={user.id} user={user} />);
+```
+
+Keys help React efficiently reconcile list updates and preserve component state.
+
+---
+
+## 8. Inline styles are JavaScript objects
+
+```tsx
+<div
+  style={{
+    color: "red",
+    fontSize: "20px",
+  }}
+>
+  Hello
+</div>
+```
+
+CSS property names use camelCase.
+
+---
+
+## 9. Comments use JavaScript syntax
+
+```tsx
+<div>
+  {/* This is a JSX comment */}
+  <p>Hello</p>
+</div>
+```
+
+---
+
+## 10. Rendering behavior (React 18)
+
+JSX itself is declarative—it describes the desired UI. During rendering:
+
+1. JSX is compiled into React element objects.
+2. React builds a Virtual DOM tree.
+3. React compares it with the previous tree (reconciliation).
+4. Only changed DOM nodes are updated.
+
+React 18's concurrent rendering and automatic batching optimize when and how these updates are processed, but JSX syntax remains unchanged.
+
+---
+
+# Example
+
+**Scaffold using Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**`App.tsx`**
+
+```tsx
+type User = {
+  id: number;
+  name: string;
+};
+
+const users: User[] = [
+  { id: 1, name: "Alice" },
+  { id: 2, name: "Bob" },
+];
+
+export default function App() {
+  return (
+    <>
+      <h1 className="title">Users</h1>
+
+      <ul>
+        {users.map((user) => (
+          <li key={user.id}>{user.name}</li>
+        ))}
+      </ul>
+
+      <button onClick={() => alert("Clicked")}>Click Me</button>
+    </>
+  );
+}
+```
+
+This example demonstrates:
+
+- Fragment (`<>...</>`)
+- `className`
+- `map()`
+- `key`
+- JavaScript expressions
+- Event handling
+- Type-safe React component
+
+---
+
+# Tooling & Setup
+
+- **Preferred stack:** Vite + React + TypeScript for fast HMR, native ESM support, and excellent TypeScript integration.
+- **Avoid Create React App (CRA):** It is deprecated. Use Vite for SPAs or Next.js/Remix when SSR or routing is required.
+- **ESM vs CommonJS:** Vite serves code as native **ES Modules (ESM)** during development. Production builds are optimized with Rollup.
+- **JSX Transform:** Modern React uses the automatic JSX runtime, so you typically don't need `import React from "react";` solely to use JSX.
+
+---
+
+# Performance
+
+- JSX itself has minimal runtime cost after compilation.
+- Use the **React DevTools Profiler** to identify expensive component re-renders rather than optimizing JSX syntax.
+- Use `React.memo` for components with stable props, and `useMemo`/`useCallback` only when profiling demonstrates a benefit.
+- Render large collections efficiently using stable `key` props and consider virtualization (`react-window`, `react-virtualized`) for very large lists.
+- Use `React.lazy` and `Suspense` for code splitting to reduce initial bundle size.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders the users heading", () => {
+  render(<App />);
+  expect(screen.getByRole("heading", { name: /users/i })).toBeInTheDocument();
+});
+```
+
+Use **Playwright** for end-to-end testing of rendered JSX and user interactions.
+
+---
+
+# Ops & Deployment
+
+- Wrap major UI sections in **Error Boundaries** to isolate rendering failures.
+- Use SSR or React Server Components (e.g., Next.js App Router) for improved SEO and initial page load performance when appropriate.
+- Monitor rendering errors with tools such as Sentry.
+- Optimize production bundles using code splitting, tree shaking, and CDN delivery.
+
+---
+
+# Pitfalls
+
+- Returning multiple sibling elements without a wrapper or Fragment.
+- Using HTML attributes like `class` or `for` instead of `className` and `htmlFor`.
+- Using array indices as `key` values for dynamic lists that can be reordered, inserted into, or deleted from.
+
 ## Question 7. How do you render components conditionally without using ternary operators?
+
+# Short answer
+
+You can conditionally render components **without using the ternary (`? :`) operator** by using:
+
+- Logical **`&&`** operator
+- Early `return` statements
+- `if...else` before the `return`
+- Returning `null`
+- Variables that hold JSX
+- Object/Map lookups (for multiple conditions)
+- Immediately Invoked Function Expressions (IIFEs) (less common)
+
+Choose the approach that makes the code the most readable.
+
+---
+
+# Explanation
+
+React supports any JavaScript control flow outside JSX, and expressions inside JSX. The goal is to keep rendering logic clear and maintainable.
+
+---
+
+## 1. Using the logical `&&` operator (most common)
+
+Render a component only when a condition is `true`.
+
+```tsx
+function App() {
+  const isLoggedIn = true;
+
+  return <div>{isLoggedIn && <Dashboard />}</div>;
+}
+```
+
+If `isLoggedIn` is `false`, React renders nothing.
+
+**Best for:** Rendering a component only when a condition is true.
+
+**Caution:** If the left side can be `0`, it will render `0`.
+
+```tsx
+{
+  count && <Message />;
+} // Renders 0 when count === 0
+```
+
+A safer version:
+
+```tsx
+{
+  count > 0 && <Message />;
+}
+```
+
+---
+
+## 2. Using an early return
+
+Often the cleanest solution.
+
+```tsx
+function Dashboard({ user }: { user: string | null }) {
+  if (!user) {
+    return null;
+  }
+
+  return <h1>Welcome {user}</h1>;
+}
+```
+
+This avoids deeply nested JSX.
+
+---
+
+## 3. Using `if...else`
+
+Compute the UI before returning JSX.
+
+```tsx
+function App() {
+  const isAdmin = true;
+
+  if (isAdmin) {
+    return <AdminPanel />;
+  }
+
+  return <UserPanel />;
+}
+```
+
+This is often easier to read than nested ternaries.
+
+---
+
+## 4. Store JSX in a variable
+
+Useful when rendering multiple alternatives.
+
+```tsx
+function App() {
+  const isLoading = false;
+
+  let content;
+
+  if (isLoading) {
+    content = <Spinner />;
+  } else {
+    content = <Dashboard />;
+  }
+
+  return <div>{content}</div>;
+}
+```
+
+---
+
+## 5. Return `null`
+
+Render nothing.
+
+```tsx
+function Notification({ show }: { show: boolean }) {
+  if (!show) {
+    return null;
+  }
+
+  return <div>New Notification</div>;
+}
+```
+
+This is the standard way to hide a component.
+
+---
+
+## 6. Object lookup (great for multiple conditions)
+
+Instead of long `if...else` chains:
+
+```tsx
+function App() {
+  const status = "success";
+
+  const views = {
+    loading: <Spinner />,
+    success: <Dashboard />,
+    error: <ErrorPage />,
+  };
+
+  return views[status as keyof typeof views];
+}
+```
+
+This scales well for finite UI states.
+
+---
+
+## 7. IIFE (Immediately Invoked Function Expression)
+
+Useful for more complex logic inside JSX, though less common.
+
+```tsx
+function App() {
+  const role = "admin";
+
+  return (
+    <div>
+      {(() => {
+        if (role === "admin") return <AdminPanel />;
+        if (role === "user") return <UserPanel />;
+        return <GuestPanel />;
+      })()}
+    </div>
+  );
+}
+```
+
+Generally, moving this logic outside JSX improves readability.
+
+---
+
+## Rendering behavior (React 18)
+
+Conditional rendering participates in React's normal rendering process:
+
+- React evaluates the condition during render.
+- The resulting React element tree is reconciled with the previous one.
+- Components that become `null` are unmounted.
+- Multiple state updates that affect conditions are **automatically batched** in React 18.
+
+For example:
+
+```tsx
+setLoading(false);
+setData(response);
+```
+
+These updates typically trigger a single render.
+
+---
+
+## Component architecture
+
+Prefer encapsulating visibility logic inside the component when appropriate.
+
+```tsx
+function LoadingMessage({ loading }: { loading: boolean }) {
+  if (!loading) return null;
+
+  return <p>Loading...</p>;
+}
+```
+
+Benefits:
+
+- Better encapsulation
+- Improved reusability
+- Easier testing
+- Cleaner parent components
+
+---
+
+## State management trade-offs
+
+- Use local `useState` for component-specific visibility.
+- Use Context, Redux Toolkit, or Zustand when visibility is shared across multiple parts of the application.
+- Avoid global state for UI flags that are only relevant to a single component.
+
+---
+
+# Example
+
+**Scaffold using Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+```tsx
+import { useState } from "react";
+
+function Spinner() {
+  return <p>Loading...</p>;
+}
+
+function Dashboard() {
+  return <h2>Dashboard</h2>;
+}
+
+export default function App() {
+  const [loading, setLoading] = useState(true);
+
+  let content;
+
+  if (loading) {
+    content = <Spinner />;
+  } else {
+    content = <Dashboard />;
+  }
+
+  return (
+    <>
+      <button onClick={() => setLoading((prev) => !prev)}>Toggle</button>
+
+      {content}
+    </>
+  );
+}
+```
+
+This demonstrates:
+
+- `if...else`
+- JSX variables
+- conditional rendering without a ternary
+- React 18-compatible state updates
+
+---
+
+# Tooling & Setup
+
+- **Preferred stack:** Vite + React + TypeScript for fast startup, HMR, and modern ESM support.
+- **Avoid Create React App (CRA):** It is deprecated. Prefer Vite for SPAs and Next.js or Remix when SSR or routing is required.
+- **ESM vs CommonJS:** Vite uses native **ES Modules (ESM)** during development, while CommonJS is mainly found in older Node.js ecosystems.
+- **Bundling:** Vite uses **esbuild** for dependency pre-bundling and **Rollup** for optimized production builds.
+
+---
+
+# Performance
+
+- Conditional rendering itself is inexpensive; focus on avoiding unnecessary re-renders of expensive child components.
+- Use **React DevTools Profiler** to identify render bottlenecks.
+- Apply `React.memo` to components whose props remain stable.
+- Use `useMemo` and `useCallback` only when profiling shows they reduce meaningful work.
+- Lazy-load rarely used UI with `React.lazy` and `Suspense`.
+- For large conditional lists, consider virtualization (`react-window` or `react-virtualized`).
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows loading initially", () => {
+  render(<App />);
+  expect(screen.getByText("Loading...")).toBeInTheDocument();
+});
+```
+
+Use **Playwright** for end-to-end verification of conditional UI flows.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures in conditional branches.
+- Log unexpected rendering states with monitoring tools such as Sentry.
+- For SEO-sensitive pages, prefer SSR (e.g., Next.js App Router) when conditional content depends on server-side data.
+- Keep bundles small with route-based code splitting and serve assets via a CDN.
+
+---
+
+# Pitfalls
+
+- Using `&&` with numeric values can unintentionally render `0`; prefer explicit boolean expressions like `count > 0`.
+- Writing deeply nested `if` statements or conditional logic directly in JSX reduces readability; extract logic into variables or helper functions.
+- Returning `undefined` from a component instead of `null` when nothing should be rendered.
 
 ## Question 8. How do you pass an event argument to a handler function?
 
+# How do you pass an event argument to a handler function?
+
+## Short answer
+
+You pass the event object by either:
+
+- Passing the handler directly (`onClick={handleClick}`), where React automatically provides the event.
+- Using an arrow function when you need to pass additional arguments (`onClick={(e) => handleClick(id, e)}`).
+
+---
+
+# Explanation
+
+React automatically passes a **SyntheticEvent** object to event handlers. This object wraps the native browser event and provides a consistent API across browsers.
+
+There are three common patterns:
+
+### 1. Pass the handler directly (preferred)
+
+Use this when only the event object is needed.
+
+```tsx
+<button onClick={handleClick}>Click</button>
+```
+
+```tsx
+const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  console.log(event.currentTarget);
+};
+```
+
+React automatically supplies the event.
+
+---
+
+### 2. Pass additional arguments
+
+When you also need custom values (such as an ID), wrap the handler in an arrow function.
+
+```tsx
+<button onClick={(e) => handleClick(user.id, e)}>Delete</button>
+```
+
+```tsx
+const handleClick = (
+  id: number,
+  event: React.MouseEvent<HTMLButtonElement>,
+) => {
+  console.log(id);
+  console.log(event.type);
+};
+```
+
+This is the standard approach for dynamically rendered lists.
+
+---
+
+### 3. Using `bind()`
+
+Older React code sometimes uses `bind`.
+
+```tsx
+<button onClick={handleClick.bind(null, user.id)}>Delete</button>
+```
+
+Although valid, this is less common in modern React because arrow functions are more readable.
+
+---
+
+## Example (React + TypeScript)
+
+### Create the project (Vite)
+
+```bash
+npm create vite@latest react-events-demo -- --template react-ts
+cd react-events-demo
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+import React from "react";
+
+export default function App() {
+  const users = [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "Bob" },
+  ];
+
+  const handleDelete = (
+    id: number,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    console.log(`Deleting user ${id}`);
+    console.log(event.currentTarget.textContent);
+  };
+
+  return (
+    <div>
+      {users.map((user) => (
+        <button key={user.id} onClick={(e) => handleDelete(user.id, e)}>
+          Delete {user.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+Clicking each button prints both the user ID and event information.
+
+---
+
+# Tooling & Setup
+
+- Prefer **Vite** for React applications because it offers fast startup, instant HMR, and native ESM support.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- For production applications:
+  - **Vite** → SPA and component libraries
+  - **Next.js** → SSR, SSG, Server Components
+  - **Remix** → Nested routing and data loading
+
+- Modern React projects use **ES Modules (ESM)**. Bundlers like Vite (Rollup for builds + esbuild during development) optimize code splitting and tree shaking automatically.
+
+---
+
+# Performance
+
+- Inline arrow functions (`onClick={(e) => ...}`) create a new function on each render. In most applications, this cost is negligible.
+- For large lists or frequently re-rendered memoized children:
+  - Use `React.memo`.
+  - Memoize callbacks with `useCallback` when passing handlers to memoized components.
+
+- Use the **React Profiler** to determine whether function recreation is actually causing unnecessary renders before optimizing.
+- Lazy-load large components with `React.lazy()` and `Suspense` to reduce initial bundle size.
+- Use caching libraries like **TanStack Query** or **Apollo Client** to avoid unnecessary network requests.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/user-event jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+test("button click calls handler", async () => {
+  render(<App />);
+
+  await userEvent.click(screen.getByText(/Delete Alice/i));
+});
+```
+
+Use **Playwright** for end-to-end interaction testing.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Log UI errors using services such as Sentry.
+- Prefer SSR or Server Components (Next.js App Router) for SEO-sensitive pages and faster initial loads.
+- Keep bundles small with dynamic imports and route-level code splitting.
+- Serve static assets through a CDN and enable long-term caching for hashed files.
+
+---
+
+# Pitfalls
+
+- **Don't call the handler immediately:** `onClick={handleClick()}` executes during rendering.
+- **Avoid relying on `event.target`** when you need the element the handler is attached to; prefer `event.currentTarget`.
+- **Don't overuse `useCallback`**—memoize handlers only when it provides measurable benefits, such as with memoized child components.
+
 ## Question 9. How do you implement a simple counter using state?
 
+# How do you implement a simple counter using state?
+
+## Short answer
+
+Use the `useState` hook to store the counter value and update it with the setter function (`setCount`). In React 18, state updates are automatically batched for better performance.
+
+---
+
+# Explanation
+
+A simple counter demonstrates the core React concept of **state**.
+
+- `useState` creates state local to a component.
+- Calling `setCount` schedules a re-render with the new state value.
+- React compares the new Virtual DOM with the previous one and updates only the changed DOM nodes.
+- In **React 18**, multiple state updates in the same event handler are **automatically batched**, reducing unnecessary renders.
+
+### Basic flow
+
+1. Component renders with an initial state.
+2. User clicks a button.
+3. `setCount()` updates the state.
+4. React schedules a re-render.
+5. The UI displays the updated count.
+
+### Updating based on previous state
+
+When the next value depends on the previous one, always use the functional update form:
+
+```tsx
+setCount((prev) => prev + 1);
+```
+
+This avoids stale state issues when multiple updates are queued.
+
+---
+
+# Example (React + TypeScript)
+
+### Create the project (Vite)
+
+```bash
+npm create vite@latest react-counter-demo -- --template react-ts
+cd react-counter-demo
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState<number>(0);
+
+  return (
+    <main style={{ padding: "2rem" }}>
+      <h1>Counter</h1>
+
+      <p>Current Count: {count}</p>
+
+      <button onClick={() => setCount((prev) => prev + 1)}>Increment</button>
+
+      <button onClick={() => setCount((prev) => prev - 1)}>Decrement</button>
+
+      <button onClick={() => setCount(0)}>Reset</button>
+    </main>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for new React projects because it provides a fast development server, Hot Module Replacement (HMR), and optimized production builds.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- Recommended stacks:
+  - **Vite** → Single Page Applications (SPA)
+  - **Next.js** → SSR, SSG, React Server Components
+  - **Remix** → Data-driven routing
+
+- Modern React projects use **ES Modules (ESM)**. Vite leverages native ESM during development and Rollup for optimized production bundles.
+
+---
+
+# Performance
+
+Even a simple counter highlights React performance concepts:
+
+- React only re-renders the component whose state changes.
+- React 18 **automatic batching** groups multiple state updates in one render.
+
+Example:
+
+```tsx
+const handleClick = () => {
+  setCount((c) => c + 1);
+  setCount((c) => c + 1);
+};
+```
+
+The counter increases by **2** but triggers only **one render**.
+
+Optimization tips:
+
+- Use **React Profiler** to inspect render frequency.
+- Use `React.memo` for child components that don't depend on changing state.
+- Use `useCallback` when passing callbacks to memoized children.
+- Use `useMemo` only for expensive calculations.
+- Use `React.lazy` and `Suspense` for code splitting.
+- For server data, use caching libraries like **TanStack Query** or **Apollo Client** instead of local state.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/user-event jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("increments counter", async () => {
+  render(<App />);
+
+  await userEvent.click(screen.getByRole("button", { name: /increment/i }));
+
+  expect(screen.getByText(/Current Count: 1/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Wrap your application with an **Error Boundary** to catch rendering errors.
+- Log runtime issues using tools like Sentry.
+- For SEO-sensitive applications, consider SSR with **Next.js**.
+- Keep bundles small with route-based code splitting and lazy loading.
+- Deploy static Vite builds through a CDN for efficient caching and fast delivery.
+
+---
+
+# Pitfalls
+
+- **Use functional updates** (`setCount(prev => prev + 1)`) when the next state depends on the previous state.
+- **Never mutate state directly** (e.g., `count++`); always use the setter returned by `useState`.
+- **Remember that state updates are asynchronous**, so don't expect the state variable to change immediately after calling `setCount`.
+
 ## Question 10. How do you render default content when a prop is missing?
+
+# How do you render default content when a prop is missing?
+
+## Short answer
+
+Use **default parameter values** (recommended for functional components) or the **nullish coalescing operator (`??`)** to provide fallback content when a prop is `undefined` or `null`. Avoid relying on `defaultProps` for function components in modern React.
+
+---
+
+# Explanation
+
+Props are optional unless explicitly required (e.g., with TypeScript). When a prop is missing, you can render a default value to keep the UI predictable.
+
+### 1. Default parameter values (Recommended)
+
+The cleanest and most modern approach is to assign defaults during destructuring.
+
+```tsx
+function Greeting({ name = "Guest" }: { name?: string }) {
+  return <h1>Hello, {name}!</h1>;
+}
+```
+
+If `name` isn't passed, `"Guest"` is used automatically.
+
+---
+
+### 2. Nullish coalescing (`??`)
+
+Use `??` when rendering to fall back only if the value is `null` or `undefined`.
+
+```tsx
+<p>{description ?? "No description available."}</p>
+```
+
+Unlike `||`, this preserves valid falsy values like `0`, `false`, and `""`.
+
+---
+
+### 3. Logical OR (`||`)
+
+```tsx
+<p>{title || "Untitled"}</p>
+```
+
+Be careful: `||` treats **all falsy values** (`0`, `false`, `""`, `NaN`) as missing.
+
+Example:
+
+```tsx
+title = ""; // Renders "Untitled"
+```
+
+Often this is **not** what you want.
+
+---
+
+### TypeScript example
+
+```tsx
+type UserCardProps = {
+  name?: string;
+  age?: number;
+};
+```
+
+Optional props pair naturally with default values.
+
+---
+
+# Example (React + TypeScript)
+
+### Create the project (Vite)
+
+```bash
+npm create vite@latest react-default-props-demo -- --template react-ts
+cd react-default-props-demo
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+type UserCardProps = {
+  name?: string;
+  city?: string;
+};
+
+function UserCard({ name = "Guest", city = "Unknown" }: UserCardProps) {
+  return (
+    <div>
+      <h2>{name}</h2>
+      <p>City: {city}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <UserCard name="Alice" city="London" />
+      <UserCard name="Bob" />
+      <UserCard />
+    </>
+  );
+}
+```
+
+**Output**
+
+```
+Alice
+City: London
+
+Bob
+City: Unknown
+
+Guest
+City: Unknown
+```
+
+---
+
+# Tooling & Setup
+
+- Prefer **Vite** for modern React development because it provides fast startup, HMR, and optimized builds.
+- Avoid **Create React App (CRA)** since it is deprecated.
+- Use:
+  - **Vite** for SPAs.
+  - **Next.js** for SSR, SSG, and React Server Components.
+  - **Remix** for nested routing and data loading.
+
+- Modern React tooling uses **ES Modules (ESM)**. Vite uses native ESM during development and Rollup for production builds.
+
+---
+
+# Performance
+
+Providing default prop values has virtually no performance cost.
+
+For larger applications:
+
+- Use **React.memo** to avoid unnecessary re-renders when props haven't changed.
+- Use **useCallback** for stable callback props passed to memoized children.
+- Use **useMemo** for expensive derived values.
+- Profile renders with the **React Profiler** before optimizing.
+- Use `React.lazy()` and `Suspense` for code splitting.
+- Cache server state with **TanStack Query** or **Apollo Client** instead of repeatedly fetching data.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/user-event jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import UserCard from "./UserCard";
+
+test("renders default name", () => {
+  render(<UserCard />);
+
+  expect(screen.getByText("Guest")).toBeInTheDocument();
+});
+```
+
+Use **Playwright** for end-to-end testing of complete user flows.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors.
+- Log UI issues with tools like Sentry.
+- Prefer SSR (e.g., Next.js) when default content affects SEO or initial page load.
+- Optimize bundles using code splitting and tree shaking.
+- Deploy static assets via a CDN with long-term caching for hashed files.
+
+---
+
+# Pitfalls
+
+- **Prefer `??` over `||`** when `0`, `false`, or an empty string are valid values.
+- **Avoid `defaultProps` for function components**; use default parameter values instead.
+- **Mark optional props correctly in TypeScript** (`prop?: Type`) when providing defaults.
 
 ## Question 11. How do you use logical AND (`&&`) for conditional rendering?
 
