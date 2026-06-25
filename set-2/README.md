@@ -1211,13 +1211,1408 @@ npm run test
 
 ## Question 6. What is ReactDOM? Difference between React and ReactDOM?
 
+## Short answer
+
+**React** is the core library for building UI components, while **ReactDOM** is the platform-specific package that renders React components into the **browser DOM**. React handles _what to render_, and ReactDOM handles _how to render it in the browser_.
+
+---
+
+# Explanation
+
+## 1. What is React?
+
+React is a **UI library** focused on:
+
+- Component creation (functional components, hooks)
+- State management (`useState`, `useReducer`)
+- Reconciliation (Virtual DOM diffing)
+- Declarative UI logic
+
+It is **platform-agnostic**, meaning React itself does NOT care where UI is rendered.
+
+React can be used with:
+
+- ReactDOM (web)
+- React Native (mobile)
+- React Three Fiber (3D)
+- Custom renderers (Canvas, VR, etc.)
+
+---
+
+## 2. What is ReactDOM?
+
+ReactDOM is a **rendering layer for the web**.
+
+It provides:
+
+- DOM mounting (`createRoot`)
+- DOM updates during reconciliation
+- Hydration (SSR apps like Next.js)
+- Event binding to browser DOM
+
+---
+
+## Key API:
+
+```tsx id="k1p9d2"
+import ReactDOM from "react-dom/client";
+
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+
+root.render(<App />);
+```
+
+---
+
+## 3. Difference between React and ReactDOM
+
+| Feature  | React                       | ReactDOM                 |
+| -------- | --------------------------- | ------------------------ |
+| Purpose  | Build UI logic              | Render UI to browser DOM |
+| Focus    | Components, state, hooks    | DOM manipulation         |
+| Platform | Platform-agnostic           | Web only                 |
+| Provides | Virtual DOM, reconciliation | DOM APIs, hydration      |
+| Example  | `useState`, `useEffect`     | `createRoot`, `render`   |
+
+---
+
+## 4. Rendering flow (important for interviews)
+
+When React app runs:
+
+1. React builds component tree
+2. Creates Virtual DOM
+3. ReactDOM takes that tree
+4. Compares it with real DOM
+5. Updates only changed parts
+
+### React 18 modern flow:
+
+```tsx id="r9x1k4"
+import { createRoot } from "react-dom/client";
+
+createRoot(document.getElementById("root")!).render(<App />);
+```
+
+### What changed in React 18:
+
+- `ReactDOM.render()` ❌ deprecated
+- `createRoot()` enables:
+  - concurrent rendering
+  - automatic batching
+  - better streaming support
+
+---
+
+## 5. React without ReactDOM
+
+React alone cannot render UI to the browser:
+
+```tsx id="m8d2p1"
+// React alone only describes UI
+const element = <h1>Hello</h1>;
+```
+
+You need a renderer:
+
+- ReactDOM → Web
+- React Native → Mobile
+- React Test Renderer → Testing
+
+---
+
+## 6. ReactDOM in SSR (important modern concept)
+
+In frameworks like Next.js:
+
+- Server uses `react-dom/server`
+- Client uses `react-dom/client`
+
+### Hydration:
+
+```tsx id="h2k8d9"
+import { hydrateRoot } from "react-dom/client";
+
+hydrateRoot(document.getElementById("root")!, <App />);
+```
+
+This attaches React behavior to server-rendered HTML.
+
+---
+
+# Example
+
+## Vite setup (recommended modern approach)
+
+```bash id="v9k2d1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## React + ReactDOM usage
+
+### `main.tsx`
+
+```tsx id="p4x9d2"
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+
+const rootElement = document.getElementById("root");
+
+if (!rootElement) throw new Error("Root element not found");
+
+ReactDOM.createRoot(rootElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+```
+
+---
+
+### `App.tsx`
+
+```tsx id="c8m2p1"
+export default function App() {
+  return <h1>Hello React + ReactDOM</h1>;
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Modern stack:
+
+- **Vite** (recommended)
+- React 18+
+- TypeScript
+
+### Why Vite?
+
+- Native ESM support
+- Fast HMR
+- Minimal bundling overhead
+- Replaces older CRA approach
+
+### ReactDOM role in tooling:
+
+- Entry point for web apps
+- Works with bundlers (Vite, Webpack, Turbopack)
+- Handles DOM mounting & hydration
+
+---
+
+# Performance
+
+ReactDOM performance features:
+
+- **Batching updates (React 18+)**
+- **Concurrent rendering support**
+- **Selective DOM updates via diffing**
+
+Optimization strategies:
+
+- Use `React.memo` to avoid unnecessary renders
+- Keep DOM updates minimal
+- Use `useTransition` for non-blocking updates
+- Avoid unnecessary root re-renders
+
+Profiling:
+
+- React DevTools Profiler
+- Chrome Performance tab (long tasks, layout shifts)
+
+---
+
+# Testing
+
+ReactDOM is often replaced in tests:
+
+### React Testing Library (preferred)
+
+```tsx id="t3v8m1"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders heading", () => {
+  render(<App />);
+  expect(screen.getByText("Hello React + ReactDOM")).toBeInTheDocument();
+});
+```
+
+### Under the hood:
+
+- Uses `react-dom/client` to mount components into a virtual DOM container
+
+Run:
+
+```bash id="r1x9d3"
+npm run test
+```
+
+---
+
+# Ops & Deployment
+
+- ReactDOM is only used in **browser environments**
+- In SSR frameworks:
+  - Server uses `react-dom/server`
+  - Client uses `react-dom/client`
+
+- Ensure hydration consistency to avoid mismatches
+- Deploy via:
+  - Vercel (Next.js)
+  - Netlify / Cloudflare Pages (Vite SPA)
+
+- Use CDN for static assets
+
+---
+
+# Pitfalls
+
+- Using deprecated `ReactDOM.render()` in React 18+
+- Confusing React (logic) with ReactDOM (renderer)
+- Hydration mismatch in SSR apps
+- Mounting multiple roots unnecessarily instead of one app root
+
 ## Question 7. How do you include images in React projects?
+
+## Short answer
+
+In React, images can be included by **importing them as modules (recommended in Vite/CRA-like setups)**, using **public folder paths**, or loading them from **remote URLs (CDN/API)**. The best approach depends on whether the image is static, dynamic, or externally hosted.
+
+---
+
+# Explanation
+
+React doesn’t treat images specially—Webpack/Vite handle them during bundling. There are three main approaches:
+
+---
+
+## 1. Import images (recommended for static assets)
+
+Best for images inside `src/`.
+
+```tsx id="img1"
+import logo from "./assets/logo.png";
+
+export default function Header() {
+  return <img src={logo} alt="Logo" />;
+}
+```
+
+### How it works
+
+- Vite/Webpack processes the image
+- Optimizes and hashes filename for caching
+- Returns final URL at build time
+
+### Rendering behavior
+
+- Image is bundled into the app
+- Cache-friendly hashed output in production
+
+---
+
+## 2. Using the `public` folder
+
+Best for:
+
+- Static files not processed by bundler
+- SEO assets, favicon, robots.txt, etc.
+
+```tsx id="img2"
+export default function Banner() {
+  return <img src="/images/banner.png" alt="Banner" />;
+}
+```
+
+### Key difference
+
+- Files are served **as-is**
+- No hashing or optimization
+- Accessed directly via URL
+
+---
+
+## 3. External image URLs (CDN / API)
+
+Best for:
+
+- User-uploaded images
+- Cloud storage (S3, Cloudinary)
+- Dynamic content
+
+```tsx id="img3"
+export default function Avatar() {
+  return (
+    <img src="https://cdn.example.com/user/avatar.png" alt="User avatar" />
+  );
+}
+```
+
+---
+
+## 4. Dynamic images
+
+When image paths are dynamic:
+
+```tsx id="img4"
+const getImage = (name: string) =>
+  new URL(`./assets/${name}.png`, import.meta.url).href;
+
+export default function Icon({ name }: { name: string }) {
+  return <img src={getImage(name)} alt={name} />;
+}
+```
+
+---
+
+# React 18 rendering behavior
+
+- Image rendering is part of DOM commit phase
+- React does not manage image loading internally
+- Browser handles loading, caching, decoding
+
+### Important:
+
+- Re-renders do NOT reload images if `src` stays the same
+- Changing `src` triggers new network request
+
+---
+
+# Example
+
+## Vite setup (modern recommended approach)
+
+```bash id="vite1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Example project structure
+
+```
+src/
+  assets/
+    logo.png
+  App.tsx
+public/
+  images/
+    banner.png
+```
+
+---
+
+## `App.tsx`
+
+```tsx id="appimg1"
+import logo from "./assets/logo.png";
+
+export default function App() {
+  return (
+    <div>
+      {/* Imported image */}
+      <img src={logo} alt="Company Logo" width={120} />
+
+      {/* Public folder image */}
+      <img src="/images/banner.png" alt="Banner" width={300} />
+
+      {/* External image */}
+      <img src="https://via.placeholder.com/150" alt="Placeholder" />
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended stack
+
+- **Vite (preferred)** → fast ESM bundling, asset handling
+- **Next.js** → built-in image optimization (`next/image`)
+- **TypeScript** → safer asset imports
+
+## Why Vite over CRA?
+
+- Faster dev server (native ESM)
+- Better asset pipeline
+- Modern Rollup-based production builds
+- CRA is deprecated
+
+---
+
+## Advanced (Next.js option)
+
+Next.js provides optimized image handling:
+
+```tsx id="nextimg"
+import Image from "next/image";
+
+export default function Page() {
+  return <Image src="/logo.png" alt="Logo" width={200} height={200} />;
+}
+```
+
+Benefits:
+
+- Lazy loading by default
+- Automatic resizing
+- WebP/AVIF optimization
+
+---
+
+# Performance
+
+## Key considerations:
+
+### 1. Lazy loading
+
+```tsx id="lazyimg"
+<img src="/image.png" loading="lazy" alt="..." />
+```
+
+### 2. Use optimized formats
+
+- Prefer WebP / AVIF over PNG/JPEG
+
+### 3. Avoid layout shift
+
+Always set dimensions:
+
+```tsx id="dims"
+<img src={logo} width={200} height={100} alt="logo" />
+```
+
+### 4. CDN usage
+
+- Serve images via CDN for lower latency
+- Use caching headers (`Cache-Control`)
+
+### 5. React rendering optimization
+
+- Changing image props triggers re-render
+- Use `React.memo` if image component is part of larger tree
+
+---
+
+# Testing
+
+Using React Testing Library:
+
+```tsx id="imgtest"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders logo image", () => {
+  render(<App />);
+  const img = screen.getByAltText("Company Logo");
+  expect(img).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Static images:
+  - Go in `public/` or bundled via `src/assets`
+
+- Production builds:
+  - Vite hashes asset filenames for caching
+
+- CDN best practice:
+  - Store images in S3 / Cloudinary / Cloudflare Images
+
+- SSR frameworks (Next.js):
+  - Use `next/image` for optimization
+
+- Monitor:
+  - Largest Contentful Paint (LCP)
+  - image load failures
+
+---
+
+# Pitfalls
+
+- ❌ Using wrong path in `public/` (missing leading `/`)
+- ❌ Not setting `alt` attributes (accessibility issue)
+- ❌ Missing width/height → layout shift (CLS)
+- ❌ Importing large images unnecessarily into bundle
+- ❌ Using non-optimized formats (PNG instead of WebP)
 
 ## Question 8. What is React component lifecycle?
 
+## Short answer
+
+The **React component lifecycle** is the sequence of phases a component goes through: **mounting, updating, and unmounting**. In functional components, lifecycle behavior is handled using **Hooks like `useEffect`, `useLayoutEffect`, and cleanup functions**, rather than class lifecycle methods.
+
+---
+
+# Explanation
+
+React components go through three main lifecycle phases:
+
+---
+
+## 1. Mounting (component is created and added to DOM)
+
+This happens when a component is rendered for the first time.
+
+### What happens:
+
+- Component function runs
+- JSX is returned
+- DOM is created and inserted
+- Effects run after render
+
+### Functional component equivalent:
+
+```tsx id="mount1"
+useEffect(() => {
+  console.log("Component mounted");
+
+  return () => {
+    console.log("Cleanup on unmount");
+  };
+}, []);
+```
+
+---
+
+## 2. Updating (re-render due to state/props change)
+
+Occurs when:
+
+- State changes (`useState`, `useReducer`)
+- Props change
+- Context updates
+- Parent re-renders
+
+### Example:
+
+```tsx id="update1"
+useEffect(() => {
+  console.log("Runs on every render or dependency change");
+}, [count]);
+```
+
+---
+
+## 3. Unmounting (component removed from DOM)
+
+Happens when:
+
+- Conditional rendering removes component
+- Route changes
+- Parent stops rendering it
+
+### Cleanup example:
+
+```tsx id="unmount1"
+useEffect(() => {
+  const timer = setInterval(() => {
+    console.log("Running...");
+  }, 1000);
+
+  return () => {
+    clearInterval(timer);
+    console.log("Component unmounted");
+  };
+}, []);
+```
+
+---
+
+# Lifecycle in Class Components (for interviews)
+
+Even though modern React uses hooks, class lifecycle methods are still asked in interviews:
+
+| Phase      | Method                                                  |
+| ---------- | ------------------------------------------------------- |
+| Mounting   | `constructor`, `render`, `componentDidMount`            |
+| Updating   | `shouldComponentUpdate`, `render`, `componentDidUpdate` |
+| Unmounting | `componentWillUnmount`                                  |
+
+---
+
+### Example:
+
+```tsx id="class1"
+class MyComponent extends React.Component {
+  componentDidMount() {
+    console.log("Mounted");
+  }
+
+  componentDidUpdate() {
+    console.log("Updated");
+  }
+
+  componentWillUnmount() {
+    console.log("Unmounted");
+  }
+
+  render() {
+    return <h1>Hello</h1>;
+  }
+}
+```
+
+---
+
+# React 18 behavior (important modern concept)
+
+### 1. Rendering vs committing
+
+React separates lifecycle into two phases:
+
+- **Render phase** (pure calculation)
+- **Commit phase** (DOM updates + effects)
+
+### 2. Strict Mode (development only)
+
+React intentionally double-invokes:
+
+- functions
+- effects
+
+to detect side effects:
+
+```tsx id="strict1"
+<React.StrictMode>
+  <App />
+</React.StrictMode>
+```
+
+So you may see:
+
+- mount logs twice in dev (not production behavior)
+
+---
+
+### 3. Automatic batching
+
+Multiple state updates in lifecycle are grouped:
+
+```tsx id="batch1"
+setCount((c) => c + 1);
+setFlag(true);
+```
+
+→ triggers only one re-render
+
+---
+
+# Example
+
+## Vite setup (recommended)
+
+```bash id="vite2"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Functional lifecycle demo
+
+```tsx id="life1"
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  // Mount + update
+  useEffect(() => {
+    console.log("Mounted or updated: count =", count);
+  }, [count]);
+
+  // Mount only
+  useEffect(() => {
+    console.log("Mounted");
+
+    return () => {
+      console.log("Unmounted");
+    };
+  }, []);
+
+  return (
+    <div>
+      <h1>{count}</h1>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended stack:
+
+- **Vite (preferred)** → fast ESM dev server
+- React 18+
+- TypeScript
+
+## Why Vite?
+
+- Instant HMR
+- Native ES modules
+- Minimal config
+- Replaces CRA (deprecated)
+
+## Framework alternatives:
+
+- Next.js → SSR + routing + server components
+- Remix → full-stack React
+
+---
+
+# Performance
+
+Lifecycle awareness helps optimize:
+
+### 1. Prevent unnecessary updates
+
+- `React.memo`
+- `useMemo`
+- `useCallback`
+
+### 2. Control side effects
+
+- Proper dependency arrays in `useEffect`
+- Avoid infinite loops
+
+### 3. Cleanup effects
+
+- Clear timers
+- Unsubscribe from events
+- Cancel API requests
+
+### 4. React Profiler
+
+- Identify expensive mount/update cycles
+
+---
+
+# Testing
+
+Using Vitest + React Testing Library:
+
+```tsx id="test1"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders counter", () => {
+  render(<App />);
+  expect(screen.getByText("0")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash id="run1"
+npm run test
+```
+
+---
+
+# Ops & Deployment
+
+- Ensure cleanup logic prevents memory leaks in:
+  - intervals
+  - subscriptions
+  - WebSockets
+
+- Use Error Boundaries for render-time errors
+- Monitor lifecycle-heavy components for performance issues
+- In SSR (Next.js):
+  - mount lifecycle happens only on client hydration
+
+- Deploy via Vercel / Netlify / Cloudflare Pages
+
+---
+
+# Pitfalls
+
+- Missing cleanup in `useEffect` → memory leaks
+- Incorrect dependency arrays → stale or infinite effects
+- Confusing render phase vs commit phase
+- Overusing `useEffect` for derived state instead of computing during render
+
 ## Question 9. Difference between mounting, updating, and unmounting phases
 
+## Short answer
+
+- **Mounting**: Component is created and inserted into the DOM for the first time.
+- **Updating**: Component re-renders due to changes in state, props, or context.
+- **Unmounting**: Component is removed from the DOM and cleanup logic runs.
+
+---
+
+# Explanation
+
+React component lifecycle is divided into three main phases that describe how a component behaves over time in the UI.
+
+---
+
+## 1. Mounting phase
+
+This is when the component is **created and added to the DOM**.
+
+### What happens:
+
+- Component function executes (or class constructor runs)
+- JSX is rendered
+- Virtual DOM is created
+- Real DOM node is inserted
+- Effects run after render (`useEffect` with `[]`)
+
+### Functional equivalent:
+
+```tsx id="mount2"
+useEffect(() => {
+  console.log("Mounted");
+
+  return () => {
+    console.log("Unmount cleanup");
+  };
+}, []);
+```
+
+### Key characteristics:
+
+- Runs only once per component lifecycle (in normal cases)
+- Used for initialization (API calls, subscriptions)
+
+---
+
+## 2. Updating phase
+
+This happens when a component **re-renders due to changes**.
+
+### Triggered by:
+
+- `useState` updates
+- `props` changes
+- `context` updates
+- Parent re-rendering
+
+### Functional equivalent:
+
+```tsx id="update2"
+useEffect(() => {
+  console.log("Runs on mount + when count changes");
+}, [count]);
+```
+
+### Key characteristics:
+
+- Happens multiple times
+- React re-executes component function
+- Virtual DOM is diffed (reconciliation)
+- Only changed parts update in real DOM
+
+### React 18 behavior:
+
+- Updates are **automatically batched**
+- Multiple state changes cause a single re-render
+
+---
+
+## 3. Unmounting phase
+
+This is when the component is **removed from the DOM**.
+
+### What happens:
+
+- Component is destroyed
+- Event listeners cleaned up
+- Timers/subscriptions stopped
+- Cleanup function runs
+
+### Functional equivalent:
+
+```tsx id="unmount2"
+useEffect(() => {
+  const timer = setInterval(() => {
+    console.log("Running...");
+  }, 1000);
+
+  return () => {
+    clearInterval(timer);
+    console.log("Component unmounted");
+  };
+}, []);
+```
+
+---
+
+# Key differences (interview-ready table)
+
+| Phase      | When it happens   | What triggers it                     | Key purpose          |
+| ---------- | ----------------- | ------------------------------------ | -------------------- |
+| Mounting   | First render      | Component is added                   | Initialize component |
+| Updating   | Re-render         | State/props/context change           | Sync UI with data    |
+| Unmounting | Component removed | Conditional rendering / route change | Cleanup resources    |
+
+---
+
+# React internal behavior (important)
+
+### 1. Mounting
+
+- Fiber node is created
+- DOM nodes are inserted
+- Effects scheduled after commit
+
+### 2. Updating
+
+- New virtual tree is created
+- Diffing (reconciliation) occurs
+- Minimal DOM updates applied
+- Effects re-run if dependencies change
+
+### 3. Unmounting
+
+- Fiber node is removed
+- Cleanup functions executed
+- DOM nodes destroyed
+
+---
+
+# Example
+
+## Vite setup
+
+```bash id="vite3"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Lifecycle demo component
+
+```tsx id="life2"
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [show, setShow] = useState(true);
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <button onClick={() => setShow((s) => !s)}>Toggle Component</button>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+
+      {show && <Child count={count} />}
+    </div>
+  );
+}
+
+function Child({ count }: { count: number }) {
+  useEffect(() => {
+    console.log("Mounted");
+
+    return () => {
+      console.log("Unmounted or before re-run cleanup");
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log("Updated count:", count);
+  }, [count]);
+
+  return <h1>{count}</h1>;
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** (preferred modern setup)
+- React 18+ for concurrent rendering
+- TypeScript for type safety
+
+Why Vite:
+
+- Fast dev server (ESM-based)
+- Instant HMR
+- Modern build pipeline
+
+Avoid CRA (deprecated).
+
+---
+
+# Performance
+
+### Mount optimization
+
+- Avoid heavy computations during initial render
+- Lazy load components (`React.lazy`)
+
+### Update optimization
+
+- `React.memo` prevents unnecessary re-renders
+- `useMemo` avoids recalculating expensive values
+- `useCallback` stabilizes functions
+
+### Unmount optimization
+
+- Always clean up:
+  - intervals
+  - event listeners
+  - subscriptions
+  - WebSockets
+
+### Profiling tools
+
+- React DevTools Profiler
+- Chrome Performance tab
+
+---
+
+# Testing
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders toggle button", () => {
+  render(<App />);
+  expect(screen.getByText("Toggle Component")).toBeInTheDocument();
+});
+```
+
+For lifecycle behavior:
+
+- simulate mount/unmount
+- verify cleanup logic
+
+Run:
+
+```bash id="test-run2"
+npm run test
+```
+
+---
+
+# Ops & Deployment
+
+- Ensure cleanup prevents memory leaks (especially in SPAs)
+- Use Error Boundaries for crash recovery
+- In SSR (Next.js):
+  - mount happens only on client hydration
+
+- Monitor:
+  - render frequency
+  - memory usage
+  - long-running effects
+
+Deploy via:
+
+- Vercel (Next.js)
+- Netlify / Cloudflare Pages (Vite)
+
+---
+
+# Pitfalls
+
+- Forgetting cleanup in `useEffect` → memory leaks
+- Incorrect dependency arrays → infinite updates or stale values
+- Confusing re-render with remount
+- Assuming unmount always means app shutdown (it can be temporary in routing)
+
 ## Question 10. How do you use ref in React?
+
+## Short answer
+
+`ref` in React is used to **directly access DOM elements or persist values across renders without causing re-renders**. It is created using `useRef()` in functional components and attached to elements via the `ref` attribute.
+
+---
+
+# Explanation
+
+## What is `ref`?
+
+A **ref (reference)** is a mutable container that React does not track for re-renders.
+
+It is mainly used for:
+
+- Accessing DOM elements directly (imperative actions)
+- Storing mutable values that don’t trigger re-render
+- Managing focus, scroll, animations, timers, etc.
+
+---
+
+## 1. Creating a ref
+
+```tsx id="ref1"
+import { useRef } from "react";
+
+const inputRef = useRef<HTMLInputElement>(null);
+```
+
+- `useRef()` returns an object: `{ current: ... }`
+- `current` holds the actual value or DOM node
+
+---
+
+## 2. Accessing DOM elements
+
+```tsx id="ref2"
+import { useRef } from "react";
+
+export default function App() {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const focusInput = () => {
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div>
+      <input ref={inputRef} type="text" />
+      <button onClick={focusInput}>Focus Input</button>
+    </div>
+  );
+}
+```
+
+### Key idea:
+
+- React gives you the DOM node after render
+- You can call native DOM APIs like `.focus()`, `.scrollIntoView()`
+
+---
+
+## 3. Storing mutable values (no re-render)
+
+```tsx id="ref3"
+import { useRef, useState } from "react";
+
+export default function App() {
+  const renderCount = useRef(0);
+  const [count, setCount] = useState(0);
+
+  renderCount.current++;
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <p>Renders: {renderCount.current}</p>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+### Important:
+
+- Updating `ref.current` does NOT trigger re-render
+- Unlike `useState`
+
+---
+
+## 4. React 18 behavior
+
+- Refs are initialized during render
+- DOM assignment happens in **commit phase**
+- Ref updates are stable across re-renders
+
+React ensures:
+
+- `ref.current` is updated after DOM commit
+- No concurrent rendering inconsistencies
+
+---
+
+## 5. Forwarding refs (advanced pattern)
+
+Used when passing refs to child components:
+
+```tsx id="ref4"
+import { forwardRef, useRef } from "react";
+
+const Input = forwardRef<HTMLInputElement>((props, ref) => {
+  return <input ref={ref} {...props} />;
+});
+
+export default function App() {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <Input ref={inputRef} />
+      <button onClick={() => inputRef.current?.focus()}>Focus</button>
+    </>
+  );
+}
+```
+
+---
+
+## 6. When NOT to use refs
+
+Avoid refs for:
+
+- UI state (use `useState`)
+- Derived values
+- Conditional rendering logic
+
+Bad example:
+
+```tsx id="ref5"
+const isOpen = useRef(false); // ❌ wrong for UI state
+```
+
+Correct:
+
+```tsx id="ref6"
+const [isOpen, setIsOpen] = useState(false);
+```
+
+---
+
+# Example
+
+## Vite setup
+
+```bash id="vite4"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Full working example
+
+```tsx id="ref7"
+import { useRef } from "react";
+
+export default function App() {
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBox = () => {
+    boxRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  return (
+    <div style={{ height: "200vh", padding: "20px" }}>
+      <button onClick={scrollToBox}>Go to Box</button>
+
+      <div style={{ marginTop: "150vh" }}>
+        <div ref={boxRef} style={{ height: "100px", background: "lightblue" }}>
+          Target Box
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite (recommended)** for modern React apps
+- React 18+ ensures stable ref handling in concurrent rendering
+- TypeScript improves ref safety:
+
+  ```tsx
+  useRef<HTMLInputElement>(null);
+  ```
+
+Framework options:
+
+- Vite → SPA apps
+- Next.js → SSR + server components (refs only on client)
+
+---
+
+# Performance
+
+- Refs do NOT trigger re-renders → useful for performance-sensitive values
+- Avoid using state when mutation is enough
+- Use refs for:
+  - DOM access
+  - timers/intervals
+  - previous value tracking
+
+### Optimization tips:
+
+- Avoid excessive DOM manipulation via refs
+- Combine with `useEffect` for lifecycle-controlled DOM access
+- Use `React.memo` to avoid unnecessary child re-renders
+
+---
+
+# Testing
+
+Using React Testing Library:
+
+```tsx id="test3"
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("renders button and input interaction", () => {
+  render(<App />);
+
+  const button = screen.getByText("Go to Box");
+  fireEvent.click(button);
+
+  expect(button).toBeInTheDocument();
+});
+```
+
+For ref-based logic:
+
+- Test DOM behavior (focus, scroll)
+- Not internal ref values directly
+
+---
+
+# Ops & Deployment
+
+- Refs are client-only concepts (not meaningful in SSR rendering output)
+- In Next.js:
+  - refs only attach after hydration
+
+- Avoid SSR assumptions for DOM refs
+- Ensure cleanup when refs manage resources (timers, listeners)
+
+---
+
+# Pitfalls
+
+- Using refs for state management instead of `useState`
+- Accessing `ref.current` before mount (null issue)
+- Mutating DOM too heavily → bypassing React’s reconciliation
+- Forgetting that ref updates do NOT trigger re-renders
 
 ## Question 11. What is the difference between props drilling and context API?
 
