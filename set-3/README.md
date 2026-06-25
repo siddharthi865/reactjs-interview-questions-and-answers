@@ -1170,13 +1170,1231 @@ test("renders login button", () => {
 
 ## Question 6. How do you handle side effects in React?
 
+## Short answer
+
+Side effects in React are handled primarily using the **`useEffect` hook** (and related hooks like `useLayoutEffect` or external libraries like React Query). Side effects include anything that interacts with the outside world, such as API calls, subscriptions, timers, DOM manipulation, or logging.
+
+---
+
+## Explanation
+
+### What are side effects?
+
+A **side effect** is any operation that happens outside the pure rendering process.
+
+Examples:
+
+- Fetching data from APIs
+- Subscribing/unsubscribing to events
+- Setting timers (`setTimeout`, `setInterval`)
+- Manual DOM manipulation
+- Logging, analytics tracking
+
+React rendering must remain **pure**, meaning:
+
+> Given the same props and state, rendering should always return the same UI.
+
+So side effects are separated from rendering using lifecycle-aware hooks.
+
+---
+
+### Primary tool: `useEffect`
+
+```tsx id="fx1"
+useEffect(() => {
+  // side effect here
+  return () => {
+    // cleanup here
+  };
+}, [dependencies]);
+```
+
+---
+
+### How React executes effects (React 18+)
+
+- Render phase: React calculates UI (pure, no side effects)
+- Commit phase: DOM updates happen
+- Post-commit: `useEffect` runs asynchronously after paint
+- Cleanup runs before re-running effect or unmounting
+
+React 18 concurrent rendering may:
+
+- Pause or restart renders
+- Re-run effects in Strict Mode (development only) to detect unsafe side effects
+
+---
+
+## Common side effect patterns
+
+### 1. API calls (data fetching)
+
+```tsx id="fx2"
+import { useEffect, useState } from "react";
+
+type User = { id: number; name: string };
+
+export default function Users() {
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchUsers() {
+      const res = await fetch("https://jsonplaceholder.typicode.com/users");
+      const data = await res.json();
+
+      if (isMounted) {
+        setUsers(data);
+      }
+    }
+
+    fetchUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <ul>
+      {users.map((u) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+### 2. Event listeners
+
+```tsx id="fx3"
+import { useEffect } from "react";
+
+export default function WindowResize() {
+  useEffect(() => {
+    const handleResize = () => {
+      console.log(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return <div>Resize the window</div>;
+}
+```
+
+---
+
+### 3. Timers
+
+```tsx id="fx4"
+import { useEffect, useState } from "react";
+
+export default function Timer() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount((c) => c + 1);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  return <h1>{count}</h1>;
+}
+```
+
+---
+
+### 4. DOM manipulation (rare cases)
+
+```tsx id="fx5"
+import { useEffect, useRef } from "react";
+
+export default function FocusInput() {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+
+  return <input ref={ref} />;
+}
+```
+
+---
+
+## Tooling & Setup
+
+- Use **Vite + React + TypeScript** for modern React apps
+- Prefer **Next.js** if:
+  - You need SSR/SEO
+  - You want server-side data fetching
+
+- Avoid CRA (deprecated)
+
+Modern ecosystem alternatives for side effects:
+
+- **TanStack Query (React Query)** → API state + caching
+- **SWR** → lightweight data fetching
+- **Redux Toolkit Query (RTK Query)** → centralized async state
+
+---
+
+## Performance considerations
+
+### Key rules
+
+- Avoid unnecessary effects (bad dependency arrays = extra runs)
+- Don’t use `useEffect` for derived state
+- Prefer server-side or memoized computations when possible
+
+### Optimization strategies
+
+- Correct dependency arrays (use ESLint plugin: `react-hooks/exhaustive-deps`)
+- Use `useMemo`/`useCallback` to stabilize dependencies
+- Debounce/throttle expensive effects (e.g., search input)
+- Cancel async requests using AbortController
+
+```tsx id="fx_perf"
+useEffect(() => {
+  const controller = new AbortController();
+
+  fetch("/api/data", { signal: controller.signal })
+    .then((res) => res.json())
+    .then((data) => console.log(data));
+
+  return () => controller.abort();
+}, []);
+```
+
+- Use React DevTools Profiler to detect unnecessary re-runs
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**
+
+```bash id="fx_test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx id="fx_test_ex"
+import { render, waitFor, screen } from "@testing-library/react";
+import Users from "./Users";
+
+test("renders users", async () => {
+  render(<Users />);
+
+  await waitFor(() =>
+    expect(screen.getByText(/Leanne Graham/i)).toBeInTheDocument(),
+  );
+});
+```
+
+For side effects:
+
+- Mock APIs using **MSW (Mock Service Worker)**
+- Avoid real network calls in unit tests
+
+---
+
+## Ops & Deployment
+
+- Handle async failures with error boundaries or local error state
+- Add retry logic for API effects (or use React Query)
+- Avoid memory leaks (always clean up subscriptions/timers)
+- In SSR (Next.js):
+  - Move data fetching to server components or `getServerSideProps`
+  - Avoid client-only effects for initial critical data
+
+- Monitor real-world issues with Sentry or OpenTelemetry
+- Deploy via CDN (Vercel, Netlify, Cloudflare Pages)
+
+---
+
+## Pitfalls
+
+- ❌ Missing dependency arrays → stale or incorrect data
+- ❌ Using `useEffect` for derived state (unnecessary re-renders)
+- ❌ Not cleaning up subscriptions → memory leaks
+- ❌ Triggering infinite loops (setting state inside effect without conditions)
+
 ## Question 7. Explain higher-order components (HOC)
+
+## Short answer
+
+A **Higher-Order Component (HOC)** is a function in React that takes a component as input and returns a new enhanced component with additional props or behavior. It is a pattern used for **code reuse, logic abstraction, and cross-cutting concerns** like authentication, logging, or data fetching.
+
+---
+
+## Explanation
+
+### What is an HOC?
+
+An HOC is essentially a function:
+
+```ts
+const EnhancedComponent = withSomething(BaseComponent);
+```
+
+It follows this signature:
+
+```ts
+(Component) => Component;
+```
+
+More precisely:
+
+```ts
+function withFeature(WrappedComponent) {
+  return function EnhancedComponent(props) {
+    return <WrappedComponent {...props} extraProp="value" />;
+  };
+}
+```
+
+---
+
+### Why HOCs exist
+
+Before Hooks, HOCs were the primary way to:
+
+- Share logic across components
+- Inject props
+- Wrap behavior (authentication, theming, permissions)
+
+Even today, they are still used in:
+
+- Legacy React codebases
+- Libraries (React Redux `connect`, React Router patterns, etc.)
+
+---
+
+### How HOCs work internally
+
+- A HOC creates a **new component wrapper**
+- It composes behavior around the original component
+- It does not modify the original component (pure composition)
+
+React 18 still treats HOCs as normal components:
+
+- They re-render when props/context/state change
+- They participate in reconciliation like any other component
+
+---
+
+### Common use cases
+
+- Authentication guards
+- Logging / analytics
+- Feature flags
+- Injecting data (older Redux patterns)
+- Theming wrappers
+- Permission-based rendering
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite)
+
+```bash id="hoc_setup"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+### 1. Basic HOC: Authentication guard
+
+```tsx id="hoc1"
+import React from "react";
+
+type WithAuthProps = {
+  isAuthenticated: boolean;
+};
+
+function withAuth<P extends object>(WrappedComponent: React.ComponentType<P>) {
+  return function AuthComponent(props: P & WithAuthProps) {
+    const { isAuthenticated, ...rest } = props;
+
+    if (!isAuthenticated) {
+      return <h2>Please log in to continue</h2>;
+    }
+
+    return <WrappedComponent {...(rest as P)} />;
+  };
+}
+```
+
+---
+
+### 2. Base component
+
+```tsx id="hoc2"
+type DashboardProps = {
+  username: string;
+};
+
+function Dashboard({ username }: DashboardProps) {
+  return <h1>Welcome, {username}</h1>;
+}
+```
+
+---
+
+### 3. Enhanced component
+
+```tsx id="hoc3"
+const ProtectedDashboard = withAuth(Dashboard);
+```
+
+---
+
+### 4. Usage
+
+```tsx id="hoc4"
+export default function App() {
+  return (
+    <>
+      <ProtectedDashboard isAuthenticated={true} username="John" />
+
+      <ProtectedDashboard isAuthenticated={false} username="John" />
+    </>
+  );
+}
+```
+
+---
+
+## Tooling & Setup
+
+- Preferred modern stack: **Vite + React + TypeScript**
+
+- Avoid CRA (deprecated)
+
+- HOCs are often replaced by Hooks in modern React:
+  - `useAuth()` instead of `withAuth`
+  - `useQuery()` instead of `withDataFetching`
+
+- In modern frameworks:
+  - **Next.js** prefers Server Components + hooks over HOCs
+  - HOCs are still used in legacy integrations
+
+---
+
+## Performance considerations
+
+### Potential issues
+
+- Extra component layer → slightly deeper React tree
+- Can break memoization if not handled properly
+- Re-renders propagate through wrapper components
+
+### Optimization strategies
+
+- Use `React.memo` inside or after HOC wrapping
+- Forward refs using `React.forwardRef`
+- Avoid recreating HOCs inside render functions
+
+```tsx id="hoc_perf"
+const MemoizedComponent = React.memo(WrappedComponent);
+```
+
+- Combine with `useCallback`/`useMemo` where needed
+- Use React DevTools Profiler to detect wrapper-induced re-renders
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**
+
+```bash id="hoc_test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx id="hoc_test_ex"
+import { render, screen } from "@testing-library/react";
+import { describe, test, expect } from "vitest";
+
+test("shows auth message when not logged in", () => {
+  const Protected = withAuth(() => <div>Secret</div>);
+
+  render(<Protected isAuthenticated={false} />);
+
+  expect(screen.getByText(/Please log in/i)).toBeInTheDocument();
+});
+```
+
+---
+
+## Ops & Deployment
+
+- HOCs increase abstraction layers → harder debugging if overused
+- Prefer hooks in new codebases for readability and composition
+- Ensure consistent props typing with TypeScript generics
+- Use Error Boundaries separately (don’t mix with HOCs unless needed)
+- In SSR (Next.js), ensure HOCs are compatible with server rendering
+- Avoid deep HOC nesting (can degrade maintainability and debugging)
+
+---
+
+## Pitfalls
+
+- ❌ Overusing HOCs instead of hooks (leads to wrapper hell)
+- ❌ Losing prop types if generics are not handled correctly
+- ❌ Creating HOCs inside render (causes remounting)
+- ❌ Ignoring `displayName` → harder debugging in React DevTools
 
 ## Question 8. What is React Portal? Give a use case
 
+## Short answer
+
+A **React Portal** allows you to render a component’s UI **outside the parent DOM hierarchy**, while still keeping it logically inside the React component tree. It is commonly used for UI elements like **modals, tooltips, dropdowns, and overlays**.
+
+---
+
+## Explanation
+
+### What problem does Portal solve?
+
+Normally, React renders components inside their parent DOM node:
+
+```txt
+<App>
+  <div id="root">
+    Parent → Child → Grandchild
+  </div>
+</App>
+```
+
+This causes issues for UI layers like:
+
+- Modals being clipped by `overflow: hidden`
+- Tooltips being affected by `z-index`
+- Dropdowns breaking layout stacking contexts
+
+---
+
+### What is a Portal?
+
+A Portal lets you render a component into a **different DOM node**, typically outside `#root`.
+
+Example structure:
+
+```txt
+<body>
+  <div id="root"></div>
+  <div id="portal-root"></div>
+</body>
+```
+
+React renders UI into `portal-root` instead of `root`.
+
+---
+
+### How it works internally
+
+React Portal:
+
+- Keeps component in the **same React tree**
+- But renders DOM output in a **different DOM container**
+- Event bubbling still works through React tree (not DOM hierarchy)
+
+So:
+
+> Logical structure ≠ DOM structure
+
+React 18 treats portals like normal components during reconciliation, but DOM placement differs.
+
+---
+
+### Syntax
+
+```tsx
+ReactDOM.createPortal(child, container);
+```
+
+- `child` → React element
+- `container` → DOM node outside root
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite)
+
+```bash id="portal_setup"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+### 1. Add portal root in HTML
+
+```html id="portal_html"
+<!-- index.html -->
+<body>
+  <div id="root"></div>
+  <div id="modal-root"></div>
+</body>
+```
+
+---
+
+### 2. Modal using Portal
+
+```tsx id="portal1"
+import React from "react";
+import ReactDOM from "react-dom";
+
+type ModalProps = {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+};
+
+export default function Modal({ open, onClose, children }: ModalProps) {
+  if (!open) return null;
+
+  const modalRoot = document.getElementById("modal-root");
+
+  if (!modalRoot) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "white", padding: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+        <button onClick={onClose}>Close</button>
+      </div>
+    </div>,
+    modalRoot,
+  );
+}
+```
+
+---
+
+### 3. Usage
+
+```tsx id="portal2"
+import { useState } from "react";
+import Modal from "./Modal";
+
+export default function App() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <h1>Portal Example</h1>
+
+      <button onClick={() => setOpen(true)}>Open Modal</button>
+
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <h2>Hello from Portal</h2>
+      </Modal>
+    </div>
+  );
+}
+```
+
+---
+
+## Tooling & Setup
+
+- Use **Vite + React + TypeScript**
+- Ensure `index.html` includes a separate portal root
+- In Next.js:
+  - Portals must be client-only (`use client`)
+  - Avoid SSR rendering into portal containers directly
+
+Modern alternatives:
+
+- Radix UI (uses portals internally)
+- Headless UI
+- React Aria
+
+---
+
+## Performance
+
+- Portals do **not reduce rendering cost**
+- They only change DOM placement
+- Useful for avoiding layout recalculations caused by parent containers
+
+### Optimization tips
+
+- Avoid re-creating portal containers dynamically
+- Use `React.memo` for modal content
+- Lazy load modals using `React.lazy`:
+
+```tsx
+const Modal = React.lazy(() => import("./Modal"));
+```
+
+- Keep portal UI minimal to reduce re-renders
+- Use React DevTools Profiler to check overlay re-renders
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**
+
+```bash id="portal_test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx id="portal_test_ex"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("opens modal", () => {
+  render(<App />);
+
+  screen.getByText("Open Modal").click();
+
+  expect(screen.getByText("Hello from Portal")).toBeInTheDocument();
+});
+```
+
+If needed, mock `document.body` or portal root in tests.
+
+---
+
+## Ops & Deployment
+
+- Ensure portal root exists in production HTML
+- Avoid multiple conflicting portal roots
+- Be careful with z-index stacking contexts in CSS
+- Handle accessibility:
+  - Focus trapping inside modals
+  - Escape key handling
+
+- Consider SSR hydration behavior in Next.js
+- Use CDNs for static assets; portals do not affect deployment strategy
+
+---
+
+## Pitfalls
+
+- ❌ Forgetting to add portal container in HTML
+- ❌ Breaking accessibility (focus not trapped in modal)
+- ❌ Event handling confusion (DOM hierarchy vs React tree)
+- ❌ Overusing portals unnecessarily (adds complexity)
+
 ## Question 9. How do you handle errors in React? Explain error boundaries
 
+## Short answer
+
+In React, errors are handled using **Error Boundaries**, which are special components that catch JavaScript errors in their child component tree during rendering, lifecycle methods, and constructors, and display a fallback UI instead of crashing the entire app.
+
+---
+
+## Explanation
+
+### What problem do Error Boundaries solve?
+
+Without error boundaries:
+
+- A single runtime error in a component → **entire React app crashes**
+- UI becomes blank or broken
+
+With error boundaries:
+
+- Only the **faulty part of the UI is replaced**
+- Rest of the application continues working
+
+---
+
+### What is an Error Boundary?
+
+An Error Boundary is a class component that implements:
+
+- `static getDerivedStateFromError()`
+- `componentDidCatch()`
+
+React 18 still requires **class components** for error boundaries (no functional equivalent yet for full boundary behavior).
+
+---
+
+### How React handles errors internally
+
+- Errors during render phase are propagated up the component tree
+- React looks for the nearest error boundary
+- That boundary catches the error and renders fallback UI
+- Error boundaries **do NOT catch**:
+  - Event handlers
+  - Async code (setTimeout, promises)
+  - Server-side rendering errors (handled separately)
+
+---
+
+## Error Boundary lifecycle flow
+
+```txt id="eb1"
+Render → Error thrown → Boundary catches → Fallback UI rendered
+```
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite recommended)
+
+```bash id="eb_setup"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+### 1. Error Boundary class component
+
+```tsx id="eb2"
+import React, { ReactNode } from "react";
+
+type Props = {
+  children: ReactNode;
+};
+
+type State = {
+  hasError: boolean;
+};
+
+export class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("Error caught by boundary:", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <h2>Something went wrong.</h2>;
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+---
+
+### 2. Faulty component
+
+```tsx id="eb3"
+export function BuggyComponent() {
+  throw new Error("Crash inside component!");
+
+  return <div>This will never render</div>;
+}
+```
+
+---
+
+### 3. Usage
+
+```tsx id="eb4"
+import { ErrorBoundary } from "./ErrorBoundary";
+import { BuggyComponent } from "./BuggyComponent";
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <h1>React App</h1>
+      <BuggyComponent />
+    </ErrorBoundary>
+  );
+}
+```
+
+---
+
+### Result
+
+- `BuggyComponent` crashes
+- Error Boundary catches it
+- App still renders fallback UI instead of breaking completely
+
+---
+
+## Tooling & Setup
+
+- Use **Vite + React + TypeScript** for modern apps
+- Avoid CRA (deprecated)
+- In Next.js:
+  - Use `error.tsx` (App Router) for route-level boundaries
+  - Server Components have their own error handling model
+
+Modern alternatives:
+
+- `react-error-boundary` library (functional wrapper around class boundaries)
+- Sentry for production error tracking
+
+---
+
+## Performance considerations
+
+- Error boundaries are **cheap** and do not affect render performance unless triggered
+- Place boundaries strategically:
+  - At page level (route boundaries)
+  - At widget/component level (isolate failures)
+
+### Best practices
+
+- Don’t wrap entire app in a single boundary (too coarse)
+- Use multiple boundaries for isolation
+- Combine with lazy loading:
+
+```tsx id="eb_perf"
+const LazyComponent = React.lazy(() => import("./Component"));
+```
+
+- Use React DevTools to trace error source components
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**
+
+```bash id="eb_test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx id="eb_test_ex"
+import { render, screen } from "@testing-library/react";
+import { ErrorBoundary } from "./ErrorBoundary";
+
+function Broken() {
+  throw new Error("Test error");
+}
+
+test("renders fallback UI on error", () => {
+  render(
+    <ErrorBoundary>
+      <Broken />
+    </ErrorBoundary>,
+  );
+
+  expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+});
+```
+
+---
+
+## Ops & Deployment
+
+- Use production error tracking:
+  - Sentry
+  - LogRocket
+
+- Log errors in `componentDidCatch`
+- Pair with fallback UI for better UX
+- Avoid exposing sensitive error messages to users
+- In SSR (Next.js):
+  - Use `error.tsx` route boundaries
+  - Handle server/client errors separately
+
+- Monitor error rates in production dashboards
+
+---
+
+## Pitfalls
+
+- ❌ Error boundaries do NOT catch async errors (fetch, promises)
+- ❌ Cannot be used in functional components alone (requires class or library wrapper)
+- ❌ Overusing a single boundary reduces granularity
+- ❌ Forgetting fallback UI leads to poor UX
+
 ## Question 10. Difference between controlled and uncontrolled forms
+
+## Short answer
+
+A **controlled form** is where form data is managed by React state, while an **uncontrolled form** is where form data is handled by the DOM itself using refs. Controlled forms give React full control over input values; uncontrolled forms rely on the browser DOM for state management.
+
+---
+
+## Explanation
+
+### Controlled Components
+
+In a **controlled form**, every input value is tied to React state:
+
+- Source of truth → React state
+- Updates happen via `onChange`
+- React re-renders on every input change
+
+#### How it works (React 18 behavior)
+
+- User types → event fires
+- `setState` updates value
+- React re-renders component
+- Input value is synced from state
+
+This creates a **single source of truth**.
+
+---
+
+### Uncontrolled Components
+
+In an **uncontrolled form**, the DOM manages the state:
+
+- Source of truth → DOM
+- You access values using `ref`
+- React does NOT re-render on each keystroke
+
+You typically read values only on submit.
+
+---
+
+### Key differences
+
+| Feature         | Controlled      | Uncontrolled              |
+| --------------- | --------------- | ------------------------- |
+| Source of truth | React state     | DOM                       |
+| Re-rendering    | On every change | Minimal                   |
+| Validation      | Real-time       | On submit or manual       |
+| Complexity      | More verbose    | Simpler                   |
+| Performance     | More re-renders | Fewer re-renders          |
+| Use case        | Dynamic forms   | Simple forms, file inputs |
+
+---
+
+## When to use what
+
+### Use Controlled Forms when:
+
+- You need real-time validation
+- You depend on input values dynamically (e.g., search, filters)
+- You want predictable state flow
+- You are building complex forms (multi-step, conditional logic)
+
+### Use Uncontrolled Forms when:
+
+- Form is simple (login, contact form)
+- You want better performance for large forms
+- Working with file inputs (often easier uncontrolled)
+- Integrating with non-React libraries
+
+---
+
+## Example (React + TypeScript)
+
+### Setup (Vite)
+
+```bash id="form_setup"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## 1. Controlled Form Example
+
+```tsx id="controlled_form"
+import { useState } from "react";
+
+export default function ControlledForm() {
+  const [email, setEmail] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Submitted:", email);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter email"
+      />
+
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+### Flow:
+
+- Input changes → state updates → re-render → UI syncs
+
+---
+
+## 2. Uncontrolled Form Example
+
+```tsx id="uncontrolled_form"
+import { useRef } from "react";
+
+export default function UncontrolledForm() {
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Submitted:", emailRef.current?.value);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="email" ref={emailRef} placeholder="Enter email" />
+
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+### Flow:
+
+- Input changes → DOM updates only
+- React reads value only on submit
+
+---
+
+## Tooling & Setup
+
+- Use **Vite + React + TypeScript** for modern form handling
+- Avoid CRA (deprecated)
+- For large-scale forms:
+  - React Hook Form (uncontrolled + optimized)
+  - Formik (more controlled-based, heavier)
+
+---
+
+## Performance considerations
+
+### Controlled forms
+
+- Cause re-render on every keystroke
+- Can be expensive for large forms
+- Optimize using:
+  - `useMemo` for derived validation
+  - `React.memo` for input components
+  - Debouncing input handlers
+
+### Uncontrolled forms
+
+- Minimal re-renders → better performance
+- Less React overhead
+- Harder to implement dynamic validation
+
+---
+
+## Best practice in modern React
+
+A hybrid approach is often ideal:
+
+- Controlled for critical fields (validation, UI logic)
+- Uncontrolled for simple or large inputs
+
+Or better:
+
+- Use **React Hook Form**
+  - Uses uncontrolled inputs internally
+  - Optimized for performance
+  - Minimal re-renders
+
+---
+
+## Testing
+
+Using **Vitest + React Testing Library**
+
+```bash id="form_test"
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx id="form_test_ex"
+import { render, screen, fireEvent } from "@testing-library/react";
+import ControlledForm from "./ControlledForm";
+
+test("updates input value", () => {
+  render(<ControlledForm />);
+
+  const input = screen.getByPlaceholderText("Enter email");
+
+  fireEvent.change(input, { target: { value: "test@mail.com" } });
+
+  expect((input as HTMLInputElement).value).toBe("test@mail.com");
+});
+```
+
+---
+
+## Ops & Deployment
+
+- Validate on both client and server (never trust client-only validation)
+- Sanitize inputs to prevent XSS
+- Use schema validation (Zod, Yup)
+- Handle form submission errors gracefully
+- Consider server actions (Next.js App Router) for secure submissions
+- Avoid storing sensitive form state unnecessarily in global state
+
+---
+
+## Pitfalls
+
+- ❌ Using controlled inputs without need → performance overhead
+- ❌ Mixing controlled + uncontrolled in same input
+- ❌ Forgetting `value` prop in controlled inputs (causes React warnings)
+- ❌ Direct DOM manipulation in controlled forms
 
 ## Question 11. How do you optimize React performance?
 
