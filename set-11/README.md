@@ -1514,13 +1514,1316 @@ For E2E:
 
 ## Question 6. What is the difference between state and props immutability?
 
+# What is the difference between state and props immutability?
+
+## Short answer
+
+Both **props** and **state** are treated as **immutable** in React, but they have different ownership:
+
+- **Props** are **read-only values passed from a parent component**. A child component must **never modify props**.
+- **State** is **owned by the component** and can be updated **only through React state setters** (e.g., `setState` or `setCount`), not by direct mutation.
+
+```tsx
+// ❌ Don't mutate props
+props.user.name = "John";
+
+// ❌ Don't mutate state
+count++;
+
+// ✅ Correct
+setCount((prev) => prev + 1);
+```
+
+---
+
+# Explanation
+
+Immutability means **creating a new object or array instead of modifying the existing one**. React relies on immutable updates to efficiently detect changes and trigger re-renders.
+
+## Props Immutability
+
+Props are passed **from parent to child**. The child component receives them as **read-only**.
+
+```tsx
+type GreetingProps = {
+  name: string;
+};
+
+function Greeting({ name }: GreetingProps) {
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+❌ Incorrect:
+
+```tsx
+props.name = "Alice";
+```
+
+Why?
+
+- Breaks one-way data flow
+- Makes components unpredictable
+- React assumes props are immutable
+
+If a child needs to change a value, it should call a callback provided by the parent.
+
+```tsx
+type ChildProps = {
+  onChangeName: () => void;
+};
+
+function Child({ onChangeName }: ChildProps) {
+  return <button onClick={onChangeName}>Change Name</button>;
+}
+```
+
+---
+
+## State Immutability
+
+State belongs to the component and **can change**, but it must be updated immutably.
+
+```tsx
+const [count, setCount] = useState(0);
+```
+
+✅ Correct:
+
+```tsx
+setCount((prev) => prev + 1);
+```
+
+❌ Incorrect:
+
+```tsx
+count++;
+```
+
+Direct mutation does not notify React that state has changed, so the UI may not update correctly.
+
+---
+
+## Updating Objects
+
+❌ Mutating an object:
+
+```tsx
+user.name = "Alice";
+setUser(user);
+```
+
+✅ Creating a new object:
+
+```tsx
+setUser((prev) => ({
+  ...prev,
+  name: "Alice",
+}));
+```
+
+---
+
+## Updating Arrays
+
+❌ Mutating an array:
+
+```tsx
+items.push("React");
+setItems(items);
+```
+
+✅ Creating a new array:
+
+```tsx
+setItems((prev) => [...prev, "React"]);
+```
+
+---
+
+## Comparison
+
+| Feature           | Props                   | State                                  |
+| ----------------- | ----------------------- | -------------------------------------- |
+| Owner             | Parent component        | Current component                      |
+| Mutable?          | No                      | No (update immutably)                  |
+| Updated by        | Parent re-render        | State setter (`setState` / `useState`) |
+| Child can modify? | No                      | Yes, via its own setter                |
+| Purpose           | Pass data and callbacks | Store component-local data             |
+
+---
+
+## React Rendering Behavior
+
+React uses **reference equality** (`Object.is` in many state update scenarios) to determine whether values have changed.
+
+```tsx
+const newUser = { ...user };
+```
+
+New reference → React detects a change.
+
+```tsx
+user.name = "Alice";
+```
+
+Same reference → React may not detect the update correctly, leading to stale UI.
+
+### React 18
+
+React 18's automatic batching groups multiple state updates into a single render, improving performance. Immutability still remains essential because React depends on new references to identify changes.
+
+---
+
+# Example
+
+## Setup (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+## Parent and Child
+
+```tsx
+import { useState } from "react";
+
+type ChildProps = {
+  count: number;
+  onIncrement: () => void;
+};
+
+function Child({ count, onIncrement }: ChildProps) {
+  return (
+    <>
+      <p>Count: {count}</p>
+      <button onClick={onIncrement}>Increment</button>
+    </>
+  );
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <Child count={count} onIncrement={() => setCount((prev) => prev + 1)} />
+  );
+}
+```
+
+The child **reads** the `count` prop and requests updates by invoking the callback. It never mutates the prop directly.
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for modern React development with fast HMR.
+- Use **Next.js** when SSR, Server Components, or SEO are required.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Modern React projects use **ES Modules (ESM)**, and bundlers like Vite optimize builds with tree-shaking and code splitting.
+
+---
+
+# Performance
+
+- Use immutable updates so React can efficiently detect changes.
+- Use `React.memo` to skip re-renders when props are unchanged.
+- Use `useMemo` for expensive derived values.
+- Use `useCallback` for stable callback references passed to children.
+- Lazy-load feature modules with `React.lazy` and `Suspense`.
+- For complex nested updates, consider libraries like **Immer** or reducers with `useReducer` to simplify immutable logic.
+
+---
+
+# Testing
+
+Install testing dependencies:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("increments count", () => {
+  render(<App />);
+  expect(screen.getByText(/Count: 0/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Keep state updates immutable to avoid subtle production bugs.
+- Use Error Boundaries to isolate rendering failures.
+- Monitor unnecessary re-renders with React DevTools Profiler.
+- Minimize bundle size with code splitting and efficient state management.
+
+---
+
+# Pitfalls
+
+- **Never mutate props**—they are owned by the parent component.
+- **Never mutate state directly**—always use the state setter and create new objects/arrays.
+- **Be careful with nested objects**—a shallow copy (`...`) only clones the first level; deeply nested updates require copying each modified level or using a helper like Immer.
+
 ## Question 7. How do you combine multiple states into a single object in functional components?
+
+# How do you combine multiple states into a single object in functional components?
+
+## Short answer
+
+You can store related values in a **single object state** using `useState`.
+
+```tsx
+const [form, setForm] = useState({
+  name: "",
+  email: "",
+});
+```
+
+When updating one property, **always create a new object** using the spread operator.
+
+```tsx
+setForm((prev) => ({
+  ...prev,
+  name: "John",
+}));
+```
+
+Use an object when multiple state values are **logically related** (e.g., form fields). If state values are independent, prefer separate `useState` hooks.
+
+---
+
+# Explanation
+
+React allows state to be:
+
+- Primitive values
+- Arrays
+- Objects
+- Complex nested structures
+
+Instead of writing:
+
+```tsx
+const [name, setName] = useState("");
+const [email, setEmail] = useState("");
+const [age, setAge] = useState(0);
+```
+
+You can combine related values:
+
+```tsx
+const [form, setForm] = useState({
+  name: "",
+  email: "",
+  age: 0,
+});
+```
+
+This is especially useful for:
+
+- Forms
+- User profiles
+- Search filters
+- Configuration objects
+
+---
+
+## Updating a single property
+
+Unlike class component `setState`, the `useState` setter **replaces the entire state value**. Therefore, you must merge the existing object yourself.
+
+❌ Incorrect:
+
+```tsx
+setForm({
+  name: "John",
+});
+```
+
+Result:
+
+```tsx
+{
+  name: "John";
+}
+```
+
+`email` and `age` are lost.
+
+---
+
+✅ Correct:
+
+```tsx
+setForm((prev) => ({
+  ...prev,
+  name: "John",
+}));
+```
+
+Result:
+
+```tsx
+{
+  name: "John",
+  email: "",
+  age: 0
+}
+```
+
+---
+
+## Handling multiple inputs
+
+```tsx
+const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { name, value } = e.target;
+
+  setForm((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+```
+
+This pattern scales well for forms with many fields.
+
+---
+
+## When to combine state
+
+Good example:
+
+```tsx
+const [user, setUser] = useState({
+  firstName: "",
+  lastName: "",
+  email: "",
+});
+```
+
+These values represent one logical entity.
+
+---
+
+## When **not** to combine state
+
+Avoid grouping unrelated values:
+
+```tsx
+const [state, setState] = useState({
+  isDarkMode: false,
+  cartItems: [],
+  searchText: "",
+  sidebarOpen: true,
+});
+```
+
+These values change independently, so separate state variables are often clearer:
+
+```tsx
+const [isDarkMode, setIsDarkMode] = useState(false);
+const [cartItems, setCartItems] = useState<string[]>([]);
+const [searchText, setSearchText] = useState("");
+const [sidebarOpen, setSidebarOpen] = useState(true);
+```
+
+This can reduce unnecessary updates and improve readability.
+
+---
+
+# Rendering behavior
+
+React compares the previous and next state by reference.
+
+```tsx
+setForm((prev) => ({
+  ...prev,
+  name: "Alice",
+}));
+```
+
+A new object reference is created, so React schedules a re-render.
+
+Mutating the existing object does not create a new reference:
+
+```tsx
+form.name = "Alice";
+setForm(form);
+```
+
+React may not detect the change correctly, leading to stale UI.
+
+React 18 also performs **automatic batching**, so multiple state updates in the same event are grouped into a single render.
+
+---
+
+# Example
+
+## Setup (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+## App.tsx
+
+```tsx
+import { useState, ChangeEvent } from "react";
+
+type FormState = {
+  name: string;
+  email: string;
+};
+
+export default function App() {
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    email: "",
+  });
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  return (
+    <>
+      <input
+        name="name"
+        value={form.name}
+        onChange={handleChange}
+        placeholder="Name"
+      />
+
+      <input
+        name="email"
+        value={form.email}
+        onChange={handleChange}
+        placeholder="Email"
+      />
+
+      <pre>{JSON.stringify(form, null, 2)}</pre>
+    </>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Use **Vite** for modern React development with fast HMR and ESM support.
+- Use **Next.js** when you need SSR, Server Components, or SEO.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Modern bundlers (Vite, Next.js with Turbopack/Webpack) efficiently handle TypeScript, code splitting, and hot reloading.
+
+---
+
+# Performance
+
+- Use object state only when values are logically related.
+- Use the functional updater (`setState(prev => ...)`) when the next state depends on the previous state.
+- Use `React.memo` to prevent unnecessary child re-renders.
+- Use `useMemo` for expensive derived values and `useCallback` for stable event handlers.
+- For large or deeply nested state objects, consider `useReducer` or libraries like **Immer** to simplify immutable updates.
+- Use the React DevTools Profiler to identify unnecessary re-renders.
+
+---
+
+# Testing
+
+Install testing tools:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders form inputs", () => {
+  render(<App />);
+  expect(screen.getByPlaceholderText(/name/i)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Keep state normalized and avoid unnecessary nesting.
+- Use Error Boundaries for resilient UI.
+- Monitor rendering performance with React DevTools Profiler.
+- Optimize bundle size through lazy loading and route-based code splitting.
+
+---
+
+# Pitfalls
+
+- **Don't forget to spread the previous state**—`useState` replaces the entire object, unlike class component `setState`, which merged partial updates.
+- **Never mutate object state directly**—always create a new object.
+- **Don't combine unrelated state** into one object; it makes updates harder to reason about and can increase unnecessary re-renders.
 
 ## Question 8. What are `defaultProps` and when are they useful?
 
+# What are `defaultProps` and when are they useful?
+
+## Short answer
+
+`defaultProps` provide default values for component props when the parent does not pass them. They were commonly used with class components and older function components, but in modern React, **default parameter values** are the recommended approach for function components. `defaultProps` remain useful primarily for class components or maintaining legacy code.
+
+---
+
+# Explanation
+
+### What are `defaultProps`?
+
+`defaultProps` define fallback values for props that are `undefined`.
+
+Example:
+
+```jsx
+Component.defaultProps = {
+  title: "Default Title",
+};
+```
+
+If the parent omits `title`, React uses `"Default Title"`.
+
+---
+
+### Modern React Recommendation (Function Components)
+
+Instead of:
+
+```tsx
+Greeting.defaultProps = {
+  name: "Guest",
+};
+```
+
+Use:
+
+```tsx
+function Greeting({ name = "Guest" }: { name?: string }) {
+  return <h1>Hello {name}</h1>;
+}
+```
+
+This is:
+
+- Simpler
+- Better supported by TypeScript
+- Easier to understand
+- Recommended in modern React documentation
+
+---
+
+### When are they useful?
+
+Use default values when:
+
+- Optional props are omitted
+- Components should have sensible defaults
+- Prevent rendering `undefined`
+- Reduce conditional checks inside components
+
+Example:
+
+Instead of:
+
+```tsx
+const color = props.color || "blue";
+```
+
+Use:
+
+```tsx
+function Button({ color = "blue" }) {}
+```
+
+---
+
+### Class Component Example
+
+`defaultProps` are still commonly used with class components.
+
+```tsx
+class Welcome extends React.Component<{ name?: string }> {
+  static defaultProps = {
+    name: "Guest",
+  };
+
+  render() {
+    return <h1>Hello {this.props.name}</h1>;
+  }
+}
+```
+
+---
+
+### React 18 Considerations
+
+`defaultProps` have **no effect on rendering performance**.
+
+React 18 features like:
+
+- Concurrent Rendering
+- Automatic Batching
+- Suspense
+
+work exactly the same whether props come from:
+
+- parent
+- default parameters
+- `defaultProps`
+
+---
+
+### Props are still immutable
+
+Even default values should never be modified.
+
+```tsx
+function Button({ options = [] }) {
+  // ❌ Never mutate
+  options.push("New");
+
+  return null;
+}
+```
+
+Always create new objects or arrays.
+
+---
+
+# Example (React + TypeScript, Vite)
+
+Create a project:
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+type UserCardProps = {
+  name?: string;
+  age?: number;
+};
+
+function UserCard({ name = "Guest", age = 18 }: UserCardProps) {
+  return (
+    <div>
+      <h2>{name}</h2>
+      <p>Age: {age}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <UserCard />
+      <UserCard name="Alice" />
+      <UserCard name="Bob" age={25} />
+    </>
+  );
+}
+```
+
+Output:
+
+```
+Guest
+Age: 18
+
+Alice
+Age: 18
+
+Bob
+Age: 25
+```
+
+---
+
+# Tooling & Setup
+
+Use **Vite** for new React projects because it provides fast startup, instant Hot Module Replacement (HMR), and native ES module support. Avoid **Create React App (CRA)**, as it is deprecated.
+
+Other production-ready options include:
+
+- **Next.js** – SSR, SSG, React Server Components, App Router
+- **Remix** – Nested routing and web-standard APIs
+- **Turbopack** – High-performance bundler (used with Next.js)
+
+**ESM vs CommonJS**
+
+- Modern React projects use **ES Modules (`import`/`export`)**.
+- CommonJS (`require`, `module.exports`) is mainly used in older Node.js codebases.
+
+---
+
+# Performance
+
+Default values themselves don't affect performance, but you should still optimize component rendering:
+
+- Use **React DevTools Profiler** to identify unnecessary renders.
+- Wrap expensive components with `React.memo`.
+- Use `useMemo` for expensive computations.
+- Use `useCallback` for stable callback references passed to memoized children.
+- Split large bundles with `React.lazy` and `Suspense`.
+- Cache API data with libraries like **TanStack Query** or **SWR** instead of repeatedly fetching the same resources.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests, and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test:
+
+```tsx
+render(<UserCard />);
+expect(screen.getByText("Guest")).toBeInTheDocument();
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to catch rendering errors in production.
+- Log runtime errors with tools like Sentry or LogRocket.
+- Choose **SSR** (e.g., Next.js) for SEO-sensitive pages and **CSR** for highly interactive dashboards.
+- Reduce bundle size through tree shaking, code splitting, and lazy loading.
+- Deploy static builds to a CDN (e.g., Vercel, Netlify, Cloudflare Pages) for low-latency asset delivery.
+
+---
+
+# Pitfalls
+
+- **Don't use `defaultProps` for new function components**—prefer default parameter values.
+- **Remember that defaults apply only when a prop is `undefined`;** passing `null` will not trigger the default.
+- **Avoid mutating object or array props,** even when they come from default values.
+
 ## Question 9. How do you pass props to nested child components?
 
+# How do you pass props to nested child components?
+
+## Short answer
+
+Props are passed **from parent to child**. To pass data to a deeply nested component, each intermediate component forwards the props (known as **prop drilling**). For deeply shared state, prefer **Context API**, a state management library (e.g., Redux, Zustand), or component composition to avoid excessive prop drilling.
+
+---
+
+# Explanation
+
+### Basic prop passing
+
+React follows a **one-way data flow**:
+
+```
+Parent
+   ↓
+Child
+   ↓
+GrandChild
+```
+
+Each component receives props and can pass them further down.
+
+Example:
+
+```tsx
+<App user={user} />
+      ↓
+<Dashboard user={user} />
+      ↓
+<Profile user={user} />
+```
+
+Every intermediate component forwards the prop.
+
+---
+
+### Prop drilling
+
+When a prop is passed through multiple components that don't use it themselves, it's called **prop drilling**.
+
+Example:
+
+```text
+App
+ ↓
+Layout
+ ↓
+Dashboard
+ ↓
+Sidebar
+ ↓
+UserProfile
+```
+
+If only `UserProfile` needs the data, passing it through every intermediate component can make the code harder to maintain.
+
+---
+
+### Alternatives to prop drilling
+
+For values used across many components, consider:
+
+- **Context API** for app-wide settings (theme, locale, authenticated user).
+- State management libraries like **Redux Toolkit**, **Zustand**, or **Jotai** for more complex global state.
+- Component composition or children props to reduce unnecessary forwarding.
+
+Choose the simplest solution that fits your application's scale.
+
+---
+
+### React 18 considerations
+
+Passing props does not inherently trigger unnecessary rendering. When a parent renders:
+
+- Child components receive new props.
+- React compares values during reconciliation.
+- Components wrapped with `React.memo` can skip re-rendering if their props are shallowly equal.
+
+React 18 also provides:
+
+- **Automatic batching** for grouped state updates.
+- **Concurrent rendering** for more responsive UI scheduling.
+
+---
+
+### Architecture considerations
+
+For small applications:
+
+```
+Parent
+   ↓
+Child
+   ↓
+GrandChild
+```
+
+Prop drilling is simple and perfectly acceptable.
+
+For larger applications:
+
+```
+Context Provider
+        ↓
+Any Component
+```
+
+or
+
+```
+Global Store
+      ↓
+Components subscribe only to needed state
+```
+
+This improves maintainability and reduces unnecessary prop forwarding.
+
+---
+
+# Example (React + TypeScript, Vite)
+
+Create a project:
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+type User = {
+  name: string;
+};
+
+type ProfileProps = {
+  user: User;
+};
+
+function Profile({ user }: ProfileProps) {
+  return <h2>Welcome, {user.name}</h2>;
+}
+
+function Dashboard({ user }: ProfileProps) {
+  return <Profile user={user} />;
+}
+
+function App() {
+  const user = { name: "Alice" };
+
+  return <Dashboard user={user} />;
+}
+
+export default App;
+```
+
+Here:
+
+```
+App
+ ↓ user
+Dashboard
+ ↓ user
+Profile
+```
+
+The `user` prop is forwarded through the component tree.
+
+---
+
+# Tooling & Setup
+
+Use **Vite** for modern React development because it offers fast startup, native ES modules, and instant Hot Module Replacement (HMR). Avoid **Create React App (CRA)**, as it is deprecated.
+
+Other production-ready options:
+
+- **Next.js** – SSR, SSG, App Router, React Server Components.
+- **Remix** – Nested routing and server-centric data loading.
+- **Turbopack** – High-performance bundler used with Next.js.
+
+**ESM vs CommonJS**
+
+- React projects use **ES Modules** (`import`/`export`).
+- CommonJS (`require`) is mainly used in legacy Node.js environments.
+
+---
+
+# Performance
+
+When passing props through nested components:
+
+- Use **React DevTools Profiler** to identify unnecessary re-renders.
+- Use `React.memo` for components that render frequently with unchanged props.
+- Use `useCallback` for callbacks passed to memoized children to maintain stable references.
+- Use `useMemo` for expensive derived values passed as props.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Cache server data with libraries like **TanStack Query** or **SWR** instead of repeatedly fetching it.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for unit and integration tests, and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+render(<App />);
+expect(screen.getByText("Welcome, Alice")).toBeInTheDocument();
+```
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Log runtime errors with services like Sentry or LogRocket.
+- Choose **SSR** (e.g., Next.js) for SEO-focused pages and **CSR** for highly interactive applications.
+- Reduce bundle size with tree shaking, lazy loading, and route-based code splitting.
+- Deploy optimized builds to CDNs such as Vercel, Netlify, or Cloudflare Pages.
+
+---
+
+# Pitfalls
+
+- Avoid excessive **prop drilling** when many unrelated components simply forward props.
+- Don't create new object or function props on every render unless necessary, as this can reduce the effectiveness of `React.memo`.
+- Keep data flow **unidirectional**; children should communicate changes upward through callback props rather than mutating parent data.
+
 ## Question 10. How do you handle button click events in functional components?
+
+# How do you handle button click events in functional components?
+
+## Short answer
+
+In React functional components, button click events are handled using the `onClick` prop. You pass a **function reference** (or an inline arrow function when arguments are needed), and React invokes it when the user clicks the button. Typically, the handler updates state with `useState`, triggers side effects, or calls business logic.
+
+---
+
+# Explanation
+
+### Basic click event handling
+
+React uses **camelCase** event names and passes a **SyntheticEvent** object to event handlers.
+
+```tsx
+<button onClick={handleClick}>Click Me</button>
+```
+
+```tsx
+function handleClick() {
+  console.log("Button clicked");
+}
+```
+
+Unlike HTML:
+
+```html
+<button onclick="handleClick()"></button>
+```
+
+React uses:
+
+```tsx
+<button onClick={handleClick}>
+```
+
+---
+
+### Updating state on click
+
+The most common use case is updating component state.
+
+```tsx
+const [count, setCount] = useState(0);
+
+const handleClick = () => {
+  setCount((prev) => prev + 1);
+};
+```
+
+Using the **functional updater** (`prev => prev + 1`) avoids stale state issues when multiple updates occur.
+
+---
+
+### Passing arguments
+
+Don't call the function directly during rendering.
+
+❌ Incorrect
+
+```tsx
+<button onClick={handleClick(5)}>Add</button>
+```
+
+This executes immediately.
+
+✅ Correct
+
+```tsx
+<button onClick={() => handleClick(5)}>Add</button>
+```
+
+```tsx
+function handleClick(value: number) {
+  console.log(value);
+}
+```
+
+---
+
+### React Synthetic Events
+
+React wraps browser events in a **SyntheticEvent**, providing a consistent API across browsers.
+
+```tsx
+const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  console.log(event.currentTarget);
+};
+```
+
+---
+
+### React 18 rendering behavior
+
+Click events are one of the primary sources of state updates.
+
+React 18 automatically batches updates inside event handlers:
+
+```tsx
+setCount((c) => c + 1);
+setName("Alice");
+setLoading(false);
+```
+
+These updates are batched into a single render, improving performance.
+
+With Concurrent Rendering, React can prioritize urgent user interactions to keep the UI responsive.
+
+---
+
+### Component architecture
+
+Keep event handlers:
+
+- Small and focused
+- Free of complex business logic
+- Reusable when possible
+
+Large applications often delegate business logic to:
+
+- Custom hooks
+- Service functions
+- State management libraries
+- API layers
+
+rather than embedding everything inside click handlers.
+
+---
+
+# Example (React + TypeScript, Vite)
+
+Create a project:
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const handleClick = () => {
+    setCount((prev) => prev + 1);
+  };
+
+  return (
+    <div>
+      <h2>Count: {count}</h2>
+
+      <button onClick={handleClick}>Increment</button>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+Use **Vite** for new React applications because it provides fast startup, native ES module support, and excellent Hot Module Replacement (HMR). Avoid **Create React App (CRA)** since it is deprecated.
+
+Other production-ready choices include:
+
+- **Next.js** for SSR, SSG, and React Server Components.
+- **Remix** for server-centric routing and data loading.
+- **Turbopack** for high-performance bundling with Next.js.
+
+**ESM vs CommonJS**
+
+- Modern React uses **ES Modules** (`import`/`export`).
+- CommonJS (`require`) is primarily found in legacy Node.js projects.
+
+---
+
+# Performance
+
+Button click handlers are generally inexpensive, but in larger applications:
+
+- Use **React DevTools Profiler** to identify unnecessary re-renders.
+- Use `React.memo` for child components receiving stable props.
+- Use `useCallback` when passing handlers to memoized children to avoid recreating function references unnecessarily.
+- Use `useMemo` for expensive derived values.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Cache server state with libraries like **TanStack Query** or **SWR** instead of repeatedly fetching data on clicks.
+
+> Don't overuse `useCallback`; it has its own cost. Apply it where stable function references provide measurable benefits.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library** for component tests and **Playwright** for end-to-end testing.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+test("increments count", async () => {
+  render(<App />);
+
+  await userEvent.click(screen.getByRole("button"));
+
+  expect(screen.getByText("Count: 1")).toBeInTheDocument();
+});
+```
+
+---
+
+# Ops & Deployment
+
+- Handle asynchronous click actions with proper loading and error states.
+- Use **Error Boundaries** for rendering errors (they don't catch errors thrown directly in event handlers, so handle those with `try/catch` where appropriate).
+- Log client-side errors using services like Sentry or LogRocket.
+- Optimize bundle size with tree shaking, lazy loading, and route-based code splitting.
+- Deploy optimized production builds through CDNs such as Vercel, Netlify, or Cloudflare Pages.
+
+---
+
+# Pitfalls
+
+- **Don't invoke handlers during render** (`onClick={handleClick()}`); pass a function reference instead.
+- **Use the functional state updater** when the next state depends on the previous state.
+- **Avoid creating unnecessary inline functions** in performance-critical lists unless profiling shows they are a bottleneck.
 
 ## Question 11. How do you render HTML content from a string safely?
 
