@@ -1261,13 +1261,1041 @@ class MockObserver {
 
 ## Question 6. How do you handle memoization of components with dynamic props?
 
+## Short answer
+
+Use `React.memo` to memoize components and ensure that **dynamic props have stable references**. For objects, arrays, and functions, use `useMemo` and `useCallback` in the parent to prevent unnecessary re-renders. If needed, provide a custom comparison function to `React.memo` for fine-grained control.
+
+---
+
+# Explanation
+
+`React.memo` prevents a functional component from re-rendering when its **props have not changed**. By default, React performs a **shallow comparison** using `Object.is`.
+
+Primitive props (`string`, `number`, `boolean`) work well because they are compared by value. However, **objects, arrays, and functions are compared by reference**, so creating a new object or function on every render causes `React.memo` to see the prop as changed.
+
+### Example of the problem
+
+```tsx
+const user = { name: "Alice" }; // New object every render
+<Profile user={user} />;
+```
+
+Even though `user.name` hasn't changed, `Profile` re-renders because `user` is a new object reference.
+
+### Solutions
+
+1. **Memoize objects and arrays with `useMemo`.**
+2. **Memoize callbacks with `useCallback`.**
+3. **Wrap child components with `React.memo`.**
+4. **Use a custom comparison function** only when shallow comparison isn't sufficient and profiling shows it's beneficial.
+
+### React 18 considerations
+
+- **Automatic batching** reduces the number of renders after multiple state updates, but it does not prevent re-renders caused by changing prop references.
+- Concurrent rendering may invoke render functions more than once before committing, so memoization should optimize expensive rendering—not be relied on for correctness.
+- Avoid overusing memoization; it has its own comparison cost.
+
+---
+
+# Example (React + TypeScript)
+
+## Create a Vite project
+
+```bash
+npm create vite@latest memo-demo -- --template react-ts
+cd memo-demo
+npm install
+npm run dev
+```
+
+### `UserCard.tsx`
+
+```tsx
+import React from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+type Props = {
+  user: User;
+  onSelect: (id: number) => void;
+};
+
+function UserCard({ user, onSelect }: Props) {
+  console.log("Rendering:", user.name);
+
+  return (
+    <div>
+      <p>{user.name}</p>
+      <button onClick={() => onSelect(user.id)}>Select</button>
+    </div>
+  );
+}
+
+export default React.memo(UserCard);
+```
+
+### `App.tsx`
+
+```tsx
+import { useCallback, useMemo, useState } from "react";
+import UserCard from "./UserCard";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  const user = useMemo(
+    () => ({
+      id: 1,
+      name: "Alice",
+    }),
+    [],
+  );
+
+  const handleSelect = useCallback((id: number) => {
+    console.log("Selected:", id);
+  }, []);
+
+  return (
+    <>
+      <button onClick={() => setCount((c) => c + 1)}>Counter: {count}</button>
+
+      <UserCard user={user} onSelect={handleSelect} />
+    </>
+  );
+}
+```
+
+Clicking the counter updates the parent state, but `UserCard` does not re-render because both `user` and `handleSelect` keep stable references.
+
+### Custom comparison example
+
+If only a subset of props determines rendering:
+
+```tsx
+export default React.memo(UserCard, (prev, next) => {
+  return prev.user.id === next.user.id && prev.user.name === next.user.name;
+});
+```
+
+Use custom comparators sparingly—they run on every parent render and can become more expensive than simply rendering the component.
+
+---
+
+# Tooling & Setup
+
+**Recommended stack:** Vite + React + TypeScript
+
+```bash
+npm create vite@latest memo-demo -- --template react-ts
+npm install
+npm run dev
+```
+
+- **Vite** uses native **ES Modules (ESM)** during development for fast startup and HMR.
+- Production builds use **Rollup** for tree-shaking and optimized bundles.
+- Avoid **Create React App (CRA)**, as it is deprecated.
+- For SSR, frameworks like Next.js or Remix support the same memoization techniques in Client Components.
+
+---
+
+# Performance
+
+Memoization should be **driven by profiling**, not applied everywhere.
+
+Recommended optimizations:
+
+- Wrap expensive components with `React.memo`.
+- Memoize derived objects and arrays using `useMemo`.
+- Memoize callbacks passed to memoized children with `useCallback`.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Use the React DevTools **Profiler** to verify that memoization reduces rendering work.
+- For large collections, combine memoization with virtualization libraries such as `react-window`.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders user name", () => {
+  render(<App />);
+  expect(screen.getByText("Alice")).toBeInTheDocument();
+});
+```
+
+To verify memoization, spy on the child component or inspect render counts with React DevTools Profiler. Functional correctness tests should take priority over implementation details.
+
+---
+
+# Ops & Deployment
+
+- Use logging or the React Profiler during development to identify unnecessary renders.
+- Wrap application sections with Error Boundaries for resilience.
+- Memoization affects runtime performance but not bundle size.
+- Optimize bundle size with tree-shaking, route-level code splitting, and lazy loading.
+- Serve production bundles via a CDN and enable long-term caching for static assets.
+
+---
+
+# Pitfalls
+
+- Don't create new object, array, or function props inline when passing them to memoized components.
+- Don't overuse `React.memo`, `useMemo`, or `useCallback`; each adds maintenance and comparison overhead.
+- Don't write expensive custom comparison functions without confirming the performance benefit through profiling.
+
 ## Question 7. How do you prevent stale closures in hooks?
+
+## Short answer
+
+A **stale closure** occurs when a Hook callback (`useEffect`, `useCallback`, event handler, `setInterval`, etc.) captures old state or props from a previous render. Prevent stale closures by:
+
+- Including all dependencies in Hook dependency arrays.
+- Using **functional state updates** when the next state depends on the previous state.
+- Storing mutable values in `useRef` when they need to be read without causing re-renders.
+- Memoizing callbacks with `useCallback` and the correct dependencies.
+- Avoiding disabling the `react-hooks/exhaustive-deps` ESLint rule unless you fully understand the consequences.
+
+---
+
+# Explanation
+
+React components re-run on every render. Each render creates **new variables and new closures**.
+
+Consider this example:
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      console.log(count);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  return <button onClick={() => setCount((c) => c + 1)}>+</button>;
+}
+```
+
+The interval always logs `0` because the callback captured the initial value of `count`. This is a **stale closure**.
+
+### Common causes
+
+- `setInterval` / `setTimeout`
+- Event listeners
+- Async functions
+- Promises
+- Missing dependencies in `useEffect`
+- Memoized callbacks with incorrect dependency arrays
+
+### React 18 considerations
+
+- Concurrent rendering can make stale closure bugs more noticeable because renders may be interrupted or restarted.
+- Automatic batching reduces unnecessary renders but **does not fix stale closures**.
+- In development, Strict Mode intentionally mounts, unmounts, and re-runs effects to help detect side-effect bugs, making proper cleanup and dependency management even more important.
+
+---
+
+# Example (React + TypeScript)
+
+## Create a Vite project
+
+```bash
+npm create vite@latest stale-closure-demo -- --template react-ts
+cd stale-closure-demo
+npm install
+npm run dev
+```
+
+### ❌ Incorrect
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount(count + 1); // Uses stale count
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  return <h2>{count}</h2>;
+}
+```
+
+The interval always uses the initial `count`.
+
+### ✅ Correct (Functional Update)
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  return <h2>{count}</h2>;
+}
+```
+
+Functional updates always receive the latest state.
+
+### ✅ Using `useRef` for the latest value
+
+```tsx
+import { useEffect, useRef, useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  const countRef = useRef(count);
+
+  useEffect(() => {
+    countRef.current = count;
+  }, [count]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      console.log(countRef.current);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  return <button onClick={() => setCount((c) => c + 1)}>{count}</button>;
+}
+```
+
+`useRef` provides access to the latest value without recreating the interval.
+
+---
+
+# Tooling & Setup
+
+**Recommended stack:** Vite + React + TypeScript
+
+```bash
+npm create vite@latest stale-closure-demo -- --template react-ts
+npm install
+npm run dev
+```
+
+- Vite provides a fast development server with native **ES Modules (ESM)** and HMR.
+- Production builds use **Rollup** for optimized bundles.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Next.js and Remix use the same Hook patterns in Client Components.
+
+---
+
+# Performance
+
+- Include all dependencies in `useEffect`, `useMemo`, and `useCallback`.
+- Use `useCallback` to stabilize callback references when passing them to memoized children.
+- Prefer functional state updates instead of adding frequently changing state to dependency arrays when appropriate.
+- Use `useRef` for mutable values that shouldn't trigger re-renders.
+- Profile with the React DevTools Profiler to verify that dependency changes aren't causing unnecessary renders.
+- Use `React.lazy` and code splitting for large applications; memoization and stale closure prevention solve different performance problems.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders counter", () => {
+  render(<App />);
+  expect(screen.getByRole("button")).toBeInTheDocument();
+});
+```
+
+For interval-based logic, use fake timers (`vi.useFakeTimers()`) to verify that state updates correctly over time.
+
+---
+
+# Ops & Deployment
+
+- Enable the `eslint-plugin-react-hooks` rules, especially `react-hooks/exhaustive-deps`, to catch missing dependencies early.
+- Use Error Boundaries to isolate runtime failures; they don't catch stale closure bugs but improve application resilience.
+- Monitor production behavior with logging and error reporting tools to identify issues caused by asynchronous callbacks.
+- Bundle optimization (tree-shaking, lazy loading, CDN delivery) is independent of stale closure handling.
+
+---
+
+# Pitfalls
+
+- ❌ Omitting dependencies from `useEffect` or `useCallback` to "avoid re-renders."
+- ❌ Using `setState(value + 1)` inside timers or async callbacks instead of functional updates.
+- ❌ Disabling the `react-hooks/exhaustive-deps` ESLint rule without understanding why it's reporting an issue.
 
 ## Question 8. Explain the difference between `componentDidMount` and `useEffect(() => {}, [])`
 
+## Short answer
+
+`componentDidMount` is a **class component lifecycle method** that runs once after the component is mounted. `useEffect(() => {}, [])` is the **functional component equivalent** that runs after the initial render when given an empty dependency array.
+
+Although they are often compared, **they are not exactly identical**, especially in React 18's Strict Mode and concurrent rendering.
+
+---
+
+# Explanation
+
+## `componentDidMount` (Class Components)
+
+- Runs **once** after the component is mounted.
+- Used for:
+  - API calls
+  - Subscriptions
+  - Timers
+  - DOM manipulation
+
+- Cannot be used in functional components.
+
+```tsx
+class User extends React.Component {
+  componentDidMount() {
+    console.log("Mounted");
+  }
+
+  render() {
+    return <h1>User</h1>;
+  }
+}
+```
+
+---
+
+## `useEffect(() => {}, [])` (Function Components)
+
+```tsx
+useEffect(() => {
+  console.log("Mounted");
+}, []);
+```
+
+- Runs after the initial render.
+- Empty dependency array (`[]`) means React won't re-run it due to state or prop changes.
+- Can return a cleanup function for unmounting.
+
+```tsx
+useEffect(() => {
+  console.log("Mounted");
+
+  return () => {
+    console.log("Unmounted");
+  };
+}, []);
+```
+
+Unlike `componentDidMount`, `useEffect` combines the responsibilities of:
+
+- `componentDidMount`
+- `componentDidUpdate` (when dependencies change)
+- `componentWillUnmount` (via cleanup)
+
+---
+
+# Key Differences (Interview Core)
+
+| Feature                            | `componentDidMount`             | `useEffect(() => {}, [])`                                      |
+| ---------------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| Component type                     | Class                           | Function                                                       |
+| Runs after mount                   | ✅                              | ✅                                                             |
+| Runs once in production            | ✅                              | ✅                                                             |
+| Cleanup support                    | ❌ (use `componentWillUnmount`) | ✅ Return cleanup function                                     |
+| Handles updates                    | ❌                              | ✅ (with dependencies)                                         |
+| React 18 Strict Mode (development) | Runs once                       | Effect is intentionally mounted, cleaned up, and mounted again |
+| Concurrent rendering support       | Legacy lifecycle                | Designed for modern React                                      |
+
+---
+
+# React 18 & Strict Mode
+
+A common interview topic is that **`useEffect(() => {}, [])` may appear to run twice in development**.
+
+```tsx
+useEffect(() => {
+  console.log("Mounted");
+}, []);
+```
+
+In **React 18 Strict Mode (development only)**, React intentionally performs:
+
+1. Mount
+2. Run effect
+3. Cleanup
+4. Mount again
+5. Run effect again
+
+This helps detect side effects that aren't properly cleaned up.
+
+**Production behavior:**
+
+- The effect runs only once after mount.
+
+`componentDidMount` in class components does **not** undergo this intentional effect re-execution.
+
+---
+
+# Example (React + TypeScript)
+
+## Create a Vite project
+
+```bash
+npm create vite@latest lifecycle-demo -- --template react-ts
+cd lifecycle-demo
+npm install
+npm run dev
+```
+
+### Functional Component
+
+```tsx
+import { useEffect } from "react";
+
+export default function App() {
+  useEffect(() => {
+    console.log("Component mounted");
+
+    return () => {
+      console.log("Component unmounted");
+    };
+  }, []);
+
+  return <h1>Hello React</h1>;
+}
+```
+
+### Equivalent Class Component
+
+```tsx
+import React from "react";
+
+class App extends React.Component {
+  componentDidMount() {
+    console.log("Component mounted");
+  }
+
+  componentWillUnmount() {
+    console.log("Component unmounted");
+  }
+
+  render() {
+    return <h1>Hello React</h1>;
+  }
+}
+
+export default App;
+```
+
+---
+
+# Tooling & Setup
+
+**Recommended stack:** Vite + React + TypeScript
+
+```bash
+npm create vite@latest lifecycle-demo -- --template react-ts
+npm install
+npm run dev
+```
+
+Why Vite?
+
+- Fast HMR
+- Native ESM in development
+- Rollup for optimized production builds
+- **Avoid Create React App (CRA)**, as it is deprecated.
+
+Framework notes:
+
+- **Next.js:** `useEffect` only runs on the client after hydration. It never runs during server rendering.
+- **Remix:** Same client-side behavior for `useEffect`.
+
+---
+
+# Performance
+
+- Use `useEffect` only for **side effects**, not for deriving state that can be computed during rendering.
+- Always clean up:
+  - Timers
+  - Event listeners
+  - WebSocket subscriptions
+  - `IntersectionObserver`
+
+- Memoize callbacks with `useCallback` if they're dependencies of effects.
+- Use the React DevTools Profiler to identify unnecessary renders.
+- Combine with `React.lazy` and route-level code splitting for better performance.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render } from "@testing-library/react";
+import App from "./App";
+
+test("renders component", () => {
+  render(<App />);
+});
+```
+
+For effects involving timers or asynchronous work, use fake timers (`vi.useFakeTimers()`) or `waitFor` from React Testing Library.
+
+---
+
+# Ops & Deployment
+
+- Keep effects idempotent so they behave correctly under React 18 Strict Mode.
+- Use Error Boundaries to catch rendering errors (they don't catch errors inside asynchronous effects).
+- Minimize bundle size with tree-shaking and lazy loading.
+- Serve optimized assets through a CDN.
+- In SSR applications, remember that `useEffect` runs only in the browser after hydration.
+
+---
+
+# Pitfalls
+
+- ❌ Assuming `useEffect(() => {}, [])` is **exactly** the same as `componentDidMount`; it isn't, especially in React 18 development mode.
+- ❌ Performing data derivation in `useEffect` instead of computing it during render.
+- ❌ Forgetting cleanup for subscriptions, timers, or event listeners, leading to memory leaks.
+
 ## Question 9. How do you handle forms with dynamic fields in React?
 
+Handling **dynamic forms** in React means managing fields that can be **added, removed, or modified at runtime**, such as multiple addresses, phone numbers, or education records.
+
+---
+
+## Approach 1: Using `useState` (Most Common)
+
+Store form data as an object or array.
+
+```jsx
+import { useState } from "react";
+
+function DynamicForm() {
+  const [users, setUsers] = useState([{ name: "", email: "" }]);
+
+  const handleChange = (index, event) => {
+    const values = [...users];
+    values[index][event.target.name] = event.target.value;
+    setUsers(values);
+  };
+
+  const addUser = () => {
+    setUsers([...users, { name: "", email: "" }]);
+  };
+
+  const removeUser = (index) => {
+    const values = [...users];
+    values.splice(index, 1);
+    setUsers(values);
+  };
+
+  return (
+    <div>
+      {users.map((user, index) => (
+        <div key={index}>
+          <input
+            name="name"
+            value={user.name}
+            onChange={(e) => handleChange(index, e)}
+            placeholder="Name"
+          />
+
+          <input
+            name="email"
+            value={user.email}
+            onChange={(e) => handleChange(index, e)}
+            placeholder="Email"
+          />
+
+          <button onClick={() => removeUser(index)}>Remove</button>
+        </div>
+      ))}
+
+      <button onClick={addUser}>Add User</button>
+    </div>
+  );
+}
+
+export default DynamicForm;
+```
+
+---
+
+## Data Structure
+
+Instead of separate state variables:
+
+```jsx
+const [name, setName] = useState("");
+const [email, setEmail] = useState("");
+```
+
+Use an array:
+
+```jsx
+[
+  {
+    name: "John",
+    email: "john@test.com",
+  },
+  {
+    name: "Alice",
+    email: "alice@test.com",
+  },
+];
+```
+
+This allows unlimited dynamic fields.
+
+---
+
+## Updating a Specific Field
+
+```jsx
+const handleChange = (index, e) => {
+  const values = [...users];
+  values[index][e.target.name] = e.target.value;
+  setUsers(values);
+};
+```
+
+Steps:
+
+1. Copy state.
+2. Find the correct object.
+3. Update the property.
+4. Save new state.
+
+---
+
+## Adding New Fields
+
+```jsx
+setUsers([...users, { name: "", email: "" }]);
+```
+
+This appends another blank form section.
+
+---
+
+## Removing Fields
+
+```jsx
+const removeUser = (index) => {
+  setUsers(users.filter((_, i) => i !== index));
+};
+```
+
+Using `filter` is often preferred over `splice` because it avoids mutating the copied array.
+
+---
+
+## Dynamic Validation
+
+You can validate each object individually.
+
+```jsx
+users.map((user) => ({
+  nameError: user.name === "",
+  emailError: !user.email.includes("@"),
+}));
+```
+
+Example:
+
+```jsx
+{
+  !user.name && <p>Name is required</p>;
+}
+```
+
+---
+
+## Using `useReducer` for Complex Forms
+
+When the form becomes large:
+
+```jsx
+const reducer = (state, action) => {
+  switch (action.type) {
+    case "UPDATE":
+      return state.map((item, index) =>
+        index === action.index
+          ? { ...item, [action.field]: action.value }
+          : item,
+      );
+
+    case "ADD":
+      return [...state, { name: "", email: "" }];
+
+    case "REMOVE":
+      return state.filter((_, i) => i !== action.index);
+
+    default:
+      return state;
+  }
+};
+```
+
+`useReducer` centralizes state updates and scales better than multiple `useState` calls.
+
+---
+
+## Using Form Libraries
+
+For large applications, libraries simplify handling dynamic fields:
+
+- **React Hook Form** (`useFieldArray`) — Excellent performance and minimal re-renders.
+- **Formik** — Good for forms with built-in validation.
+- **Final Form** — Another option for complex form state management.
+
+For example, `useFieldArray` in React Hook Form is specifically designed for dynamically adding and removing groups of fields.
+
+---
+
+## Best Practices
+
+- Use an **array of objects** for repeatable form sections.
+- Keep inputs **controlled** by binding `value` and `onChange`.
+- Prefer **stable IDs** over array indexes as React `key`s when items can be reordered or deleted.
+- Avoid mutating state directly; create new arrays/objects using the spread operator or methods like `map` and `filter`.
+- Validate each dynamic section independently.
+- Consider `useReducer` or a form library for complex forms with nested data.
+
+---
+
+## Interview Answer (Short)
+
+> Dynamic forms are typically implemented by storing form sections in an array of objects using `useState` or `useReducer`. Each object represents one group of fields. Inputs are rendered by mapping over the array, and users can add or remove sections by updating the array immutably. For larger forms, libraries like React Hook Form with `useFieldArray` provide efficient handling of dynamic fields and validation.
+
 ## Question 10. How do you manage state across multiple components using context?
+
+The **Context API** allows you to share state across multiple components **without manually passing props through every level** (prop drilling). A context consists of:
+
+1. **Context** – created using `createContext()`
+2. **Provider** – supplies the state to descendant components
+3. **Consumer** – accesses the state using `useContext()` or `Context.Consumer`
+
+---
+
+## Step 1: Create a Context
+
+```jsx
+// ThemeContext.js
+import { createContext } from "react";
+
+export const ThemeContext = createContext();
+```
+
+---
+
+## Step 2: Create a Provider
+
+The provider stores the shared state.
+
+```jsx
+// ThemeProvider.js
+import { useState } from "react";
+import { ThemeContext } from "./ThemeContext";
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState("light");
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export default ThemeProvider;
+```
+
+---
+
+## Step 3: Wrap the Application
+
+```jsx
+import ThemeProvider from "./ThemeProvider";
+
+function App() {
+  return (
+    <ThemeProvider>
+      <Navbar />
+      <Dashboard />
+      <Footer />
+    </ThemeProvider>
+  );
+}
+```
+
+Every component inside `ThemeProvider` can access the shared state.
+
+---
+
+## Step 4: Consume the Context
+
+```jsx
+import { useContext } from "react";
+import { ThemeContext } from "./ThemeContext";
+
+function Navbar() {
+  const { theme, toggleTheme } = useContext(ThemeContext);
+
+  return (
+    <div className={theme}>
+      <button onClick={toggleTheme}>Toggle Theme</button>
+    </div>
+  );
+}
+```
+
+Any component within the provider tree can read and update the shared state.
+
+---
+
+## Sharing More Than One Value
+
+```jsx
+const value = {
+  user,
+  theme,
+  language,
+  cart,
+  login,
+  logout,
+  toggleTheme,
+};
+```
+
+These values become available to all descendant components.
+
+---
+
+## Using Multiple Contexts
+
+Instead of one large context, separate unrelated concerns.
+
+```jsx
+<AuthProvider>
+  <ThemeProvider>
+    <CartProvider>
+      <App />
+    </CartProvider>
+  </ThemeProvider>
+</AuthProvider>
+```
+
+This improves maintainability and reduces unnecessary re-renders.
+
+---
+
+## Optimizing Performance
+
+Since any change to a context value causes all consuming components to re-render, consider these optimizations:
+
+- Memoize the context value:
+
+```jsx
+const value = useMemo(() => ({ theme, toggleTheme }), [theme]);
+```
+
+- Memoize callback functions:
+
+```jsx
+const toggleTheme = useCallback(() => {
+  setTheme((prev) => (prev === "light" ? "dark" : "light"));
+}, []);
+```
+
+- Split large contexts into smaller ones (e.g., `ThemeContext`, `AuthContext`, `CartContext`) so updates affect only relevant consumers.
+
+---
+
+## When to Use Context
+
+Use Context for data that many components need, such as:
+
+- Theme (light/dark mode)
+- Authenticated user
+- Language/localization
+- User preferences
+- Shopping cart
+- Global UI state (e.g., notifications)
+
+Avoid using Context for state that is only needed by a parent and its immediate children—passing props is often simpler.
+
+---
+
+## Context vs Props
+
+| Props                                  | Context                                  |
+| -------------------------------------- | ---------------------------------------- |
+| Pass data from parent to child         | Share data across many components        |
+| Explicit and easy to trace             | Avoids prop drilling                     |
+| Best for local/component-specific data | Best for app-wide or shared state        |
+| No extra setup                         | Requires creating a context and provider |
+
+---
+
+## Interview Answer (Short)
+
+> To manage state across multiple components, I use React's Context API. I create a context with `createContext`, store the shared state inside a provider using `useState` or `useReducer`, and wrap the required part of the application with the provider. Child components access the shared state using `useContext`, eliminating prop drilling. For better performance, I memoize the context value with `useMemo`, memoize callbacks with `useCallback`, and split unrelated state into separate contexts to minimize unnecessary re-renders.`
 
 ## Question 11. How do you implement dark mode in React?
 
