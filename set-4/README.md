@@ -1424,13 +1424,1599 @@ test("debounces input updates", async () => {
 
 ## Question 6. How do you use React.forwardRef?
 
+# Short answer
+
+`React.forwardRef` is used to **pass a ref from a parent component to a child component’s DOM node or instance**, enabling direct DOM access (or imperative APIs) through functional components.
+
+---
+
+# Explanation
+
+## 1. Why `forwardRef` exists
+
+In React, `ref` is not passed as a normal prop.
+
+So this does NOT work:
+
+```tsx
+function Input(props) {
+  return <input ref={props.ref} />; // ❌ ref is not in props
+}
+```
+
+Because:
+
+- `ref` is reserved by React
+- Functional components don’t receive `ref` by default
+
+### Solution: `forwardRef`
+
+It allows a component to **accept a ref argument explicitly** and forward it to a child DOM element or component.
+
+---
+
+## 2. React 18 perspective
+
+In modern React:
+
+- Functional components are primary
+- `forwardRef` is essential for reusable UI libraries (design systems)
+- Often combined with:
+  - `useImperativeHandle` (to expose custom methods)
+  - `memo` (to avoid unnecessary re-renders)
+
+Common use cases:
+
+- Input focus management
+- Modal open/close control
+- Integrating with third-party DOM libraries
+- Form libraries (React Hook Form, etc.)
+
+---
+
+## 3. State & architecture trade-offs
+
+### Without forwardRef
+
+- Parent cannot directly control child DOM
+- Forces prop drilling or state lifting
+
+### With forwardRef
+
+- Enables **imperative control**
+- Useful for **UI component abstractions**
+- Should not be overused (breaks declarative flow if misused)
+
+---
+
+# Example (React + TypeScript)
+
+## Setup (Vite)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Basic forwardRef example
+
+### Input component
+
+```tsx
+import React, { forwardRef } from "react";
+
+type InputProps = {
+  placeholder?: string;
+};
+
+const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ placeholder }, ref) => {
+    return <input ref={ref} placeholder={placeholder} />;
+  },
+);
+
+export default Input;
+```
+
+---
+
+### Parent component
+
+```tsx
+import { useRef } from "react";
+import Input from "./Input";
+
+export default function App() {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const focusInput = () => {
+    inputRef.current?.focus();
+  };
+
+  return (
+    <>
+      <Input ref={inputRef} placeholder="Enter name" />
+      <button onClick={focusInput}>Focus Input</button>
+    </>
+  );
+}
+```
+
+---
+
+## 4. Advanced pattern: `useImperativeHandle`
+
+Used when you want to expose **custom methods instead of raw DOM**
+
+```tsx
+import React, { forwardRef, useImperativeHandle, useRef } from "react";
+
+type InputHandle = {
+  focus: () => void;
+  clear: () => void;
+};
+
+const Input = forwardRef<InputHandle>((_, ref) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    clear: () => {
+      if (inputRef.current) inputRef.current.value = "";
+    },
+  }));
+
+  return <input ref={inputRef} />;
+});
+
+export default Input;
+```
+
+### Parent usage
+
+```tsx
+const ref = useRef<InputHandle>(null);
+
+ref.current?.focus();
+ref.current?.clear();
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended stack
+
+- **Vite** (fast ESM-based dev server)
+- **TypeScript** (strongly recommended for refs)
+- **React 18+**
+
+Why Vite:
+
+- Fast HMR
+- Minimal config
+- Modern ES module support
+
+---
+
+## ESM vs CommonJS note
+
+- `forwardRef` is ESM-friendly and tree-shakeable
+- Works seamlessly in Vite / Next.js
+- Avoid mixing with legacy CommonJS patterns for component libraries
+
+---
+
+# Performance
+
+## Impact of forwardRef
+
+- No runtime performance cost by itself
+- Slight abstraction overhead only in development readability
+
+## Optimization strategies
+
+- Combine with `React.memo` for preventing re-renders
+- Avoid recreating ref callbacks unnecessarily
+- Use `useCallback` for handlers inside forwarded components
+- Keep imperative APIs minimal
+
+## Profiling
+
+Use:
+
+- React DevTools Profiler → check unnecessary re-renders
+- Highlight updates feature → visualize rerenders
+
+---
+
+# Testing
+
+## Vitest + React Testing Library
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("focuses input using ref", async () => {
+  render(<App />);
+
+  const button = screen.getByText("Focus Input");
+  await userEvent.click(button);
+
+  const input = screen.getByPlaceholderText("Enter name");
+  expect(document.activeElement).toBe(input);
+});
+```
+
+---
+
+## E2E (Playwright)
+
+```bash
+npx playwright test
+```
+
+Test:
+
+- click button
+- verify input receives focus
+
+---
+
+# Ops & Deployment
+
+- Use forwardRef in **design systems / reusable UI libraries**
+- Avoid exposing internal DOM unnecessarily in large apps
+- Combine with Error Boundaries for robustness
+- Ensure SSR compatibility (Next.js handles refs carefully)
+- Keep public imperative APIs stable (breaking changes affect consumers)
+
+---
+
+# Pitfalls
+
+- ❌ Forgetting `forwardRef` breaks ref passing completely
+- ❌ Overusing refs instead of declarative state
+- ❌ Exposing too much DOM complexity via ref
+- ❌ Not typing refs properly in TypeScript
+- ❌ Creating unnecessary imperative APIs instead of React patterns
+
 ## Question 7. Explain controlled input with dynamic validation
+
+# Short answer
+
+A **controlled input with dynamic validation** in React is an input field whose value is managed by React state, and whose validation logic runs **in real time (on change, blur, or submit)** to provide immediate feedback such as errors, warnings, or formatting rules.
+
+---
+
+# Explanation
+
+## 1. What is a controlled input?
+
+A **controlled input** is an input element whose value is driven by React state:
+
+- React state is the **single source of truth**
+- Every keystroke updates state via `onChange`
+- UI always reflects state
+
+```tsx id="controlled1"
+const [value, setValue] = useState("");
+<input value={value} onChange={(e) => setValue(e.target.value)} />;
+```
+
+### Why this matters
+
+- Enables validation
+- Enables formatting (masking, trimming)
+- Enables syncing with external systems (Redux, forms, URL params)
+
+---
+
+## 2. What is dynamic validation?
+
+Dynamic validation means:
+
+- Validation runs **while user types or interacts**
+- Not only on form submit
+
+Common triggers:
+
+- `onChange` → real-time validation
+- `onBlur` → validate when user leaves field
+- `onSubmit` → final validation
+
+---
+
+## 3. React 18 considerations
+
+With React 18:
+
+- Updates are automatically batched → validation state updates are efficient
+- Concurrent rendering means UI may be interrupted → validation logic should be **pure and deterministic**
+- Avoid expensive validation inside render; use memoization if needed
+
+---
+
+## 4. State management trade-offs
+
+### Local state (recommended for simple forms)
+
+- Fast, simple
+- Best for single component forms
+
+### Form libraries (recommended for complex apps)
+
+- React Hook Form (uncontrolled + performant)
+- Formik (controlled-heavy approach)
+- Zod/Yup for schema validation
+
+### When controlled inputs become expensive
+
+- Large forms (100+ fields)
+- High-frequency validation logic
+- Complex async validation
+
+---
+
+## 5. Performance considerations
+
+- Avoid validating entire form on every keystroke
+- Debounce expensive validations (e.g., API checks)
+- Memoize validation functions (`useCallback`)
+- Split validation per field instead of global re-validation
+- Use `useTransition` for non-urgent validation updates (React 18)
+
+---
+
+# Example (React + TypeScript)
+
+## Setup (Vite)
+
+```bash id="setup1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Controlled input with dynamic validation
+
+```tsx id="dynamic1"
+import { useState } from "react";
+
+type Errors = {
+  email?: string;
+  password?: string;
+};
+
+export default function SignupForm() {
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [errors, setErrors] = useState<Errors>({});
+
+  const validate = (name: string, value: string) => {
+    switch (name) {
+      case "email":
+        if (!value.includes("@")) return "Invalid email format";
+        return "";
+
+      case "password":
+        if (value.length < 6) return "Password must be at least 6 characters";
+        return "";
+
+      default:
+        return "";
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // dynamic validation per field
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validate(name, value),
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const newErrors: Errors = {
+      email: validate("email", form.email),
+      password: validate("password", form.password),
+    };
+
+    setErrors(newErrors);
+
+    const hasErrors = Object.values(newErrors).some(Boolean);
+
+    if (!hasErrors) {
+      console.log("Form submitted:", form);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <input
+          name="email"
+          value={form.email}
+          onChange={handleChange}
+          placeholder="Email"
+        />
+        {errors.email && <p style={{ color: "red" }}>{errors.email}</p>}
+      </div>
+
+      <div>
+        <input
+          name="password"
+          type="password"
+          value={form.password}
+          onChange={handleChange}
+          placeholder="Password"
+        />
+        {errors.password && <p style={{ color: "red" }}>{errors.password}</p>}
+      </div>
+
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+---
+
+## 6. Advanced pattern: debounced validation
+
+Useful for expensive checks (e.g., username availability API):
+
+```tsx id="debounce1"
+import { useEffect, useState } from "react";
+
+function useDebounce(value: string, delay = 400) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+
+  return debounced;
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended stack
+
+### Vite (preferred)
+
+- Fast refresh
+- ESM-first
+- Minimal config
+
+### Form libraries (production-grade apps)
+
+- **React Hook Form** → best performance (uncontrolled model)
+- **Zod** → schema-based validation
+- **Yup** → alternative schema validation
+
+Example combo:
+
+```bash id="tool1"
+npm install react-hook-form zod @hookform/resolvers
+```
+
+---
+
+# Performance
+
+## Optimization strategies
+
+- Validate only changed field (not full form)
+- Use debouncing for async validation
+- Avoid unnecessary re-renders (split components per field)
+- Memoize validation logic with `useCallback`
+- Use `React.memo` for input components
+- Consider `useTransition` for non-urgent validation updates
+
+### React 18 behavior
+
+- Automatic batching reduces validation re-renders
+- Concurrent rendering may interrupt updates → keep validation pure
+
+---
+
+# Testing
+
+## Vitest + React Testing Library
+
+```tsx id="test1"
+import { render, screen, fireEvent } from "@testing-library/react";
+import SignupForm from "./SignupForm";
+
+test("shows validation error for invalid email", () => {
+  render(<SignupForm />);
+
+  const input = screen.getByPlaceholderText("Email");
+
+  fireEvent.change(input, {
+    target: { value: "invalidemail" },
+  });
+
+  expect(screen.getByText("Invalid email format")).toBeInTheDocument();
+});
+```
+
+---
+
+## E2E (Playwright)
+
+- Type into input
+- Assert real-time error appears
+- Submit invalid form → block submission
+
+---
+
+# Ops & Deployment
+
+- Validate both client-side and server-side (never trust UI only)
+- Ensure consistent validation rules across frontend/backend
+- Log validation failures for analytics (optional)
+- Use schema validation shared between client and server (Zod)
+- Handle accessibility (ARIA error messages)
+
+---
+
+# Pitfalls
+
+- ❌ Validating entire form on every keystroke (performance issue)
+- ❌ Mutating state directly instead of using functional updates
+- ❌ Mixing controlled and uncontrolled inputs
+- ❌ Duplicating validation logic across components
+- ❌ Not handling async validation race conditions (stale responses)
 
 ## Question 8. How do you fetch API data in React?
 
+# Short answer
+
+In React, API data is typically fetched using **`useEffect` + `fetch/axios` for simple cases**, or **React Query (TanStack Query)** for production-grade apps. The key is to manage **loading, error, and caching states** properly while avoiding memory leaks and race conditions.
+
+---
+
+# Explanation
+
+## 1. Basic approach: `useEffect + fetch`
+
+The most common beginner-to-intermediate approach:
+
+### Flow
+
+- Component mounts
+- `useEffect` triggers API call
+- State updates with data
+- UI re-renders
+
+### React 18 considerations
+
+- Effects run after render
+- Strict Mode may run effects twice in dev
+- Async calls must be cancellable or guarded to avoid stale updates
+
+---
+
+## 2. State management responsibilities
+
+When fetching data manually, you must handle:
+
+- **Loading state** → UI feedback during request
+- **Error state** → failure handling
+- **Data state** → API response storage
+- **Cleanup** → prevent state update after unmount
+- **Race conditions** → ensure latest request wins
+
+---
+
+## 3. Architecture perspective
+
+### Small apps
+
+- `useEffect + fetch`
+- local state is sufficient
+
+### Medium apps
+
+- custom hooks (`useUsers`, `useProducts`)
+- shared state via Context
+
+### Large apps (recommended)
+
+- **React Query (TanStack Query)** or **SWR**
+- caching, retries, deduping, background refetching
+
+---
+
+## 4. Performance considerations
+
+Without optimization:
+
+- repeated API calls on re-renders
+- unnecessary network usage
+- UI flickering
+
+Optimizations:
+
+- AbortController for cancellation
+- memoized dependencies in `useEffect`
+- caching via React Query
+- debouncing for input-driven fetches
+- pagination / infinite queries
+
+---
+
+## 5. React 18 concurrency impact
+
+- Requests can be started and abandoned mid-render
+- Strict Mode double-invokes effects in development
+- Race conditions become more visible
+- Always assume requests may resolve out of order
+
+---
+
+# Example (React + TypeScript)
+
+## Setup (Vite)
+
+```bash id="setup1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## 1. Manual fetch with useEffect
+
+```tsx id="fetch1"
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function Users() {
+  const [data, setData] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchUsers() {
+      try {
+        setLoading(true);
+
+        const res = await fetch("https://jsonplaceholder.typicode.com/users", {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error("Failed to fetch users");
+
+        const json: User[] = await res.json();
+        setData(json);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setError(err.message);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchUsers();
+
+    return () => {
+      controller.abort(); // prevents memory leaks
+    };
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
+
+  return (
+    <ul>
+      {data.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## 2. Custom hook approach (clean architecture)
+
+```tsx id="hook1"
+import { useEffect, useState } from "react";
+
+export function useUsers() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch("https://jsonplaceholder.typicode.com/users", {
+      signal: controller.signal,
+    })
+      .then((res) => res.json())
+      .then(setData)
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, []);
+
+  return { data, loading };
+}
+```
+
+Usage:
+
+```tsx id="hook2"
+const { data, loading } = useUsers();
+```
+
+---
+
+## 3. Production-grade approach: React Query
+
+```bash id="rq1"
+npm install @tanstack/react-query
+```
+
+### Setup provider
+
+```tsx id="rq2"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Users />
+    </QueryClientProvider>
+  );
+}
+```
+
+### Fetching data
+
+```tsx id="rq3"
+import { useQuery } from "@tanstack/react-query";
+
+function fetchUsers() {
+  return fetch("https://jsonplaceholder.typicode.com/users").then((res) =>
+    res.json(),
+  );
+}
+
+export default function Users() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["users"],
+    queryFn: fetchUsers,
+  });
+
+  if (isLoading) return <p>Loading...</p>;
+  if (error) return <p>Error occurred</p>;
+
+  return (
+    <ul>
+      {data.map((u: any) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended stack
+
+### Vite
+
+- Fast build tool
+- Native ESM
+- Best DX for React SPA
+
+### Fetch libraries
+
+- Native `fetch` (built-in)
+- `axios` (interceptors, older but popular)
+- React Query (best for server state)
+
+---
+
+## ESM vs CommonJS
+
+- Vite uses **ESM**
+- React Query and modern libraries are ESM-first
+- Tree-shaking reduces bundle size automatically
+
+---
+
+# Performance
+
+## Key optimizations
+
+- Use **React Query caching** instead of refetching
+- Use **AbortController** to cancel stale requests
+- Avoid fetching inside render
+- Use pagination or infinite queries for large datasets
+- Debounce input-based API calls
+- Memoize query keys and functions
+
+---
+
+## React 18 behavior
+
+- Effects may re-run in Strict Mode (dev only)
+- Concurrent rendering may interrupt updates
+- Always assume requests can overlap or race
+
+---
+
+# Testing
+
+## Vitest + React Testing Library
+
+```tsx id="test1"
+import { render, screen, waitFor } from "@testing-library/react";
+import Users from "./Users";
+
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([{ id: 1, name: "John" }]),
+  }),
+) as any;
+
+test("renders fetched users", async () => {
+  render(<Users />);
+
+  await waitFor(() => {
+    expect(screen.getByText("John")).toBeInTheDocument();
+  });
+});
+```
+
+---
+
+## E2E (Playwright)
+
+- intercept API calls
+- verify loading → success states
+- simulate slow network conditions
+
+---
+
+# Ops & Deployment
+
+- Cache API responses where possible (CDN, edge caching)
+- Monitor API latency and failure rates
+- Use retries with exponential backoff (React Query handles this)
+- Implement graceful error UI states
+- Secure API keys (never expose secrets in frontend)
+- Use SSR (Next.js) for faster initial data loading if needed
+
+---
+
+# Pitfalls
+
+- ❌ Fetching inside render instead of `useEffect`
+- ❌ Ignoring cleanup → memory leaks
+- ❌ Not handling race conditions in fast-changing inputs
+- ❌ Missing loading/error states
+- ❌ Overfetching without caching strategy
+
 ## Question 9. Difference between fetch and axios in React
 
+# Short answer
+
+**`fetch`** is a built-in browser API for making HTTP requests, while **`axios`** is a third-party library that provides a more feature-rich and developer-friendly abstraction over HTTP requests.
+
+In React, both are used to fetch API data, but **axios simplifies common patterns like JSON parsing, error handling, and request configuration**.
+
+---
+
+# Explanation
+
+## 1. Core differences
+
+### fetch
+
+- Native browser API (no install needed)
+- Returns a **Promise of Response**
+- Requires manual JSON parsing (`res.json()`)
+- Does not throw errors for HTTP errors (like 404/500)
+
+### axios
+
+- External library (`npm install axios`)
+- Automatically parses JSON
+- Throws errors for HTTP status codes outside 2xx
+- Provides interceptors, timeout, cancellation, and defaults
+
+---
+
+## 2. React 18 context
+
+In React:
+
+- Both are used inside `useEffect`, event handlers, or data libraries
+- React itself does not prefer either
+- Modern apps often use **React Query + fetch/axios underneath**
+
+Key point:
+👉 React is **transport-agnostic** — it only cares about state updates, not how data is fetched.
+
+---
+
+## 3. Architecture perspective
+
+### Using fetch
+
+- Lightweight
+- Good for small apps
+- More boilerplate (manual error handling, headers, JSON parsing)
+
+### Using axios
+
+- Better for large-scale apps
+- Centralized API configuration
+- Interceptors for auth tokens, logging, retries
+
+---
+
+## 4. State management implications
+
+With both:
+
+- You still manage:
+  - loading state
+  - error state
+  - caching (unless using React Query/SWR)
+  - cancellation
+
+But axios reduces boilerplate in:
+
+- error normalization
+- response transformation
+- request middleware (interceptors)
+
+---
+
+## 5. Performance considerations
+
+Neither `fetch` nor `axios` is inherently faster.
+
+But:
+
+- `fetch` = minimal overhead
+- `axios` = slightly heavier bundle but better DX
+
+Optimization considerations:
+
+- Use AbortController (fetch) or cancel tokens (axios legacy)
+- Avoid duplicate requests via React Query caching
+- Debounce API calls for inputs
+- Use pagination/infinite queries for large datasets
+
+---
+
+## 6. React 18 concurrency impact
+
+- Multiple renders may trigger multiple requests
+- Always ensure requests are:
+  - cancellable
+  - idempotent
+  - deduplicated (React Query helps here)
+
+---
+
+# Example (React + TypeScript)
+
+## Setup (Vite)
+
+```bash id="setup1"
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install axios
+npm run dev
+```
+
+---
+
+## 1. Fetch example
+
+```tsx id="fetch1"
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function UsersFetch() {
+  const [data, setData] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function getUsers() {
+      try {
+        const res = await fetch("https://jsonplaceholder.typicode.com/users", {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error("Fetch failed");
+
+        const json = await res.json();
+        setData(json);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setError(err.message);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    getUsers();
+
+    return () => controller.abort();
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
+
+  return (
+    <ul>
+      {data.map((u) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## 2. Axios example
+
+```tsx id="axios1"
+import { useEffect, useState } from "react";
+import axios from "axios";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+export default function UsersAxios() {
+  const [data, setData] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function getUsers() {
+      try {
+        const response = await axios.get<User[]>(
+          "https://jsonplaceholder.typicode.com/users",
+          {
+            signal: controller.signal,
+          },
+        );
+
+        setData(response.data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    getUsers();
+
+    return () => controller.abort();
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
+
+  return (
+    <ul>
+      {data.map((u) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## 3. Key improvement with Axios: centralized API layer
+
+```tsx id="axios2"
+import axios from "axios";
+
+export const api = axios.create({
+  baseURL: "https://jsonplaceholder.typicode.com",
+  timeout: 5000,
+});
+
+api.interceptors.request.use((config) => {
+  // attach token
+  config.headers.Authorization = "Bearer token";
+  return config;
+});
+```
+
+Then:
+
+```tsx id="axios3"
+api.get("/users").then((res) => res.data);
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended stack
+
+### Vite (preferred)
+
+- Fast ESM-based dev server
+- Minimal configuration
+
+### fetch (default choice for modern apps)
+
+- Native
+- No dependency
+
+### axios (when needed)
+
+Use when you need:
+
+- interceptors
+- request cancellation abstraction
+- centralized API config
+- better error handling consistency
+
+---
+
+## ESM vs CommonJS
+
+- Both `fetch` and `axios` work in ESM-based Vite setups
+- Axios is ESM-compatible in modern versions
+- Tree-shaking works better with `fetch`
+
+---
+
+# Performance
+
+## fetch advantages
+
+- Smaller bundle size
+- No extra dependency
+- Native browser optimization
+
+## axios advantages
+
+- Reduced boilerplate improves maintainability
+- Interceptors reduce duplicated logic
+- Better structure in large apps
+
+## Optimization strategies
+
+- Use AbortController (fetch) or signal-based cancellation (axios)
+- Combine with React Query for caching/deduping
+- Debounce requests for input-driven APIs
+- Avoid unnecessary re-fetching via dependency control in `useEffect`
+
+---
+
+# Testing
+
+## Vitest + RTL
+
+Mocking fetch:
+
+```tsx id="test1"
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([{ id: 1, name: "John" }]),
+  }),
+) as any;
+```
+
+Mocking axios:
+
+```tsx id="test2"
+import axios from "axios";
+
+vi.mock("axios");
+
+(axios.get as any).mockResolvedValue({
+  data: [{ id: 1, name: "John" }],
+});
+```
+
+---
+
+## E2E (Playwright)
+
+- intercept network requests
+- simulate API failures
+- verify loading and error states
+
+---
+
+# Ops & Deployment
+
+- Prefer **fetch + React Query** in modern production apps
+- Use axios when API complexity grows
+- Centralize API logic in a service layer
+- Monitor API errors with tools like Sentry
+- Add retries/backoff (React Query preferred)
+- Ensure secrets are never exposed in frontend calls
+
+---
+
+# Pitfalls
+
+- ❌ Using axios without central configuration (leads to duplication)
+- ❌ Forgetting fetch `.json()` parsing
+- ❌ Not handling HTTP error codes in fetch
+- ❌ Missing cancellation logic → memory leaks
+- ❌ Overusing axios when fetch is sufficient
+
 ## Question 10. How do you use setState asynchronously in class components?
+
+# Short answer
+
+In React class components, `setState` is **asynchronous and batched**, meaning state updates are scheduled and not applied immediately. To safely work with the updated state, you should use:
+
+- The **functional form of `setState`** when relying on previous state
+- The **callback form of `setState`** when you need to run code after state is updated
+
+---
+
+# Explanation
+
+## 1. Why `setState` is asynchronous
+
+React batches multiple `setState` calls for performance optimization.
+
+This means:
+
+- State updates are **not applied immediately**
+- React schedules a re-render
+- Multiple updates may be combined (especially in React 18 automatic batching)
+
+### React 18 impact
+
+Even in class components:
+
+- Updates inside event handlers are batched automatically
+- Updates inside async callbacks (timeouts, promises) may also be batched
+- This makes state consistency more important than ever
+
+---
+
+## 2. The problem with direct state usage
+
+❌ Incorrect approach:
+
+```js id="wrong1"
+this.setState({ count: this.state.count + 1 });
+this.setState({ count: this.state.count + 1 });
+```
+
+Expected: +2
+Actual: may still be +1 because `this.state.count` is stale in both calls
+
+---
+
+## 3. Solution 1: Functional `setState`
+
+This is the **recommended approach when state depends on previous state**.
+
+```js id="correct1"
+this.setState((prevState) => ({
+  count: prevState.count + 1,
+}));
+```
+
+### Why it works
+
+- React passes the **latest state snapshot**
+- Ensures correctness in concurrent and batched updates
+
+---
+
+## 4. Solution 2: Callback after state update
+
+If you need to run logic after state has been applied:
+
+```js id="correct2"
+this.setState({ count: this.state.count + 1 }, () => {
+  console.log("Updated state:", this.state.count);
+});
+```
+
+### Use cases
+
+- Logging updated state
+- Triggering API calls after state change
+- DOM-related logic
+
+---
+
+## 5. Solution 3: Async workflows (promises / timeouts)
+
+`setState` itself does not return a promise, so you cannot `await` it directly.
+
+Instead:
+
+```js id="async1"
+handleClick = () => {
+  this.setState(
+    (prev) => ({ count: prev.count + 1 }),
+    () => {
+      this.doSomethingAfterUpdate();
+    },
+  );
+};
+```
+
+For async flows:
+
+```js id="async2"
+async handleSave() {
+  this.setState({ loading: true });
+
+  await api.saveData();
+
+  this.setState({ loading: false });
+}
+```
+
+---
+
+## 6. React 18 concurrency considerations
+
+Even in class components:
+
+- Updates can be interrupted and resumed
+- Multiple updates may be merged
+- Order is not guaranteed unless using functional updates
+
+Best practices:
+
+- Always use functional `setState` when relying on previous state
+- Avoid reading `this.state` immediately after calling `setState`
+- Treat state updates as **eventually consistent**
+
+---
+
+## 7. State management perspective
+
+Class component state:
+
+- Local and encapsulated
+- Suitable for UI-specific state
+- Not ideal for complex shared state (Redux/Zustand preferred)
+
+Modern React:
+
+- Functional components + hooks (`useState`, `useReducer`) are preferred
+- Class components still supported but mostly legacy
+
+---
+
+# Example (Class Component)
+
+## Setup (Vite + React)
+
+```bash id="setup1"
+npm create vite@latest my-app -- --template react
+cd my-app
+npm install
+npm run dev
+```
+
+---
+
+## Safe asynchronous `setState`
+
+```jsx id="class1"
+import React from "react";
+
+class Counter extends React.Component {
+  state = {
+    count: 0,
+    loading: false,
+  };
+
+  incrementTwice = () => {
+    this.setState(
+      (prev) => ({ count: prev.count + 1 }),
+      () => {
+        this.setState(
+          (prev) => ({ count: prev.count + 1 }),
+          () => {
+            console.log("Final count:", this.state.count);
+          },
+        );
+      },
+    );
+  };
+
+  fetchData = async () => {
+    this.setState({ loading: true });
+
+    try {
+      await new Promise((res) => setTimeout(res, 1000));
+
+      this.setState({ loading: false });
+    } catch (err) {
+      this.setState({ loading: false });
+    }
+  };
+
+  render() {
+    return (
+      <div>
+        <p>Count: {this.state.count}</p>
+
+        <button onClick={this.incrementTwice}>Increment Twice</button>
+
+        <button onClick={this.fetchData}>Fetch Data</button>
+
+        {this.state.loading && <p>Loading...</p>}
+      </div>
+    );
+  }
+}
+
+export default Counter;
+```
+
+---
+
+# Tooling & Setup
+
+## Recommended modern approach
+
+Even though class components are valid, modern React prefers:
+
+- Functional components
+- `useState` instead of `this.setState`
+- `useEffect` instead of lifecycle methods
+
+### Why Vite
+
+- Fast refresh
+- ESM support
+- Lightweight setup
+- Preferred over CRA (deprecated)
+
+---
+
+## ESM vs CommonJS
+
+- Class components work in both systems
+- Modern bundlers (Vite, Next.js) use ESM
+- Tree-shaking and optimization are better with functional components
+
+---
+
+# Performance
+
+## Why React batches `setState`
+
+- Reduces re-renders
+- Improves rendering performance
+- Enables concurrent rendering optimizations
+
+## Best practices
+
+- Use functional `setState` for correctness
+- Avoid multiple sequential `setState` calls without callbacks
+- Keep state minimal (avoid derived state)
+- Avoid unnecessary state duplication
+
+## Profiling tools
+
+- React DevTools Profiler → detect unnecessary renders
+- Highlight updates → visualize state-driven re-renders
+
+---
+
+# Testing
+
+## Vitest + React Testing Library
+
+```jsx id="test1"
+import { render, fireEvent, screen } from "@testing-library/react";
+import Counter from "./Counter";
+
+test("increments correctly", () => {
+  render(<Counter />);
+
+  fireEvent.click(screen.getByText("Increment Twice"));
+
+  expect(screen.getByText(/Count:/)).toBeInTheDocument();
+});
+```
+
+## Key testing idea
+
+- Do NOT test timing of `setState`
+- Test final rendered output instead
+
+---
+
+# Ops & Deployment
+
+- Class components still work in production React apps
+- Ensure consistent state updates in async flows
+- Avoid mixing class and functional state logic in the same feature
+- Prefer migrating to functional components for new development
+- Monitor unexpected state races in async workflows
+
+---
+
+# Pitfalls
+
+- ❌ Using `this.state` directly inside `setState`
+- ❌ Assuming `setState` is synchronous
+- ❌ Chaining multiple updates without functional form
+- ❌ Trying to `await this.setState()` (not supported)
+- ❌ Overusing class components in modern React apps
 
 ## Question 11. Explain React Fiber architecture
 
