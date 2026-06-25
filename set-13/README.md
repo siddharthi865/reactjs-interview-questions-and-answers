@@ -1292,13 +1292,990 @@ For E2E:
 
 ## Question 6. How do you implement theme switching using context and hooks?
 
+# How do you implement theme switching using Context and Hooks?
+
+## Short answer
+
+Create a **Theme Context** that stores the current theme (e.g., `"light"` or `"dark"`) and exposes a `toggleTheme()` function. Wrap your application in a `ThemeProvider`, consume the context with a custom `useTheme()` hook, and apply the theme using a `data-theme` attribute, CSS variables, or a CSS-in-JS solution.
+
+---
+
+# Explanation
+
+Theme switching is a common example of **global UI state**. Since multiple components (navbar, sidebar, buttons, cards, etc.) need access to the current theme, **React Context** is a good fit.
+
+Typical architecture:
+
+```text
+App
+└── ThemeProvider
+    ├── Header
+    ├── Sidebar
+    ├── Dashboard
+    ├── Footer
+    └── ThemeToggle
+```
+
+The provider owns:
+
+- Current theme (`light` or `dark`)
+- `toggleTheme()`
+- Optionally `setTheme()` for selecting a specific theme
+
+Components consume the theme via a custom hook:
+
+```tsx
+const { theme, toggleTheme } = useTheme();
+```
+
+This avoids prop drilling and centralizes theme management.
+
+---
+
+## React 18 Rendering Behavior
+
+When the user toggles the theme:
+
+1. `toggleTheme()` updates the context state.
+2. React 18 automatically batches updates occurring in the same event or async context.
+3. The `ThemeProvider` re-renders.
+4. Components consuming the theme context receive the updated value.
+5. React updates only the affected DOM nodes.
+
+Since every consumer of the context re-renders when the context value changes, keep the context focused on theme-related state only.
+
+---
+
+## Component Architecture
+
+A scalable structure:
+
+```text
+src/
+├── context/
+│   └── ThemeContext.tsx
+├── hooks/
+│   └── useTheme.ts
+├── components/
+│   ├── ThemeToggle.tsx
+│   └── Header.tsx
+├── styles/
+│   └── theme.css
+└── App.tsx
+```
+
+Responsibilities:
+
+- **ThemeProvider** → manages theme state.
+- **useTheme()** → provides access to the theme API.
+- **ThemeToggle** → switches themes.
+- **CSS** → defines colors using CSS variables.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+### `ThemeContext.tsx`
+
+```tsx
+import { createContext, useContext, useMemo, useState, ReactNode } from "react";
+
+type Theme = "light" | "dark";
+
+type ThemeContextType = {
+  theme: Theme;
+  toggleTheme: () => void;
+};
+
+const ThemeContext = createContext<ThemeContextType | null>(null);
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<Theme>("light");
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  const value = useMemo(() => ({ theme, toggleTheme }), [theme]);
+
+  return (
+    <ThemeContext.Provider value={value}>
+      <div data-theme={theme}>{children}</div>
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+
+  if (!context) {
+    throw new Error("useTheme must be used within ThemeProvider");
+  }
+
+  return context;
+}
+```
+
+### `App.tsx`
+
+```tsx
+import { ThemeProvider, useTheme } from "./ThemeContext";
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <>
+      <p>Current theme: {theme}</p>
+      <button onClick={toggleTheme}>Toggle Theme</button>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <ThemeToggle />
+    </ThemeProvider>
+  );
+}
+```
+
+### `theme.css`
+
+```css
+[data-theme="light"] {
+  --bg: white;
+  --text: black;
+}
+
+[data-theme="dark"] {
+  --bg: #1a1a1a;
+  --text: white;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+```
+
+This implementation:
+
+- Centralizes theme state.
+- Avoids prop drilling.
+- Uses CSS variables for efficient styling.
+- Is easy to extend with additional themes.
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Use **Vite** for fast development, native **ES Modules (ESM)** support, and optimized production builds.
+- Use **Next.js App Router** if SSR or React Server Components are required. The `ThemeProvider` must be a Client Component (`"use client"`).
+- CSS variables are framework-agnostic and work well with Vite, Next.js, Tailwind CSS, or CSS Modules.
+
+---
+
+# Performance
+
+- Memoize the context value with `useMemo` to avoid unnecessary consumer re-renders.
+- Keep the theme context focused only on theme-related state.
+- Use `React.memo` for expensive components that receive stable props.
+- Lazy-load theme-specific assets if they are large.
+- Use the **React DevTools Profiler** to verify rendering behavior before optimizing.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example test:
+
+```tsx
+render(
+  <ThemeProvider>
+    <ThemeToggle />
+  </ThemeProvider>,
+);
+
+fireEvent.click(screen.getByText("Toggle Theme"));
+expect(screen.getByText(/dark/i)).toBeInTheDocument();
+```
+
+For end-to-end testing, use **Playwright** to verify theme persistence and visual changes.
+
+---
+
+# Ops & Deployment
+
+- Persist the selected theme in `localStorage` and restore it on initial load.
+- Respect the user's system preference using `window.matchMedia("(prefers-color-scheme: dark)")`.
+- In SSR applications (e.g., Next.js), avoid a flash of the wrong theme by initializing the theme before hydration.
+- Use CSS variables instead of inline styles to minimize DOM updates.
+- Log theme preference changes only if required for analytics.
+
+---
+
+# Pitfalls
+
+- **Not memoizing the context value**, causing all consumers to re-render unnecessarily.
+- **Ignoring persisted or system theme preferences**, leading to a poor user experience.
+- **Putting unrelated global state into the theme context**, increasing unnecessary re-renders.
+
 ## Question 7. How do you debounce input search using `useEffect`?
+
+# How do you debounce input search using `useEffect`?
+
+## Short answer
+
+Debouncing delays an action until the user **stops typing for a specified duration**. In React, you can implement debouncing with `useEffect` by setting a `setTimeout` whenever the input changes and clearing the previous timeout in the effect's cleanup function. This prevents unnecessary API calls on every keystroke.
+
+---
+
+# Explanation
+
+Without debouncing:
+
+```text
+User types: React
+
+R  → API call
+Re → API call
+Rea → API call
+Reac → API call
+React → API call
+```
+
+This results in **5 API requests**.
+
+With a **500ms debounce**:
+
+```text
+User types: React
+
+R
+Re
+Rea
+Reac
+React
+      ↓ (500ms of inactivity)
+      API call
+```
+
+Only **one API request** is made after the user pauses typing.
+
+### How `useEffect` implements debouncing
+
+1. User updates the input.
+2. State (`query`) changes.
+3. `useEffect` runs and starts a timer.
+4. If the user types again before the timer finishes:
+   - Cleanup runs.
+   - The previous timer is cleared.
+   - A new timer starts.
+
+5. When the timer completes, update the debounced value or trigger the API call.
+
+This pattern avoids race conditions caused by stale timers.
+
+---
+
+## React 18 Rendering Behavior
+
+With React 18:
+
+1. Input change updates state.
+2. React automatically batches multiple state updates occurring in the same event.
+3. Component re-renders.
+4. `useEffect` schedules the timeout.
+5. Cleanup cancels the previous timeout if the input changes again.
+6. Only after the debounce delay does the API request execute.
+
+For network requests, combine debouncing with `AbortController` to cancel outdated requests if a newer search starts.
+
+---
+
+## Component Architecture
+
+A clean separation:
+
+```text
+SearchPage
+├── SearchInput
+├── useDebouncedValue (custom hook)
+└── SearchResults
+```
+
+Responsibilities:
+
+- **SearchInput** → captures user input.
+- **useDebouncedValue** → delays updates.
+- **SearchResults** → fetches and renders results.
+
+This makes the debounce logic reusable across components.
+
+---
+
+# Example
+
+**Scaffold a modern React + TypeScript app (Vite):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm i
+npm run dev
+```
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (!debouncedQuery) return;
+
+    console.log("Searching:", debouncedQuery);
+    // Example:
+    // fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
+  }, [debouncedQuery]);
+
+  return (
+    <div>
+      <input
+        type="text"
+        placeholder="Search..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
+      <p>Searching for: {debouncedQuery}</p>
+    </div>
+  );
+}
+```
+
+### Reusable custom hook
+
+```tsx
+import { useEffect, useState } from "react";
+
+export function useDebouncedValue<T>(value: T, delay = 500) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+```
+
+Usage:
+
+```tsx
+const debouncedQuery = useDebouncedValue(query, 500);
+```
+
+---
+
+# Tooling & Setup
+
+- **Avoid Create React App (CRA)** because it is deprecated.
+- Use **Vite** for fast development, native **ES Modules (ESM)** support, and optimized production builds.
+- Use **Next.js App Router** if your application requires SSR. Keep debounced search logic in Client Components (`"use client"`).
+- Consider integrating with **TanStack Query** for caching and request deduplication once the debounced value changes.
+
+---
+
+# Performance
+
+- Debounce API requests to reduce unnecessary network traffic.
+- Cancel in-flight requests with `AbortController` when a newer search supersedes an older one.
+- Memoize expensive derived results with `useMemo` when appropriate.
+- Use `React.memo` for result list items if they receive stable props.
+- Virtualize long result lists using libraries like `react-window`.
+- Profile typing performance with the **React DevTools Profiler**.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Testing strategy:
+
+- Use fake timers (`vi.useFakeTimers()`).
+- Simulate rapid typing.
+- Advance timers with `vi.advanceTimersByTime(500)`.
+- Assert that the search function is called only once after the debounce delay.
+
+For end-to-end testing, use **Playwright** to verify search behavior in the browser.
+
+---
+
+# Ops & Deployment
+
+- Log search queries only if required, while respecting privacy requirements.
+- Handle API errors gracefully and display loading/error states.
+- Cache repeated searches using TanStack Query or SWR.
+- Code-split large search result components if needed.
+- Monitor API latency and debounce timing to balance responsiveness with server load.
+
+---
+
+# Pitfalls
+
+- **Forgetting to clear the timeout**, resulting in multiple delayed executions.
+- **Using debouncing for every interaction**, even when immediate feedback is expected (e.g., form validation on blur may be more appropriate).
+- **Ignoring stale API responses**; cancel or ignore outdated requests to prevent older results from overwriting newer ones.
 
 ## Question 8. How do you cancel fetch requests in `useEffect`?
 
+You can cancel fetch requests in `useEffect` using the **`AbortController`** API. This prevents:
+
+- Memory leaks
+- Updating state after a component unmounts
+- Race conditions when multiple requests are made
+
+---
+
+## Example using `AbortController`
+
+```jsx
+import { useState, useEffect } from "react";
+
+function User() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch("https://jsonplaceholder.typicode.com/users/1", {
+      signal: controller.signal,
+    })
+      .then((response) => response.json())
+      .then((data) => setUser(data))
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          console.error(error);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  return <div>{user ? user.name : "Loading..."}</div>;
+}
+
+export default User;
+```
+
+---
+
+## How it works
+
+1. Create an `AbortController`.
+
+```jsx
+const controller = new AbortController();
+```
+
+2. Pass its `signal` to `fetch`.
+
+```jsx
+fetch(url, {
+  signal: controller.signal,
+});
+```
+
+3. Abort the request during cleanup.
+
+```jsx
+return () => {
+  controller.abort();
+};
+```
+
+---
+
+## Why use it?
+
+Imagine a user navigates away before the API responds.
+
+Without cancellation:
+
+```
+Component Mounted
+      ↓
+Fetch Started
+      ↓
+Component Unmounted
+      ↓
+Fetch Completes
+      ↓
+setState() runs ❌
+```
+
+With `AbortController`:
+
+```
+Component Mounted
+      ↓
+Fetch Started
+      ↓
+Component Unmounted
+      ↓
+abort() called
+      ↓
+Fetch Cancelled ✅
+```
+
+---
+
+## Example: Search with changing query
+
+Cancel the previous request whenever the search term changes.
+
+```jsx
+import { useEffect, useState } from "react";
+
+function Search() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+
+  useEffect(() => {
+    if (!query) return;
+
+    const controller = new AbortController();
+
+    fetch(`https://api.example.com/search?q=${query}`, {
+      signal: controller.signal,
+    })
+      .then((res) => res.json())
+      .then((data) => setResults(data))
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          console.error(err);
+        }
+      });
+
+    return () => controller.abort();
+  }, [query]);
+
+  return (
+    <>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search..."
+      />
+
+      <ul>
+        {results.map((item) => (
+          <li key={item.id}>{item.name}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+```
+
+Here, every time the user types:
+
+- The previous request is cancelled.
+- A new request starts.
+- Only the latest response is processed.
+
+---
+
+## Using `async/await`
+
+```jsx
+useEffect(() => {
+  const controller = new AbortController();
+
+  async function fetchData() {
+    try {
+      const response = await fetch(
+        "https://jsonplaceholder.typicode.com/posts",
+        {
+          signal: controller.signal,
+        },
+      );
+
+      const data = await response.json();
+      setPosts(data);
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error(error);
+      }
+    }
+  }
+
+  fetchData();
+
+  return () => controller.abort();
+}, []);
+```
+
+---
+
+## Benefits
+
+- Prevents memory leaks.
+- Avoids updating state after a component unmounts.
+- Eliminates race conditions from overlapping requests.
+- Improves performance by cancelling unnecessary network requests.
+- Uses the built-in browser `AbortController` API without additional libraries.
+
+---
+
+### Interview Tip
+
+If asked _"How do you cancel fetch requests in `useEffect`?"_, a concise answer is:
+
+> Use the browser's **`AbortController`**. Create a controller inside `useEffect`, pass `controller.signal` to the `fetch` request, and call `controller.abort()` in the cleanup function. Handle the `AbortError` separately so that cancelled requests don't trigger error handling. This prevents memory leaks and stale state updates when the component unmounts or the effect re-runs.
+
 ## Question 9. How do you implement a countdown timer with hooks?
 
+A countdown timer in React can be implemented using the **`useState`** hook to store the remaining time and the **`useEffect`** hook to update the timer every second. The interval should be cleaned up to prevent memory leaks.
+
+## Basic Countdown Timer
+
+```jsx
+import { useState, useEffect } from "react";
+
+function CountdownTimer() {
+  const [seconds, setSeconds] = useState(10);
+
+  useEffect(() => {
+    if (seconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setSeconds((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [seconds]);
+
+  return (
+    <div>
+      <h2>Time Left: {seconds}s</h2>
+    </div>
+  );
+}
+
+export default CountdownTimer;
+```
+
+### How it works
+
+1. `useState` initializes the countdown value.
+2. `useEffect` starts an interval.
+3. Every second, the state is decremented.
+4. The cleanup function clears the interval.
+5. When the timer reaches `0`, the effect exits without creating another interval.
+
+---
+
+## Optimized Version (Single Interval)
+
+Instead of creating a new interval every second, create it once and use a functional state update.
+
+```jsx
+import { useState, useEffect } from "react";
+
+function CountdownTimer() {
+  const [seconds, setSeconds] = useState(10);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return <h2>{seconds}s</h2>;
+}
+
+export default CountdownTimer;
+```
+
+**Why this is better:**
+
+- Only one interval is created.
+- Uses a functional state update to always access the latest state.
+- Clears the interval automatically when the countdown reaches zero.
+
+---
+
+## Countdown with Start, Pause, and Reset
+
+```jsx
+import { useState, useEffect } from "react";
+
+function CountdownTimer() {
+  const initialTime = 20;
+
+  const [seconds, setSeconds] = useState(initialTime);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!running || seconds === 0) return;
+
+    const timer = setInterval(() => {
+      setSeconds((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [running, seconds]);
+
+  return (
+    <div>
+      <h2>{seconds}s</h2>
+
+      <button onClick={() => setRunning(true)}>Start</button>
+
+      <button onClick={() => setRunning(false)}>Pause</button>
+
+      <button
+        onClick={() => {
+          setRunning(false);
+          setSeconds(initialTime);
+        }}
+      >
+        Reset
+      </button>
+    </div>
+  );
+}
+
+export default CountdownTimer;
+```
+
+---
+
+## Using `setTimeout` Instead of `setInterval`
+
+Another approach is to schedule the next tick with `setTimeout`.
+
+```jsx
+useEffect(() => {
+  if (seconds <= 0) return;
+
+  const timeout = setTimeout(() => {
+    setSeconds((prev) => prev - 1);
+  }, 1000);
+
+  return () => clearTimeout(timeout);
+}, [seconds]);
+```
+
+This avoids overlapping intervals and is often easier to reason about because each timeout schedules only the next update.
+
+---
+
+## Best Practices
+
+- Always clear intervals or timeouts in the cleanup function.
+- Use functional state updates (`setState(prev => ...)`) to avoid stale state.
+- Stop the timer when it reaches `0`.
+- Create only one interval when possible for better performance.
+- Add controls (start, pause, reset) by managing a separate `running` state.
+
+### Interview Tip
+
+If asked **"How do you implement a countdown timer with hooks?"**, you can answer:
+
+> "I use `useState` to store the remaining time and `useEffect` to start a timer with `setInterval` or `setTimeout`. On each tick, I decrement the state using a functional update. I clear the timer in the cleanup function to prevent memory leaks, and stop the countdown when it reaches zero. For additional controls like pause or reset, I manage a separate `running` state."
+
 ## Question 10. How do you implement a "read more / read less" feature?
+
+A **"Read More / Read Less"** feature allows users to toggle between a shortened version of text and the full content. In React, this is typically implemented using the **`useState`** hook.
+
+---
+
+## Basic Example
+
+```jsx
+import { useState } from "react";
+
+function ReadMore() {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const text =
+    "React is a JavaScript library for building user interfaces. It uses a component-based architecture, virtual DOM, hooks, and declarative rendering to build fast and scalable web applications.";
+
+  const shortText = text.slice(0, 80);
+
+  return (
+    <div>
+      <p>{isExpanded ? text : `${shortText}...`}</p>
+
+      <button onClick={() => setIsExpanded(!isExpanded)}>
+        {isExpanded ? "Read Less" : "Read More"}
+      </button>
+    </div>
+  );
+}
+
+export default ReadMore;
+```
+
+---
+
+## Reusable Component
+
+```jsx
+import { useState } from "react";
+
+function ReadMore({ text, maxLength = 100 }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (text.length <= maxLength) {
+    return <p>{text}</p>;
+  }
+
+  return (
+    <div>
+      <p>{expanded ? text : `${text.substring(0, maxLength)}...`}</p>
+
+      <button onClick={() => setExpanded(!expanded)}>
+        {expanded ? "Read Less" : "Read More"}
+      </button>
+    </div>
+  );
+}
+
+export default ReadMore;
+```
+
+### Usage
+
+```jsx
+function App() {
+  return (
+    <ReadMore
+      text="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+      maxLength={60}
+    />
+  );
+}
+```
+
+---
+
+## Using CSS Line Clamp
+
+If you want to limit the number of visible lines instead of characters:
+
+```jsx
+import { useState } from "react";
+
+function ReadMore() {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <p
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: expanded ? "unset" : 3,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+        tempor incididunt ut labore et dolore magna aliqua...
+      </p>
+
+      <button onClick={() => setExpanded(!expanded)}>
+        {expanded ? "Read Less" : "Read More"}
+      </button>
+    </>
+  );
+}
+```
+
+This approach preserves whole words and works well for paragraphs with varying lengths.
+
+---
+
+## How It Works
+
+1. Store the expanded/collapsed state with `useState`.
+2. Display either:
+   - the full text, or
+   - a truncated version.
+
+3. Toggle the state when the button is clicked.
+4. Update the button label dynamically.
+
+---
+
+## Best Practices
+
+- Make the component reusable by accepting `text` and `maxLength` as props.
+- Hide the button if the text is already shorter than `maxLength`.
+- Consider truncating at word boundaries instead of fixed characters for better readability.
+- For long articles, prefer CSS line clamping to avoid cutting text awkwardly.
+- Ensure the toggle button is keyboard accessible.
+
+---
+
+### Interview Tip
+
+If asked **"How do you implement a Read More / Read Less feature in React?"**, you can answer:
+
+> "I use `useState` to track whether the content is expanded. Based on that state, I conditionally render either a truncated version of the text or the full content. A button toggles the state, updating both the displayed text and the button label. For a reusable solution, I accept the text and maximum length as props, and for better UX with paragraphs, I may use CSS line clamping."
 
 ## Question 11. How do you fetch data when a user scrolls to the bottom of a page?
 
