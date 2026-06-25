@@ -1438,13 +1438,912 @@ test("renders timer", () => {
 
 ## Question 6. How do you pass multiple props to a child component?
 
+## Short answer
+
+You pass multiple props to a child component by adding multiple attributes to the component in JSX. The child receives them as a single `props` object (or via destructuring). For passing many related values, consider grouping them into an object to keep the API clean.
+
+---
+
+# Explanation
+
+## 1. Passing multiple props
+
+A parent component can pass any number of props.
+
+### Parent
+
+```tsx
+<Profile name="Alice" age={28} isAdmin={true} />
+```
+
+### Child
+
+```tsx
+type ProfileProps = {
+  name: string;
+  age: number;
+  isAdmin: boolean;
+};
+
+function Profile({ name, age, isAdmin }: ProfileProps) {
+  return (
+    <div>
+      <h2>{name}</h2>
+      <p>Age: {age}</p>
+      <p>{isAdmin ? "Admin" : "User"}</p>
+    </div>
+  );
+}
+```
+
+Each prop is immutable from the child's perspective and flows **one way** from parent to child.
+
+---
+
+## 2. Props are received as a single object
+
+Internally, React passes all props as one object.
+
+```tsx
+type ProfileProps = {
+  name: string;
+  age: number;
+};
+
+function Profile(props: ProfileProps) {
+  return <h2>{props.name}</h2>;
+}
+```
+
+Destructuring is generally preferred for readability.
+
+---
+
+## 3. Passing objects and functions
+
+Props are not limited to primitive values. You can pass objects, arrays, and callback functions.
+
+```tsx
+type User = {
+  id: number;
+  name: string;
+};
+
+type ProfileProps = {
+  user: User;
+  onLogout: () => void;
+};
+
+function Profile({ user, onLogout }: ProfileProps) {
+  return (
+    <>
+      <h2>{user.name}</h2>
+      <button onClick={onLogout}>Logout</button>
+    </>
+  );
+}
+```
+
+---
+
+## 4. Using the spread operator
+
+If you already have an object whose keys match the prop names, you can use the spread operator.
+
+```tsx
+const user = {
+  name: "Alice",
+  age: 28,
+  isAdmin: true,
+};
+
+<Profile {...user} />;
+```
+
+This is equivalent to:
+
+```tsx
+<Profile name="Alice" age={28} isAdmin={true} />
+```
+
+Use prop spreading thoughtfully, as it can make it less obvious which props are being passed.
+
+---
+
+## 5. Designing component APIs
+
+For a few unrelated values, pass individual props:
+
+```tsx
+<Button label="Save" disabled={false} variant="primary" />
+```
+
+For related data, group it into an object:
+
+```tsx
+<UserCard user={user} />
+```
+
+This keeps the component interface simpler and easier to evolve.
+
+---
+
+## Example
+
+### Scaffold (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### Parent Component
+
+```tsx
+import UserCard from "./UserCard";
+
+export default function App() {
+  return <UserCard name="Alice" age={28} city="London" />;
+}
+```
+
+### Child Component (`UserCard.tsx`)
+
+```tsx
+type UserCardProps = {
+  name: string;
+  age: number;
+  city: string;
+};
+
+export default function UserCard({ name, age, city }: UserCardProps) {
+  return (
+    <div>
+      <h2>{name}</h2>
+      <p>Age: {age}</p>
+      <p>City: {city}</p>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- Prefer **Vite + React + TypeScript** for modern React development.
+- Use **Next.js** when you need SSR, routing, or React Server Components.
+- Avoid Create React App (CRA), as it is deprecated.
+- Vite uses native **ES Modules (ESM)** in development with fast Hot Module Replacement (HMR), while production builds are optimized with Rollup.
+
+---
+
+# Performance
+
+- Passing multiple props does **not** by itself cause performance issues.
+- Child components re-render when their parent re-renders unless optimized.
+- Use:
+  - `React.memo` to skip unnecessary child re-renders.
+  - `useCallback` for stable function props.
+  - `useMemo` for expensive computed values or object props.
+
+- Use the React DevTools Profiler to identify unnecessary renders.
+- Apply code splitting with `React.lazy` and `Suspense` for larger applications.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import UserCard from "./UserCard";
+
+test("renders user information", () => {
+  render(<UserCard name="Alice" age={28} city="London" />);
+
+  expect(screen.getByText("Alice")).toBeInTheDocument();
+  expect(screen.getByText("Age: 28")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Define prop types with TypeScript interfaces for better maintainability.
+- Use Error Boundaries to isolate rendering failures.
+- Minimize bundle size through tree shaking and dynamic imports.
+- Deploy static assets through a CDN and monitor runtime issues with tools like Sentry.
+
+---
+
+# Pitfalls
+
+- Passing too many unrelated props can make components difficult to maintain—group related values into an object.
+- Passing new object or function literals on every render can trigger unnecessary re-renders in memoized children.
+- Avoid prop drilling through many component levels; use Context or a state management library when appropriate.
+
 ## Question 7. Can you use props to modify parent state? Why or why not?
+
+## Short answer
+
+**No, not directly.** Props are **read-only (immutable)** in React. A child component **cannot modify the parent's state by changing props**. Instead, the parent passes a **callback function** as a prop, and the child calls that function to request a state update. This preserves React's **one-way data flow** and makes applications predictable and easier to debug.
+
+---
+
+# Explanation
+
+## 1. Why can't a child modify props?
+
+Props are owned by the **parent**. When React renders a child, it passes a snapshot of the parent's data as props.
+
+```text
+Parent State
+      │
+      ▼
+    Props
+      │
+      ▼
+Child Component
+```
+
+The child can **read** props but must never modify them.
+
+For example, this is **incorrect**:
+
+```tsx
+function Child({ count }: { count: number }) {
+  // ❌ Error: props are read-only
+  count = count + 1;
+
+  return <p>{count}</p>;
+}
+```
+
+React enforces this pattern because props are immutable.
+
+---
+
+## 2. How does a child update parent state?
+
+The parent passes its state updater (or another callback) as a prop.
+
+### Parent
+
+```tsx
+import { useState } from "react";
+import Child from "./Child";
+
+export default function Parent() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <>
+      <h2>Count: {count}</h2>
+      <Child onIncrement={() => setCount((c) => c + 1)} />
+    </>
+  );
+}
+```
+
+### Child
+
+```tsx
+type ChildProps = {
+  onIncrement: () => void;
+};
+
+export default function Child({ onIncrement }: ChildProps) {
+  return <button onClick={onIncrement}>Increment</button>;
+}
+```
+
+Here:
+
+1. The parent owns the `count` state.
+2. The child receives a callback as a prop.
+3. Clicking the button invokes the callback.
+4. The parent updates its own state.
+5. React re-renders both components with the updated value.
+
+---
+
+## 3. Why is one-way data flow important?
+
+React's one-way data flow provides:
+
+- **Predictability** – State changes happen in one place.
+- **Easier debugging** – You always know which component owns the state.
+- **Better maintainability** – Components have clear responsibilities.
+- **Improved performance** – React can efficiently determine what needs to re-render.
+
+---
+
+## 4. React 18 rendering behavior
+
+When the child calls the callback:
+
+```tsx
+onIncrement();
+```
+
+React:
+
+1. Schedules the state update.
+2. Automatically batches updates (React 18).
+3. Re-renders the parent.
+4. Passes updated props to the child.
+5. Uses reconciliation to update only the changed DOM nodes.
+
+The child never modifies state directly—it only **requests** that the parent do so.
+
+---
+
+## Example
+
+### Scaffold (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+type CounterButtonProps = {
+  onIncrement: () => void;
+};
+
+function CounterButton({ onIncrement }: CounterButtonProps) {
+  return <button onClick={onIncrement}>Increment</button>;
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <h2>Count: {count}</h2>
+
+      <CounterButton onIncrement={() => setCount((c) => c + 1)} />
+    </div>
+  );
+}
+```
+
+This demonstrates the recommended React pattern: **state lives in the parent, while the child communicates through callback props**.
+
+---
+
+# Tooling & Setup
+
+- Use **Vite + React + TypeScript** for modern React development.
+- Use **Next.js** when you need SSR, React Server Components, or full-stack capabilities.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Vite uses native **ES Modules (ESM)** during development and provides fast Hot Module Replacement (HMR).
+
+---
+
+# Performance
+
+- Pass stable callback props with `useCallback` when passing them to memoized children.
+- Use `React.memo` to avoid unnecessary child re-renders.
+- Use `useMemo` for expensive derived values.
+- Profile rendering with the React DevTools Profiler before optimizing.
+- Use `React.lazy` and `Suspense` for code splitting, and libraries like TanStack Query to cache server state.
+
+Example:
+
+```tsx
+const handleIncrement = useCallback(() => {
+  setCount((c) => c + 1);
+}, []);
+```
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { fireEvent, render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("increments count", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Increment"));
+
+  expect(screen.getByText("Count: 1")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Keep state as close as possible to where it's used ("lift state up" only when multiple components need it).
+- Use Error Boundaries to isolate rendering failures.
+- Optimize bundles with tree shaking and dynamic imports.
+- Deploy through a CDN and monitor production issues with tools like Sentry.
+
+---
+
+# Pitfalls
+
+- Attempting to mutate props directly—they are read-only.
+- Passing callbacks through many component levels (prop drilling); consider Context or a state management library for deeply shared state.
+- Creating new callback functions on every render when memoized children depend on stable function references.
 
 ## Question 8. How do you render a component conditionally without using if statements?
 
+## Short answer
+
+In React, you can render components conditionally **without using `if` statements** by using:
+
+- **Ternary operator (`condition ? A : B`)** – when you have two possible outcomes.
+- **Logical AND (`&&`)** – when you want to render something only if a condition is true.
+- **Logical OR (`||`)** or **Nullish Coalescing (`??`)** – for fallback values.
+- **Returning `null`** – to render nothing.
+
+These approaches keep JSX concise and declarative.
+
+---
+
+# Explanation
+
+## 1. Using the ternary operator (`? :`)
+
+The ternary operator is the most common way to render one of two components.
+
+```tsx
+{
+  isLoggedIn ? <Dashboard /> : <Login />;
+}
+```
+
+Use it when there is both a **true** and **false** branch.
+
+---
+
+## 2. Using the logical AND (`&&`) operator
+
+Render a component only when a condition is true.
+
+```tsx
+{
+  isAdmin && <AdminPanel />;
+}
+```
+
+If `isAdmin` is `false`, React renders nothing.
+
+### Be careful with numbers
+
+```tsx
+{
+  count && <Badge />;
+}
+```
+
+If `count` is `0`, React renders `0`.
+
+A safer approach is:
+
+```tsx
+{
+  count > 0 && <Badge />;
+}
+```
+
+---
+
+## 3. Using the logical OR (`||`) operator
+
+Useful for fallback values.
+
+```tsx
+<p>{username || "Guest"}</p>
+```
+
+If `username` is an empty string, `0`, or `false`, `"Guest"` is displayed.
+
+---
+
+## 4. Using the nullish coalescing operator (`??`)
+
+Use `??` when only `null` or `undefined` should trigger the fallback.
+
+```tsx
+<p>{username ?? "Guest"}</p>
+```
+
+Unlike `||`, values like `0`, `false`, or `""` are preserved.
+
+---
+
+## 5. Returning `null`
+
+A component can intentionally render nothing.
+
+```tsx
+function Notification({ show }: { show: boolean }) {
+  return show ? <p>New notification</p> : null;
+}
+```
+
+Returning `null` does **not** unmount the component's parent; it simply produces no UI for that component.
+
+---
+
+## 6. React rendering behavior
+
+When the condition changes:
+
+1. React re-renders the component.
+2. A new Virtual DOM is created.
+3. React compares it with the previous Virtual DOM.
+4. Only the changed elements are updated in the real DOM.
+
+With React 18:
+
+- Automatic batching reduces unnecessary renders.
+- Concurrent rendering can prioritize more urgent updates, keeping the UI responsive.
+
+---
+
+## Example
+
+### Scaffold (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### `App.tsx`
+
+```tsx
+import { useState } from "react";
+
+function Dashboard() {
+  return <h2>Welcome!</h2>;
+}
+
+function Login() {
+  return <h2>Please log in</h2>;
+}
+
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  return (
+    <div>
+      {isLoggedIn ? <Dashboard /> : <Login />}
+
+      {isLoggedIn && <p>You have new messages.</p>}
+
+      <button onClick={() => setIsLoggedIn((v) => !v)}>Toggle Login</button>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+- **Preferred:** Vite + React + TypeScript.
+- **Next.js** is recommended when you need SSR, routing, or React Server Components.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Vite uses **ES Modules (ESM)** with fast Hot Module Replacement (HMR) during development and Rollup for optimized production builds.
+
+---
+
+# Performance
+
+- Conditional rendering itself is inexpensive; unnecessary **re-renders** are usually the bigger concern.
+- Use **React DevTools Profiler** to identify rendering bottlenecks.
+- Use `React.memo` to prevent child re-renders when props haven't changed.
+- Use `useMemo` and `useCallback` only after profiling shows a need.
+- Split large conditional sections with `React.lazy` and `Suspense` for better initial load performance.
+- Cache server state with libraries such as TanStack Query to avoid redundant network requests.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows login initially", () => {
+  render(<App />);
+  expect(screen.getByText("Please log in")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use **Playwright**.
+
+---
+
+# Ops & Deployment
+
+- Use **Error Boundaries** to isolate rendering failures.
+- Prefer SSR (e.g., Next.js) for SEO-sensitive conditional content.
+- Keep bundles small with dynamic imports and tree shaking.
+- Deploy static assets through a CDN and monitor production errors with tools like Sentry.
+
+---
+
+# Pitfalls
+
+- Using `&&` with values like `0`, which can accidentally render `0`.
+- Writing deeply nested ternary operators, making JSX difficult to read and maintain.
+- Performing expensive computations directly inside conditional expressions instead of memoizing them when appropriate.
+
 ## Question 9. What are fragments used for in React?
 
+### React Fragments
+
+**Fragments** let you group multiple JSX elements **without adding an extra DOM node**. This helps keep the DOM clean while still satisfying JSX's requirement of returning a single parent element.
+
+### Why use Fragments?
+
+Normally, a component must return a single root element.
+
+Without a fragment:
+
+```jsx
+function App() {
+  return (
+    <div>
+      <h1>Welcome</h1>
+      <p>Hello React!</p>
+    </div>
+  );
+}
+```
+
+The `<div>` is added to the DOM, even if it's only used for grouping.
+
+Using a fragment:
+
+```jsx
+function App() {
+  return (
+    <>
+      <h1>Welcome</h1>
+      <p>Hello React!</p>
+    </>
+  );
+}
+```
+
+or
+
+```jsx
+function App() {
+  return (
+    <React.Fragment>
+      <h1>Welcome</h1>
+      <p>Hello React!</p>
+    </React.Fragment>
+  );
+}
+```
+
+No extra `<div>` is created in the DOM.
+
+---
+
+### Fragment Syntax
+
+#### 1. Short Syntax (most common)
+
+```jsx
+<>
+  <Header />
+  <Main />
+  <Footer />
+</>
+```
+
+#### 2. Full Syntax
+
+```jsx
+<React.Fragment>
+  <Header />
+  <Main />
+  <Footer />
+</React.Fragment>
+```
+
+The full syntax is required when you need to pass a `key`.
+
+---
+
+### Using Fragments with Lists
+
+When rendering multiple elements inside a loop:
+
+```jsx
+const users = [
+  { id: 1, name: "Alice" },
+  { id: 2, name: "Bob" },
+];
+
+function UserList() {
+  return (
+    <>
+      {users.map((user) => (
+        <React.Fragment key={user.id}>
+          <h3>{user.name}</h3>
+          <hr />
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+```
+
+The shorthand `<>...</>` cannot accept a `key`, so use `React.Fragment` here.
+
+---
+
+### Why Fragments are Useful
+
+- Avoid unnecessary wrapper elements.
+- Keep the DOM cleaner and smaller.
+- Prevent layout issues caused by extra `<div>` elements.
+- Improve readability of JSX.
+- Useful when returning multiple sibling elements.
+
+---
+
+### Fragment vs `<div>`
+
+| Fragment                                                              | `<div>`                                                  |
+| --------------------------------------------------------------------- | -------------------------------------------------------- |
+| Adds **no** DOM element                                               | Adds an actual DOM element                               |
+| Better for grouping JSX                                               | Used when you need a container element                   |
+| Cannot have styles or attributes (except `key` with `React.Fragment`) | Can have `className`, `id`, styles, event handlers, etc. |
+| Helps keep the DOM clean                                              | May create unnecessary nesting                           |
+
+---
+
+### When to Use Fragments
+
+Use fragments when:
+
+- Returning multiple sibling elements from a component.
+- Avoiding unnecessary wrapper elements.
+- Rendering table rows or list items where extra wrappers would produce invalid HTML.
+- Keeping the DOM structure minimal.
+
+Use a `<div>` (or another HTML element) when:
+
+- You need to apply CSS styles.
+- You need layout control (Flexbox, Grid, etc.).
+- You need to attach event handlers or other attributes.
+
+---
+
+### Interview Answer (Short)
+
+**React Fragments** allow you to group multiple JSX elements without adding an extra node to the DOM. They help keep the DOM clean and avoid unnecessary wrapper elements. Fragments can be written as `<>...</>` or `<React.Fragment>...</React.Fragment>`, with the full syntax used when a `key` prop is needed.
+
 ## Question 10. How do you prevent default form submission in React?
+
+In React, you prevent the default form submission by calling the **`preventDefault()`** method on the event object inside the form's `onSubmit` handler.
+
+### Example
+
+```jsx
+import { useState } from "react";
+
+function LoginForm() {
+  const [name, setName] = useState("");
+
+  const handleSubmit = (event) => {
+    event.preventDefault(); // Prevents page reload
+
+    console.log("Form submitted:", name);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Enter your name"
+      />
+
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+
+export default LoginForm;
+```
+
+### Why use `preventDefault()`?
+
+By default, submitting an HTML form causes the browser to:
+
+- Reload the page.
+- Send form data to the URL specified in the `action` attribute.
+
+In React, you typically want to:
+
+- Validate the form.
+- Send data to an API using `fetch` or `axios`.
+- Update component state.
+- Stay on the same page in a Single Page Application (SPA).
+
+Calling `event.preventDefault()` stops the browser's default behavior, allowing React to handle the submission.
+
+### Without `preventDefault()`
+
+```jsx
+function handleSubmit(event) {
+  console.log("Submitted");
+}
+```
+
+The browser will reload the page after the form is submitted, and any component state may be lost.
+
+### With `preventDefault()`
+
+```jsx
+function handleSubmit(event) {
+  event.preventDefault();
+  console.log("Submitted without page reload");
+}
+```
+
+The page remains loaded, and you can process the form data as needed.
+
+### Interview Answer (Short)
+
+Use the **`event.preventDefault()`** method inside the form's `onSubmit` handler to stop the browser's default form submission (page reload). This lets React validate the input, update state, or send data to an API without refreshing the page.
 
 ## Question 11. How do you bind this in class components?
 
