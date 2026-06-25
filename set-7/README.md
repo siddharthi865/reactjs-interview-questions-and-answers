@@ -1046,13 +1046,1066 @@ Use Vitest or Jest + React Testing Library.
 
 ## Question 6. Can you update state directly without setState? Why not?
 
+# Short answer
+
+**No.** You should **never update state directly** (e.g., `this.state.count = 1` or modifying a state object in place). Instead, use **`setState()`** in class components or the state setter function from **`useState()`** in functional components.
+
+Directly mutating state does **not** notify React that the state has changed, so React won't schedule a re-render or reconcile the UI.
+
+---
+
+# Explanation
+
+React treats state as **immutable**. When state changes, React needs to know about it so it can:
+
+- Schedule a re-render
+- Reconcile the Virtual DOM
+- Update the real DOM efficiently
+- Apply React 18 features like automatic batching and concurrent scheduling
+
+If you mutate state directly, React has **no way of knowing** the state changed.
+
+## Incorrect (Direct Mutation)
+
+### Functional Component
+
+```tsx
+const [count, setCount] = useState(0);
+
+count = 1; // ❌ Error - state is read-only
+```
+
+### Class Component
+
+```tsx
+this.state.count = 1; // ❌ Never do this
+```
+
+The UI may not update because React wasn't notified.
+
+---
+
+## Correct Approach
+
+### Functional Component
+
+```tsx
+setCount(1);
+```
+
+### Class Component
+
+```tsx
+this.setState({ count: 1 });
+```
+
+These APIs notify React that state has changed, allowing it to schedule an efficient update.
+
+---
+
+## Why React Requires Immutable Updates
+
+Consider this object:
+
+```tsx
+const [user, setUser] = useState({
+  name: "John",
+  age: 25,
+});
+```
+
+### Incorrect
+
+```tsx
+user.age = 26;
+
+setUser(user); // ❌ Same object reference
+```
+
+The object reference hasn't changed, making it difficult for React to detect updates reliably.
+
+### Correct
+
+```tsx
+setUser({
+  ...user,
+  age: 26,
+});
+```
+
+A **new object** is created, making the change detectable.
+
+---
+
+## React 18 Rendering Behavior
+
+React 18 automatically batches multiple state updates:
+
+```tsx
+setCount((c) => c + 1);
+setName("Alice");
+```
+
+Both updates are batched into a single render.
+
+Direct mutations bypass React's update mechanism, so batching and concurrent rendering cannot work correctly.
+
+---
+
+# Example
+
+## Create a Vite React + TypeScript project
+
+```bash
+npm create vite@latest react-state-demo -- --template react-ts
+cd react-state-demo
+npm install
+npm run dev
+```
+
+### Correct State Updates
+
+```tsx
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+
+  const increment = () => {
+    setCount((prev) => prev + 1);
+  };
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={increment}>Increment</button>
+    </div>
+  );
+}
+```
+
+Using the functional updater (`prev => prev + 1`) is recommended when the next state depends on the previous state.
+
+---
+
+# Tooling & Setup
+
+- Use **Vite + React + TypeScript** for new projects.
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Vite uses **ES Modules (ESM)** for fast startup and Hot Module Replacement (HMR).
+- Use:
+  - **Vite** for client-side React apps.
+  - **Next.js** for SSR, SSG, and React Server Components.
+  - **Remix** for server-centric routing and data loading.
+
+---
+
+# Performance
+
+- Always update state immutably to allow React to detect changes efficiently.
+- Use the functional updater (`setState(prev => ...)`) when the next state depends on the previous state.
+- Use `React.memo`, `useMemo`, and `useCallback` to reduce unnecessary re-renders.
+- Profile with React DevTools Profiler to identify expensive updates.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Cache server state with TanStack Query or SWR instead of duplicating it in component state.
+
+---
+
+# Testing
+
+Using **Vitest + React Testing Library**:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import Counter from "./Counter";
+
+test("increments counter", () => {
+  render(<Counter />);
+  fireEvent.click(screen.getByText("Increment"));
+  expect(screen.getByText("1")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+For complete user-flow testing, use Playwright.
+
+---
+
+# Ops & Deployment
+
+- Treat state as immutable throughout the application.
+- Prefer immutable update patterns (spread operator or immutable helper libraries such as Immer when state becomes deeply nested).
+- Use Error Boundaries to isolate rendering failures.
+- Keep bundles small with tree shaking and dynamic imports.
+- Deploy optimized production builds to a CDN or edge network.
+
+---
+
+# Pitfalls
+
+- Mutating objects or arrays in state instead of creating new copies.
+- Calling `setState` with stale values instead of using the functional updater.
+- Assuming `setState` updates state immediately—React schedules the update and may batch multiple updates.
+
 ## Question 7. How do you handle multiple inputs in a form?
+
+# Short answer
+
+Handle multiple form inputs by giving each input a **`name`** attribute and using a **single change handler** that updates the corresponding field in the state.
+
+---
+
+# Explanation
+
+For forms with many fields, creating a separate `onChange` handler for every input is repetitive. A common pattern is to:
+
+1. Store all form values in a single state object.
+2. Add a unique `name` to each input.
+3. Use one `handleChange` function that updates the correct field based on `event.target.name`.
+
+This approach is scalable, reduces boilerplate, and works well with controlled components.
+
+## Using a single state object
+
+```text
+Form State
+{
+  name: "",
+  email: "",
+  age: ""
+}
+
+        ↓
+
+<input name="name" />
+<input name="email" />
+<input name="age" />
+
+        ↓
+
+handleChange()
+
+        ↓
+
+setForm({
+  ...form,
+  [name]: value
+})
+```
+
+React 18 automatically batches multiple state updates occurring in the same event, improving rendering performance.
+
+---
+
+# Example
+
+## Create a Vite React + TypeScript project
+
+```bash
+npm create vite@latest react-form-demo -- --template react-ts
+cd react-form-demo
+npm install
+npm run dev
+```
+
+### Multiple inputs with one change handler
+
+```tsx
+import { useState, ChangeEvent } from "react";
+
+type FormData = {
+  name: string;
+  email: string;
+  age: string;
+};
+
+export default function UserForm() {
+  const [form, setForm] = useState<FormData>({
+    name: "",
+    email: "",
+    age: "",
+  });
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  return (
+    <form>
+      <input
+        name="name"
+        value={form.name}
+        onChange={handleChange}
+        placeholder="Name"
+      />
+
+      <input
+        name="email"
+        value={form.email}
+        onChange={handleChange}
+        placeholder="Email"
+      />
+
+      <input
+        name="age"
+        value={form.age}
+        onChange={handleChange}
+        placeholder="Age"
+      />
+    </form>
+  );
+}
+```
+
+For checkboxes, use `e.target.checked` instead of `e.target.value`:
+
+```tsx
+const { name, type, value, checked } = e.target;
+
+setForm((prev) => ({
+  ...prev,
+  [name]: type === "checkbox" ? checked : value,
+}));
+```
+
+---
+
+# Tooling & Setup
+
+- **Preferred:** Vite + React + TypeScript
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Vite uses **ES Modules (ESM)**, providing fast startup and Hot Module Replacement (HMR).
+- For larger applications:
+  - **Next.js** for SSR, SSG, and React Server Components.
+  - **Remix** for server-centric forms and routing.
+
+For complex forms, libraries such as **React Hook Form** or **Formik** can reduce boilerplate and improve performance.
+
+---
+
+# Performance
+
+- Use a single state object for related form fields.
+- Use the functional updater (`setForm(prev => ...)`) to avoid stale state.
+- React 18 automatically batches multiple updates during events.
+- Memoize expensive child components with `React.memo` if large forms cause unnecessary re-renders.
+- Profile form rendering with React DevTools Profiler.
+- Lazy-load large multi-step forms using `React.lazy` and `Suspense`.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import UserForm from "./UserForm";
+
+test("updates input value", () => {
+  render(<UserForm />);
+
+  fireEvent.change(screen.getByPlaceholderText("Name"), {
+    target: { value: "Alice" },
+  });
+
+  expect(screen.getByDisplayValue("Alice")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+Use Playwright for end-to-end form submission testing.
+
+---
+
+# Ops & Deployment
+
+- Keep form state local unless multiple components need access to it.
+- Validate inputs on both the client and server.
+- Log validation or submission errors using a centralized logging solution.
+- Use Error Boundaries to isolate rendering failures.
+- Optimize bundle size by lazy-loading large forms or validation libraries.
+
+---
+
+# Pitfalls
+
+- Forgetting to add the `name` attribute, preventing the generic handler from identifying the field.
+- Mutating the form state object instead of creating a new one with the spread operator.
+- Using `value` for checkboxes instead of `checked`.
 
 ## Question 8. How do you pass functions as props?
 
+# Short answer
+
+Functions can be passed as props just like any other value. This allows a **child component to communicate with its parent**, typically by invoking a callback function provided by the parent.
+
+---
+
+# Explanation
+
+Passing functions as props is a fundamental React pattern for **parent-to-child communication** and **child-to-parent events**.
+
+### How it works
+
+1. The parent defines a function.
+2. The parent passes that function as a prop.
+3. The child calls the function when an event occurs.
+4. The parent updates its state.
+
+```text
+Parent
+  │
+  ├── handleClick()
+  │
+  ▼
+Child receives callback as prop
+  │
+  ▼
+User clicks button
+  │
+  ▼
+callback()
+  │
+  ▼
+Parent state updates
+```
+
+This keeps data flowing **one way**:
+
+```
+State
+Parent  ─────► Child (props)
+
+Events
+Child  ─────► Parent (callback function)
+```
+
+---
+
+# Example
+
+## Create a Vite React + TypeScript project
+
+```bash
+npm create vite@latest react-callback-demo -- --template react-ts
+cd react-callback-demo
+npm install
+npm run dev
+```
+
+### Parent Component
+
+```tsx
+import { useState } from "react";
+import Child from "./Child";
+
+export default function Parent() {
+  const [count, setCount] = useState(0);
+
+  const handleIncrement = () => {
+    setCount((prev) => prev + 1);
+  };
+
+  return (
+    <>
+      <h2>Count: {count}</h2>
+      <Child onIncrement={handleIncrement} />
+    </>
+  );
+}
+```
+
+### Child Component
+
+```tsx
+type ChildProps = {
+  onIncrement: () => void;
+};
+
+export default function Child({ onIncrement }: ChildProps) {
+  return <button onClick={onIncrement}>Increment</button>;
+}
+```
+
+When the button is clicked, the child invokes `onIncrement()`, which updates the parent's state.
+
+---
+
+## Passing arguments to a function
+
+If the child needs to send data back to the parent:
+
+### Parent
+
+```tsx
+const handleSelect = (id: number) => {
+  console.log("Selected:", id);
+};
+
+<Child onSelect={handleSelect} />;
+```
+
+### Child
+
+```tsx
+type Props = {
+  onSelect: (id: number) => void;
+};
+
+export default function Child({ onSelect }: Props) {
+  return <button onClick={() => onSelect(101)}>Select Item</button>;
+}
+```
+
+---
+
+# Tooling & Setup
+
+Use a modern React setup:
+
+```bash
+npm create vite@latest react-callback-demo -- --template react-ts
+cd react-callback-demo
+npm install
+npm run dev
+```
+
+- Prefer **Vite** over Create React App (CRA), which is deprecated.
+- Vite uses **ES Modules (ESM)** for fast startup and Hot Module Replacement (HMR).
+- Use **Next.js** if you need SSR, SSG, or React Server Components.
+- Use **Remix** for server-centric routing and forms.
+
+---
+
+# Performance
+
+- Passing a new inline function on every render can cause memoized child components to re-render.
+- If a callback is passed to a `React.memo` child, use `useCallback` to keep the function reference stable when appropriate.
+
+```tsx
+const handleIncrement = useCallback(() => {
+  setCount((prev) => prev + 1);
+}, []);
+```
+
+- Use `React.memo` to avoid unnecessary child renders.
+- Use `useMemo` for expensive derived values.
+- Use React DevTools Profiler to identify unnecessary renders.
+- Use `React.lazy` and `Suspense` for code splitting.
+- Use libraries like TanStack Query for caching server state instead of storing it in component state.
+
+---
+
+# Testing
+
+Using **Vitest + React Testing Library**:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import Parent from "./Parent";
+
+test("increments count when child button is clicked", () => {
+  render(<Parent />);
+
+  fireEvent.click(screen.getByText("Increment"));
+
+  expect(screen.getByText("Count: 1")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+Use Playwright for end-to-end interaction testing.
+
+---
+
+# Ops & Deployment
+
+- Keep business logic in parent components or custom hooks instead of deeply nested children.
+- Avoid unnecessary callback recreation when optimizing performance-critical components.
+- Use Error Boundaries to isolate rendering failures.
+- Monitor render performance with React DevTools Profiler.
+- Optimize production bundles with tree shaking and dynamic imports.
+
+---
+
+# Pitfalls
+
+- Calling the function during render instead of passing it as a reference (e.g., `onClick={handleClick()}` instead of `onClick={handleClick}`).
+- Creating unnecessary inline callbacks for memoized child components in performance-sensitive paths.
+- Mutating parent state directly inside the child instead of invoking the callback.
+
 ## Question 9. How do you conditionally render components using logical operators?
 
+# Short answer
+
+React supports conditional rendering using JavaScript logical operators:
+
+- **`&&` (AND)** – Render a component only when a condition is `true`.
+- **`||` (OR)** – Provide a fallback value if the left side is falsy (used sparingly in JSX).
+- **`??` (Nullish Coalescing)** – Render a fallback only when the value is `null` or `undefined`.
+- **Ternary (`condition ? A : B`)** – Choose between two components or values.
+
+---
+
+# Explanation
+
+Since JSX is JavaScript, you can use JavaScript expressions directly inside `{}`.
+
+## 1. Logical AND (`&&`)
+
+Render something only if the condition is true.
+
+```tsx
+{
+  isLoggedIn && <Dashboard />;
+}
+```
+
+Equivalent to:
+
+```tsx
+if (isLoggedIn) {
+  return <Dashboard />;
+}
+```
+
+**Use case:**
+
+- Show a loading spinner
+- Display an error message
+- Render optional UI
+
+Example:
+
+```tsx
+{
+  hasError && <p>Something went wrong.</p>;
+}
+```
+
+> **Interview tip:** Be careful with numeric values. `0 && <Component />` evaluates to `0`, so React renders `0`. Use an explicit boolean check if needed:
+
+```tsx
+{
+  count > 0 && <p>{count}</p>;
+}
+```
+
+---
+
+## 2. Logical OR (`||`)
+
+Returns the first truthy value.
+
+```tsx
+<p>{username || "Guest"}</p>
+```
+
+If `username` is:
+
+- `"John"` → `"John"`
+- `""` → `"Guest"`
+- `null` → `"Guest"`
+
+### When not to use `||`
+
+If `0` or an empty string (`""`) are valid values, `||` treats them as falsy.
+
+```tsx
+const count = 0;
+
+<p>{count || "No items"}</p>;
+```
+
+Output:
+
+```
+No items
+```
+
+This is often **not** what you want.
+
+---
+
+## 3. Nullish Coalescing (`??`)
+
+Only falls back when the value is `null` or `undefined`.
+
+```tsx
+<p>{count ?? "No data"}</p>
+```
+
+If:
+
+- `0` → displays `0`
+- `""` → displays `""`
+- `null` → `"No data"`
+- `undefined` → `"No data"`
+
+This is generally safer than `||` for displaying values.
+
+---
+
+## 4. Ternary Operator
+
+Choose between two components.
+
+```tsx
+{
+  isLoggedIn ? <Dashboard /> : <Login />;
+}
+```
+
+Best choice when both the `true` and `false` cases need to render something.
+
+---
+
+# Example
+
+## Create a Vite React + TypeScript project
+
+```bash
+npm create vite@latest react-conditional-demo -- --template react-ts
+cd react-conditional-demo
+npm install
+npm run dev
+```
+
+### Conditional rendering with logical operators
+
+```tsx
+import { useState } from "react";
+
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const notifications = 3;
+  const username: string | null = null;
+
+  return (
+    <div>
+      {isLoggedIn && <h2>Welcome back!</h2>}
+
+      <p>User: {username ?? "Guest"}</p>
+
+      {notifications > 0 && <p>You have {notifications} notifications.</p>}
+
+      <button onClick={() => setIsLoggedIn((prev) => !prev)}>
+        Toggle Login
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+# Tooling & Setup
+
+Use a modern React setup:
+
+```bash
+npm create vite@latest react-conditional-demo -- --template react-ts
+cd react-conditional-demo
+npm install
+npm run dev
+```
+
+- **Preferred:** Vite + React + TypeScript
+- Avoid **Create React App (CRA)** because it is deprecated.
+- Vite uses **ES Modules (ESM)** for fast startup and Hot Module Replacement (HMR).
+- Use **Next.js** when SSR, SSG, or React Server Components are required.
+
+---
+
+# Performance
+
+- `&&` avoids creating unnecessary UI when conditions are false.
+- Use `React.memo` to prevent unnecessary child re-renders.
+- Memoize expensive conditional calculations with `useMemo`.
+- Memoize callback props with `useCallback` when passing them to memoized children.
+- Use `React.lazy` and `Suspense` to lazy-load conditionally displayed components.
+- Use React DevTools Profiler to identify unnecessary renders.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows guest when username is null", () => {
+  render(<App />);
+  expect(screen.getByText("Guest")).toBeInTheDocument();
+});
+```
+
+Run:
+
+```bash
+npm run test
+```
+
+Use Playwright for end-to-end testing of conditional navigation or UI flows.
+
+---
+
+# Ops & Deployment
+
+- Keep conditional rendering logic simple and readable.
+- Prefer extracting complex conditions into helper variables or components.
+- Use Error Boundaries around conditionally loaded components.
+- Code-split large conditional views with `React.lazy`.
+- Monitor rendering performance with React DevTools Profiler before deployment.
+
+---
+
+# Pitfalls
+
+- Using `&&` with numeric values like `0`, which can render `0` unexpectedly.
+- Using `||` when `0` or `""` are valid values—prefer `??` in those cases.
+- Nesting multiple ternary operators, making JSX difficult to read and maintain.
+
 ## Question 10. How do you debug React component lifecycle issues?
+
+Debugging React component lifecycle issues involves understanding **when components mount, update, re-render, and unmount**, and identifying why unexpected behavior occurs.
+
+### 1. Use React Developer Tools
+
+- Install the **React DevTools** browser extension.
+- Inspect:
+  - Component hierarchy
+  - Props
+  - State
+  - Hooks
+  - Render frequency (Profiler)
+
+### 2. Add Console Logs
+
+Log lifecycle events to see when they execute.
+
+**Class Component**
+
+```jsx
+class Example extends React.Component {
+  componentDidMount() {
+    console.log("Mounted");
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    console.log("Updated");
+  }
+
+  componentWillUnmount() {
+    console.log("Unmounted");
+  }
+
+  render() {
+    console.log("Rendering");
+    return <h1>Hello</h1>;
+  }
+}
+```
+
+**Functional Component**
+
+```jsx
+import { useEffect } from "react";
+
+function Example() {
+  console.log("Rendering");
+
+  useEffect(() => {
+    console.log("Mounted");
+
+    return () => {
+      console.log("Unmounted");
+    };
+  }, []);
+
+  return <h1>Hello</h1>;
+}
+```
+
+---
+
+### 3. Use the React Profiler
+
+The **Profiler** in React DevTools helps you:
+
+- Identify unnecessary re-renders.
+- Measure rendering time.
+- Find performance bottlenecks.
+
+---
+
+### 4. Check Dependency Arrays in `useEffect`
+
+A common source of lifecycle bugs is an incorrect dependency array.
+
+Runs once after mount:
+
+```jsx
+useEffect(() => {
+  fetchData();
+}, []);
+```
+
+Runs whenever `count` changes:
+
+```jsx
+useEffect(() => {
+  console.log(count);
+}, [count]);
+```
+
+Runs after every render (often unintended):
+
+```jsx
+useEffect(() => {
+  console.log("Runs every render");
+});
+```
+
+---
+
+### 5. Watch for Infinite Render Loops
+
+Incorrect:
+
+```jsx
+useEffect(() => {
+  setCount(count + 1);
+}, [count]);
+```
+
+This continuously updates state, causing endless re-renders.
+
+---
+
+### 6. Verify State and Props Changes
+
+Use logs to compare previous and current values.
+
+**Class Component**
+
+```jsx
+componentDidUpdate(prevProps) {
+  if (prevProps.id !== this.props.id) {
+    console.log("ID changed");
+  }
+}
+```
+
+**Functional Component**
+
+```jsx
+useEffect(() => {
+  console.log("ID changed:", id);
+}, [id]);
+```
+
+---
+
+### 7. Check Cleanup Functions
+
+Always clean up subscriptions, timers, or event listeners.
+
+```jsx
+useEffect(() => {
+  const timer = setInterval(() => {
+    console.log("Running");
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, []);
+```
+
+---
+
+### 8. Use Breakpoints
+
+In browser DevTools:
+
+- Set breakpoints in component code.
+- Step through execution.
+- Inspect variables, props, and state.
+
+---
+
+### 9. Enable Strict Mode (Development)
+
+```jsx
+<React.StrictMode>
+  <App />
+</React.StrictMode>
+```
+
+Strict Mode intentionally invokes some lifecycle methods and effects twice in development to help detect side effects. This behavior does **not** occur in production.
+
+---
+
+### 10. Avoid Direct State Mutation
+
+Incorrect:
+
+```jsx
+state.count = 5;
+```
+
+Correct:
+
+```jsx
+this.setState({ count: 5 });
+```
+
+or
+
+```jsx
+setCount(5);
+```
+
+---
+
+## Common Lifecycle Problems
+
+| Problem                        | Possible Cause                             | Solution                                                        |
+| ------------------------------ | ------------------------------------------ | --------------------------------------------------------------- |
+| Component renders repeatedly   | State updated on every render              | Check `useEffect` dependencies or `setState` usage              |
+| Effect not running             | Missing dependency                         | Add required dependencies                                       |
+| Effect runs too often          | Incorrect dependency array                 | Specify only necessary dependencies                             |
+| Memory leak warning            | Missing cleanup                            | Return a cleanup function from `useEffect`                      |
+| UI not updating                | State mutated directly                     | Update state immutably using `setState` or state setter         |
+| Child re-renders unnecessarily | New object/function references each render | Use `React.memo`, `useMemo`, or `useCallback` where appropriate |
+
+### Interview Tip
+
+A strong answer is:
+
+> "To debug React lifecycle issues, I use React DevTools and the Profiler to inspect component renders and performance, add console logs in lifecycle methods or `useEffect`, verify dependency arrays, watch for unnecessary state updates that cause re-renders, use browser breakpoints for step-by-step debugging, and ensure effects clean up subscriptions or timers to avoid memory leaks."
 
 ## Question 11. What is the difference between a controlled input and a read-only input?
 
