@@ -1245,13 +1245,1232 @@ For E2E testing:
 
 ## Question 6. How do you handle multiple async API calls simultaneously in React?
 
+# Short answer
+
+Handle multiple asynchronous API calls by running them **in parallel** using `Promise.all()` (or `Promise.allSettled()` if partial failures are acceptable), managing loading and error states centrally, and avoiding race conditions with cleanup (`AbortController`) or a data-fetching library like **TanStack Query**. In React 18, automatic batching reduces unnecessary re-renders when multiple state updates occur in the same async flow.
+
+---
+
+# Explanation
+
+Applications often need to fetch multiple resources simultaneously, for example:
+
+- User profile
+- Notifications
+- Dashboard statistics
+- Permissions
+
+Instead of waiting for each request sequentially, run independent requests in parallel.
+
+### Sequential (slower)
+
+```text
+User
+  │
+  ▼
+Fetch Profile
+  │
+  ▼
+Fetch Posts
+  │
+  ▼
+Fetch Comments
+```
+
+Total time ≈ A + B + C
+
+---
+
+### Parallel (recommended)
+
+```text
+          Fetch Profile
+         /
+User ───┼──── Fetch Posts
+         \
+          Fetch Comments
+               │
+               ▼
+          Promise.all()
+               │
+               ▼
+          Update UI
+```
+
+Total time ≈ max(A, B, C)
+
+### Choosing the right Promise API
+
+- **`Promise.all()`**
+  - Best when **all requests are required**.
+  - Rejects immediately if any request fails.
+
+- **`Promise.allSettled()`**
+  - Best when **partial success is acceptable**.
+  - Returns the status of every request.
+
+- **`Promise.race()`**
+  - Returns the first settled promise.
+  - Useful for implementing timeouts or fallback strategies.
+
+### React 18 considerations
+
+- Automatic batching groups multiple `setState` calls from async callbacks into a single render.
+- Concurrent rendering keeps the UI responsive during data fetching.
+- Use `AbortController` or request cancellation to avoid updating state after a component unmounts or when a newer request supersedes an older one.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest react-multiple-api -- --template react-ts
+cd react-multiple-api
+npm install
+npm run dev
+```
+
+### Fetch multiple APIs in parallel
+
+```tsx
+import { useEffect, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+type Post = {
+  id: number;
+  title: string;
+};
+
+export default function Dashboard() {
+  const [user, setUser] = useState<User | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadData() {
+      try {
+        const [userRes, postsRes] = await Promise.all([
+          fetch("/api/user", { signal: controller.signal }),
+          fetch("/api/posts", { signal: controller.signal }),
+        ]);
+
+        const [userData, postsData] = await Promise.all([
+          userRes.json(),
+          postsRes.json(),
+        ]);
+
+        setUser(userData);
+        setPosts(postsData);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error("Failed to load data:", error);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+
+    return () => controller.abort();
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+
+  return (
+    <>
+      <h2>{user?.name}</h2>
+      <p>Total Posts: {posts.length}</p>
+    </>
+  );
+}
+```
+
+For independent resources where one failure shouldn't block the others, replace `Promise.all()` with `Promise.allSettled()` and process fulfilled results individually.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** for fast development, native ESM, and HMR.
+- **Next.js App Router** for SSR, streaming, and server-side data fetching.
+- **Remix** for route-based loaders and progressive enhancement.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### ESM vs CommonJS
+
+- Modern React applications use **ES Modules (ESM)**.
+- Vite serves ESM during development and optimizes production bundles.
+
+### Recommended data-fetching libraries
+
+For production applications, prefer **TanStack Query** or **SWR** because they provide:
+
+- Parallel queries
+- Caching
+- Background refetching
+- Automatic retries
+- Request deduplication
+- Query invalidation
+
+---
+
+# Performance
+
+To keep async operations efficient:
+
+- Use **`Promise.all()`** for independent requests.
+- Avoid sequential fetching unless requests depend on one another.
+- Use **React Profiler** to verify that loading state changes don't cause excessive re-renders.
+- Memoize expensive derived values with **`useMemo`**.
+- Stabilize callbacks with **`useCallback`** when passing them to child components.
+- Code split heavy dashboard sections with **`React.lazy`** and `Suspense`.
+- Cache server state with **TanStack Query** instead of refetching identical data.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test idea:
+
+```tsx
+it("renders user and posts after successful API calls", async () => {
+  // Mock both fetch requests
+  // Render component
+  // Wait for the UI to update
+  // Assert user name and post count
+});
+```
+
+For end-to-end testing, use **Playwright** to verify loading indicators, partial failures, retries, and request cancellation.
+
+---
+
+# Ops & Deployment
+
+- Log failed requests to observability platforms such as Sentry or Datadog.
+- Implement retry policies with exponential backoff for transient failures.
+- Use **Error Boundaries** for rendering errors only; async request failures should be handled in the data layer.
+- In SSR frameworks like Next.js, fetch data on the server when appropriate to improve initial page load and SEO.
+- Configure CDN and HTTP caching headers for cacheable resources to reduce repeated network requests.
+
+---
+
+# Pitfalls
+
+- **Using `Promise.all()` when partial success is acceptable**, causing one failed request to reject the entire operation.
+- **Not cancelling in-flight requests**, which can lead to race conditions or attempts to update unmounted components.
+- **Fetching dependent APIs in parallel**, even though one request requires data from another.
+
 ## Question 7. How do you optimize re-renders in large forms?
+
+# Short answer
+
+Optimize re-renders in large forms by **keeping state as localized as possible**, splitting the form into smaller memoized components, minimizing controlled state updates, using libraries like **React Hook Form** that rely on uncontrolled inputs and subscriptions, memoizing expensive computations, and avoiding unnecessary context updates. Profile the form with React DevTools to identify components that re-render excessively.
+
+---
+
+# Explanation
+
+Large forms (50–200+ fields) can become slow because every keystroke may trigger re-renders across many components.
+
+A scalable architecture separates concerns:
+
+- **Form container** – overall form state and submission.
+- **Field components** – isolated inputs.
+- **Validation layer** – schema validation (e.g., Zod/Yup).
+- **Reusable field components** – text inputs, selects, checkboxes.
+
+```text
+Form
+│
+├── Personal Information
+│     ├── FirstNameField
+│     ├── LastNameField
+│     └── EmailField
+│
+├── Address
+│     ├── CityField
+│     ├── StateField
+│     └── ZipField
+│
+└── Payment
+      ├── CardNumberField
+      ├── ExpiryField
+      └── CVVField
+```
+
+### React 18 rendering behavior
+
+React 18 provides:
+
+- **Automatic batching**, which groups multiple state updates into a single render.
+- **Concurrent rendering**, helping keep the UI responsive during expensive updates.
+
+However, batching doesn't eliminate unnecessary renders. If every field depends on one large state object, changing one input still causes all consumers of that state to re-render.
+
+### State management trade-offs
+
+- **One object in `useState`**
+  - Easy to implement.
+  - Poor for very large forms because updates often re-render the entire form.
+
+- **Separate state per field**
+  - Better isolation.
+  - More boilerplate.
+
+- **`useReducer`**
+  - Good for complex form logic and predictable updates.
+
+- **React Hook Form**
+  - Preferred for production-scale forms.
+  - Uses uncontrolled inputs with subscriptions, so changing one field doesn't force unrelated fields to re-render.
+
+---
+
+# Example
+
+**Vite + React + TypeScript**
+
+Create the project:
+
+```bash
+npm create vite@latest react-large-form -- --template react-ts
+cd react-large-form
+npm install
+npm run dev
+```
+
+### Memoized field component
+
+```tsx
+import { memo } from "react";
+
+type TextFieldProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+const TextField = memo(function TextField({
+  label,
+  value,
+  onChange,
+}: TextFieldProps) {
+  console.log(`${label} rendered`);
+
+  return (
+    <div>
+      <label>{label}</label>
+      <input value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+});
+
+export default TextField;
+```
+
+### Form component
+
+```tsx
+import { useCallback, useState } from "react";
+import TextField from "./TextField";
+
+export default function App() {
+  const [firstName, setFirstName] = useState("");
+  const [email, setEmail] = useState("");
+
+  const handleFirstName = useCallback(
+    (value: string) => setFirstName(value),
+    [],
+  );
+
+  const handleEmail = useCallback((value: string) => setEmail(value), []);
+
+  return (
+    <>
+      <TextField
+        label="First Name"
+        value={firstName}
+        onChange={handleFirstName}
+      />
+
+      <TextField label="Email" value={email} onChange={handleEmail} />
+    </>
+  );
+}
+```
+
+Typing in the first name field only re-renders that field because:
+
+- `TextField` is wrapped in `React.memo`.
+- Callback references remain stable with `useCallback`.
+- State is localized instead of stored in one large object.
+
+For larger applications, **React Hook Form** further reduces re-renders by subscribing individual fields to only the parts of the form state they need.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript** for fast development and native ESM.
+- **Next.js App Router** for SSR, server actions, and React Server Components.
+- **Remix** for route-based forms and progressive enhancement.
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### Recommended libraries
+
+- **React Hook Form** – subscription-based form state with excellent performance.
+- **Zod** – type-safe schema validation.
+- **TanStack Query** – for server interactions, not client form state.
+
+### ESM vs CommonJS
+
+Modern React projects use **ES Modules (ESM)**. Vite leverages native ESM for fast startup and optimized production builds.
+
+---
+
+# Performance
+
+Key optimization techniques:
+
+- **Use React Profiler** to identify fields that re-render unnecessarily.
+- Wrap reusable field components with **`React.memo`**.
+- Memoize callbacks with **`useCallback`**.
+- Memoize expensive derived values with **`useMemo`**.
+- Keep state close to where it's used.
+- Split very large forms into sections or wizard steps.
+- Lazy load rarely used sections with `React.lazy()` and `Suspense`.
+- Debounce expensive validation or API calls (e.g., username availability checks).
+- Virtualize extremely large dynamic forms if rendering hundreds of fields.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example test idea:
+
+```tsx
+it("updates only the edited field", async () => {
+  // Render the form
+  // Simulate typing
+  // Assert the field updates correctly
+  // Use render counters or React Profiler to verify unnecessary re-renders are avoided
+});
+```
+
+For end-to-end testing, use **Playwright** to verify validation, submission, and performance on large forms.
+
+---
+
+# Ops & Deployment
+
+- Log validation and submission errors to observability platforms such as Sentry or Datadog.
+- Use **Error Boundaries** to isolate rendering failures in complex form sections.
+- In SSR frameworks, ensure initial form values are consistent between server and client to avoid hydration issues.
+- Split large forms into smaller bundles or route-based steps to improve initial load time.
+
+---
+
+# Pitfalls
+
+- **Storing the entire form in one state object**, causing every field to re-render on each change.
+- **Passing new inline callback functions** to memoized field components, which defeats `React.memo`.
+- **Using Context for frequently changing form values**, causing all context consumers to re-render unless the context is split or selector-based.
 
 ## Question 8. How do you dynamically import components in React?
 
+# Short answer
+
+Use **dynamic imports** with `import()` and **`React.lazy()` + `Suspense`** to load components only when they are needed instead of including them in the initial JavaScript bundle. This reduces the initial bundle size, improves page load performance, and enables route-level or component-level code splitting.
+
+---
+
+# Explanation
+
+Dynamic imports are one of the most effective performance optimizations in modern React applications.
+
+Instead of bundling every component into a single JavaScript file, the bundler (Vite/Rollup, Webpack, Turbopack) creates **separate chunks** that are downloaded only when required.
+
+React provides:
+
+- **`React.lazy()`** – Loads a component asynchronously.
+- **`Suspense`** – Displays a fallback UI while the component is loading.
+
+Example flow:
+
+```
+User opens page
+        │
+        ▼
+Main bundle loads
+        │
+        ▼
+User clicks "Open Reports"
+        │
+        ▼
+reports.chunk.js downloads
+        │
+        ▼
+React renders Reports component
+```
+
+### Common use cases
+
+- Route-based code splitting
+- Admin dashboards
+- Heavy charts
+- Rich text editors
+- Payment modules
+- Settings pages
+- Feature flags
+- Large modals
+
+---
+
+### React 18 considerations
+
+React 18 works seamlessly with lazy loading.
+
+When a lazy component is loading:
+
+- Suspense shows the fallback UI.
+- Concurrent rendering keeps the UI responsive.
+- Automatic batching still applies for state updates.
+
+For large applications, pair Suspense with:
+
+- `startTransition`
+- Nested Suspense boundaries
+- Streaming SSR (Next.js App Router)
+
+---
+
+### Lazy loading vs dynamic import
+
+**Dynamic import**
+
+```ts
+const module = await import("./utils");
+```
+
+Loads any JavaScript module.
+
+**React.lazy**
+
+```tsx
+const Settings = React.lazy(() => import("./Settings"));
+```
+
+Special wrapper for React components.
+
+---
+
+### Route-level code splitting
+
+With React Router:
+
+```tsx
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Profile = lazy(() => import("./pages/Profile"));
+```
+
+Each route becomes its own bundle.
+
+---
+
+### Component-level code splitting
+
+Good candidates include:
+
+- Charts
+- Maps
+- PDF viewers
+- Markdown editors
+- Monaco editor
+- Video players
+
+Instead of loading them initially, load only when the user actually needs them.
+
+---
+
+# Example
+
+### Create project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### HeavyComponent.tsx
+
+```tsx
+export default function HeavyComponent() {
+  return <h2>Heavy Component Loaded!</h2>;
+}
+```
+
+### App.tsx
+
+```tsx
+import { lazy, Suspense, useState } from "react";
+
+const HeavyComponent = lazy(() => import("./HeavyComponent"));
+
+export default function App() {
+  const [show, setShow] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setShow(true)}>Load Component</button>
+
+      {show && (
+        <Suspense fallback={<p>Loading...</p>}>
+          <HeavyComponent />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+```
+
+Initially only the main bundle loads.
+
+After clicking **Load Component**, Vite downloads another JavaScript chunk.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**
+
+Why Vite?
+
+- Extremely fast dev server
+- Native ES modules
+- Rollup for optimized production builds
+- Automatic code splitting
+- Excellent TypeScript support
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### Next.js
+
+Next.js supports dynamic imports using:
+
+```tsx
+import dynamic from "next/dynamic";
+
+const Chart = dynamic(() => import("./Chart"), {
+  loading: () => <p>Loading...</p>,
+});
+```
+
+Benefits:
+
+- SSR support
+- Streaming
+- SEO
+- Automatic route splitting
+
+### ESM vs CommonJS
+
+Dynamic imports rely on **ES Modules**:
+
+```ts
+import("./Component");
+```
+
+instead of
+
+```js
+require("./Component");
+```
+
+Modern bundlers optimize ESM much better.
+
+---
+
+# Performance
+
+Dynamic imports are one of the highest ROI optimizations.
+
+Combine them with:
+
+- Route-level code splitting
+- `React.memo`
+- `useMemo`
+- `useCallback`
+- Virtualization (`react-window`)
+- Image lazy loading
+- Suspense boundaries
+- Prefetching likely-next routes
+- Bundle analysis (`rollup-plugin-visualizer`, `source-map-explorer`)
+
+### React Profiler
+
+Use React DevTools Profiler to verify:
+
+- Reduced initial render time
+- Faster Time to Interactive (TTI)
+- Fewer unnecessary renders
+
+Avoid lazy-loading tiny components, as additional network requests can outweigh any benefit.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows load button", () => {
+  render(<App />);
+  expect(screen.getByText("Load Component")).toBeInTheDocument();
+});
+```
+
+For lazy components, use async queries:
+
+```tsx
+await screen.findByText("Heavy Component Loaded!");
+```
+
+For end-to-end testing, use Playwright to verify lazy-loaded routes and loading states.
+
+---
+
+# Ops & Deployment
+
+Production recommendations:
+
+- Split bundles by routes and major features.
+- Cache chunk files aggressively with hashed filenames.
+- Serve assets through a CDN.
+- Use HTTP/2 or HTTP/3 for efficient parallel chunk loading.
+- Add Error Boundaries around Suspense trees to handle failed chunk downloads gracefully.
+- Monitor bundle sizes with CI to catch regressions.
+- For SEO-critical pages, consider SSR or static generation; for authenticated dashboards, CSR with lazy loading is often sufficient.
+
+---
+
+# Pitfalls
+
+- **Always wrap lazy components in `Suspense`**, otherwise React will throw an error.
+- **Don't lazy-load tiny or frequently used components**, as the extra request can hurt performance.
+- **Handle loading and error states**, especially for unreliable networks or failed chunk downloads (e.g., using an Error Boundary).
+
 ## Question 9. How do you implement a responsive layout in React?
 
+# Short answer
+
+A responsive layout in React is typically implemented using **CSS (Flexbox, Grid, and media queries)**, optionally combined with **responsive utility frameworks (Tailwind CSS)** or **CSS-in-JS**. React itself doesn't provide responsiveness—it renders components, while CSS handles layout adaptation. For dynamic behavior based on screen size, use `window.matchMedia`, `ResizeObserver`, or custom hooks.
+
+---
+
+# Explanation
+
+Responsive design ensures your application adapts seamlessly across mobile, tablet, and desktop devices.
+
+A senior React application usually combines:
+
+- **CSS Grid** for page layouts
+- **Flexbox** for aligning items
+- **Media queries** for breakpoint-specific styling
+- **Responsive images** (`srcSet`, `sizes`)
+- **Lazy loading** for performance
+- **Conditional rendering** for device-specific UI only when necessary
+
+Example architecture:
+
+```text
+App
+ ├── Header
+ ├── Sidebar (hidden on mobile)
+ ├── Main Content
+ └── Footer
+```
+
+### Common approaches
+
+| Technique         | Best Use Case                     |
+| ----------------- | --------------------------------- |
+| CSS Flexbox       | Navigation bars, forms, cards     |
+| CSS Grid          | Dashboards, page layouts          |
+| Media Queries     | Breakpoint styling                |
+| Tailwind CSS      | Utility-first responsive design   |
+| CSS Modules       | Component-scoped styles           |
+| Styled Components | Dynamic styling with props        |
+| `matchMedia`      | JavaScript-based responsive logic |
+| `ResizeObserver`  | Responsive containers             |
+
+---
+
+### React 18 considerations
+
+Responsive layouts are primarily a CSS concern, so React 18 features like Concurrent Rendering do not directly affect layout behavior.
+
+However:
+
+- Automatic batching reduces unnecessary renders during resize events.
+- Memoize expensive calculations derived from viewport size.
+- Avoid storing window dimensions in global state unless multiple components require them.
+
+---
+
+### Responsive layout strategy
+
+```
+Desktop
+-----------------------------------
+Sidebar | Main | Widgets
+-----------------------------------
+
+Tablet
+--------------------------
+Sidebar
+Main
+--------------------------
+
+Mobile
+--------------------------
+☰ Menu
+Main
+--------------------------
+```
+
+Use CSS to rearrange the layout instead of rendering entirely different component trees whenever possible.
+
+---
+
+# Example
+
+### Create project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+### App.tsx
+
+```tsx
+import "./App.css";
+
+export default function App() {
+  return (
+    <div className="layout">
+      <aside className="sidebar">Sidebar</aside>
+
+      <main className="content">
+        <h1>Responsive React Layout</h1>
+        <p>Resize the browser window.</p>
+      </main>
+    </div>
+  );
+}
+```
+
+### App.css
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #333;
+  color: white;
+  padding: 1rem;
+}
+
+.content {
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    order: -1;
+  }
+}
+```
+
+This layout shows a sidebar beside the content on larger screens and stacks the sidebar above the content on smaller screens.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**
+
+Why Vite?
+
+- Fast HMR and development server
+- Native ESM support
+- Efficient production builds with Rollup
+- Excellent TypeScript integration
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### Popular styling options
+
+- CSS Modules
+- Tailwind CSS
+- Styled Components
+- Emotion
+
+### ESM vs CommonJS
+
+Modern React applications use **ES Modules**:
+
+```ts
+import App from "./App";
+```
+
+instead of:
+
+```js
+const App = require("./App");
+```
+
+ESM enables tree shaking and better bundler optimizations.
+
+---
+
+# Performance
+
+For responsive applications:
+
+- Prefer CSS media queries over JavaScript resize listeners.
+- Use `React.memo` to prevent unnecessary re-renders.
+- Use `useMemo` for expensive layout calculations.
+- Use `useCallback` for stable event handlers.
+- Virtualize long responsive lists with libraries like `react-window`.
+- Lazy-load images using `loading="lazy"`.
+- Code split large feature areas with `React.lazy` and `Suspense`.
+
+### React Profiler
+
+Use React DevTools Profiler to ensure viewport changes are not causing unnecessary component re-renders.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders responsive layout", () => {
+  render(<App />);
+  expect(screen.getByText("Responsive React Layout")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use Playwright to verify layouts across different viewport sizes:
+
+```ts
+await page.setViewportSize({ width: 375, height: 812 });
+```
+
+---
+
+# Ops & Deployment
+
+- Optimize images using responsive formats (`srcSet`, `sizes`, WebP, AVIF).
+- Serve assets through a CDN.
+- Minimize CSS with build-time optimization.
+- Use hashed filenames for long-term caching.
+- Consider SSR (e.g., Next.js) for faster initial rendering and improved SEO.
+- Monitor bundle size and Core Web Vitals (LCP, CLS, INP) to ensure responsive layouts perform well on slower devices.
+
+---
+
+# Pitfalls
+
+- **Avoid using JavaScript for layout changes** when CSS media queries can achieve the same result.
+- **Don't hardcode pixel widths**; use relative units (`rem`, `%`, `fr`, `clamp()`, `min()`, `max()`).
+- **Test across multiple screen sizes and orientations**, not just desktop and one mobile viewport.
+
 ## Question 10. How do you handle global notifications or toast messages?
+
+# Short answer
+
+Global notifications or toast messages are typically managed using a **centralized notification system** exposed through **React Context**, a state management library (Redux, Zustand), or a third-party library like **React Toastify**, **Sonner**, or **Notistack**. The notification provider is mounted once near the application root, allowing any component to trigger success, error, warning, or info messages without prop drilling.
+
+---
+
+# Explanation
+
+In production applications, notifications should be:
+
+- **Globally accessible** from any component
+- **Decoupled** from business logic
+- **Automatically dismissed** after a configurable duration
+- **Accessible** (screen reader friendly, keyboard accessible)
+- **Consistent** in styling and behavior
+
+Typical architecture:
+
+```text
+App
+ ├── NotificationProvider
+ │     ├── ToastContainer
+ │     └── Context API
+ │
+ ├── Dashboard
+ ├── Profile
+ └── Settings
+
+Any component
+      │
+      ▼
+showToast("Profile updated!")
+```
+
+Instead of passing notification handlers through props, components call a shared API such as:
+
+```tsx
+showToast({
+  type: "success",
+  message: "Saved successfully",
+});
+```
+
+---
+
+### Common approaches
+
+| Approach       | Best For                      |
+| -------------- | ----------------------------- |
+| Context API    | Small to medium applications  |
+| Redux Toolkit  | Large enterprise apps         |
+| Zustand        | Lightweight global state      |
+| React Toastify | Most common toast library     |
+| Sonner         | Modern, minimal toast library |
+| Notistack      | Material UI applications      |
+
+---
+
+### React 18 considerations
+
+React 18's **automatic batching** ensures multiple notification-related state updates are grouped into a single render, reducing unnecessary re-renders.
+
+For example:
+
+```tsx
+setLoading(false);
+showToast("Profile updated");
+```
+
+These updates are automatically batched.
+
+If notifications are triggered after expensive UI updates, you can use `startTransition()` to prioritize user interactions while scheduling non-urgent updates.
+
+---
+
+# Example
+
+### Create project (Vite + React + TypeScript)
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install react-toastify
+npm run dev
+```
+
+### main.tsx
+
+```tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import App from "./App";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <>
+    <App />
+    <ToastContainer position="top-right" autoClose={3000} />
+  </>,
+);
+```
+
+### App.tsx
+
+```tsx
+import { toast } from "react-toastify";
+
+export default function App() {
+  const handleSave = () => {
+    // Simulate API success
+    toast.success("Profile saved successfully!");
+  };
+
+  return <button onClick={handleSave}>Save Profile</button>;
+}
+```
+
+This setup allows any component in the application to display notifications without prop drilling.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**
+
+Why Vite?
+
+- Fast development server (HMR)
+- Native ESM support
+- Efficient Rollup production builds
+- Excellent TypeScript experience
+
+Avoid **Create React App (CRA)** because it is deprecated.
+
+### Recommended libraries
+
+- **React Toastify** – Feature-rich and widely adopted
+- **Sonner** – Lightweight with modern UI
+- **Notistack** – Ideal for Material UI projects
+
+### ESM vs CommonJS
+
+Modern React projects use ES Modules:
+
+```ts
+import { toast } from "react-toastify";
+```
+
+This enables tree shaking and optimized bundles.
+
+---
+
+# Performance
+
+Keep the notification system lightweight:
+
+- Mount a single toast container at the application root.
+- Avoid rendering multiple toast containers.
+- Memoize notification context values using `useMemo`.
+- Use `React.memo` for custom toast components.
+- Lazy-load heavy notification-related assets if needed.
+- Profile frequent notifications with React DevTools Profiler.
+
+Most toast libraries render notifications in a portal, preventing unnecessary re-renders of the main component tree.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom
+```
+
+Example:
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import App from "./App";
+
+test("shows success notification", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByText("Save Profile"));
+
+  expect(screen.getByText("Profile saved successfully!")).toBeInTheDocument();
+});
+```
+
+For end-to-end testing, use Playwright to verify toast appearance and dismissal behavior.
+
+---
+
+# Ops & Deployment
+
+- Centralize API error handling so failed requests trigger consistent error toasts.
+- Avoid exposing sensitive backend error details in production notifications.
+- Use Error Boundaries for rendering errors and combine them with user-friendly toast messages.
+- Log notification-triggering errors to monitoring tools like Sentry while showing concise user messages.
+- Ensure toast styles are included in production bundles and served efficiently through a CDN.
+
+---
+
+# Pitfalls
+
+- **Don't mount multiple toast containers**, as this can produce duplicate notifications.
+- **Avoid storing transient toast state in business state**, since notifications are UI concerns.
+- **Don't overuse notifications**—reserve them for meaningful feedback and avoid overwhelming users.
 
 ## Question 11. How does React Fiber improve performance over older React versions?
 
