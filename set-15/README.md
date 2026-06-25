@@ -1589,13 +1589,1759 @@ Use **Playwright** for end-to-end testing of real API interactions, optimistic u
 
 ## Question 6. How do you implement state normalization for complex apps?
 
+# Short answer
+
+**State normalization** is the practice of storing relational or nested data in a **flat, entity-based structure** instead of deeply nested objects. Each entity type is stored in a dictionary keyed by ID, while relationships are maintained using arrays of IDs.
+
+Normalization improves update performance, prevents duplicated data, simplifies cache management, and reduces unnecessary React re-renders. In React, it is commonly implemented using **Redux Toolkit's `createEntityAdapter`**, **TanStack Query/Apollo Client caches**, or manually with normalized entity maps.
+
+---
+
+# Explanation
+
+Without normalization, data is often duplicated across the application.
+
+**Non-normalized state**
+
+```text
+Posts
+ ├── Post A
+ │     ├── Author (John)
+ │     └── Comments
+ │            ├── User (Alice)
+ │            └── User (Bob)
+ │
+ └── Post B
+       ├── Author (John)
+       └── Comments
+```
+
+The same user (`John`) appears multiple times. Updating the user's name requires updating every copy.
+
+---
+
+## Normalized State
+
+Instead, store entities once and reference them by ID.
+
+```text
+entities
+│
+├── users
+│     ├── 1 → John
+│     ├── 2 → Alice
+│     └── 3 → Bob
+│
+├── posts
+│     ├── 10 → { authorId: 1 }
+│     └── 11 → { authorId: 1 }
+│
+└── comments
+      ├── 100 → { userId: 2 }
+      └── 101 → { userId: 3 }
+```
+
+Relationships are maintained through IDs rather than duplicated objects.
+
+---
+
+## Benefits
+
+### 1. Single Source of Truth
+
+Each entity exists only once.
+
+```text
+users[1]
+```
+
+Updating a user automatically reflects everywhere that references the same ID.
+
+---
+
+### 2. Faster Updates
+
+Without normalization:
+
+```text
+Find every post
+
+↓
+
+Find every comment
+
+↓
+
+Update author
+```
+
+With normalization:
+
+```text
+users[id]
+
+↓
+
+Update once
+```
+
+Updates are typically O(1) lookups by ID.
+
+---
+
+### 3. Reduced Re-renders
+
+Because entities are isolated:
+
+```text
+users changed
+
+↓
+
+Only components using users rerender
+```
+
+instead of rerendering entire nested trees.
+
+---
+
+### 4. Easier Caching
+
+Libraries such as:
+
+- Redux Toolkit
+- TanStack Query
+- Apollo Client
+
+internally benefit from normalized or entity-based storage.
+
+Apollo's `InMemoryCache`, for example, normalizes GraphQL objects using `id` and `__typename`.
+
+---
+
+## Typical Architecture
+
+```text
+Store
+│
+├── entities
+│      ├── users
+│      ├── products
+│      ├── orders
+│      └── comments
+│
+└── UI State
+       ├── filters
+       ├── modal
+       └── theme
+```
+
+Separate **server entities** from **UI state**.
+
+---
+
+## Redux Toolkit's `createEntityAdapter`
+
+For Redux applications, `createEntityAdapter` is the recommended way to normalize collections.
+
+It provides:
+
+- Normalized storage (`ids` + `entities`)
+- CRUD reducers
+- Memoized selectors
+- Efficient updates
+
+Resulting shape:
+
+```text
+users
+│
+├── ids
+│      [1,2,3]
+│
+└── entities
+       1 -> John
+       2 -> Alice
+       3 -> Bob
+```
+
+---
+
+## React 18 Considerations
+
+React 18's automatic batching helps when multiple normalized entities are updated together.
+
+Additional best practices:
+
+- Use memoized selectors (`createSelector`) to avoid recomputing derived data.
+- Keep server state in TanStack Query or Apollo Client, and normalize client-managed entities only when necessary.
+- Avoid denormalizing data into component state unless creating a temporary editable copy.
+
+---
+
+# Example
+
+**Scaffold with Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm install @reduxjs/toolkit react-redux
+npm run dev
+```
+
+**usersSlice.ts**
+
+```tsx
+import { createEntityAdapter, createSlice } from "@reduxjs/toolkit";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+const usersAdapter = createEntityAdapter<User>();
+
+const usersSlice = createSlice({
+  name: "users",
+  initialState: usersAdapter.getInitialState(),
+  reducers: {
+    usersLoaded: usersAdapter.setAll,
+    userUpdated: usersAdapter.updateOne,
+  },
+});
+
+export const { usersLoaded, userUpdated } = usersSlice.actions;
+
+export default usersSlice.reducer;
+
+export const usersSelectors = usersAdapter.getSelectors(
+  (state: { users: ReturnType<typeof usersSlice.reducer> }) => state.users,
+);
+```
+
+Example normalized state:
+
+```text
+users
+├── ids: [1, 2]
+└── entities
+    ├── 1 → { id: 1, name: "Alice" }
+    └── 2 → { id: 2, name: "Bob" }
+```
+
+Updating a user only modifies one entity, and selectors return memoized results.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid **Create React App (CRA)** because it is deprecated.
+
+- **State management:** Redux Toolkit with `createEntityAdapter` is the recommended solution for normalized client state.
+- **Server state:** Prefer **TanStack Query** or **Apollo Client** instead of duplicating API data in Redux.
+- **Module system:** Use **ESM** (`import`/`export`) with Vite for efficient tree-shaking and fast development.
+- **Frameworks:** Next.js and Remix work well with normalized client state while handling SSR and routing.
+
+Run:
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+# Performance
+
+- Use **memoized selectors** (`createSelector`) to avoid recomputing joins between normalized entities.
+- Profile with the **React DevTools Profiler** to verify that only components consuming updated entities re-render.
+- Keep entity updates immutable so Redux Toolkit can efficiently detect changes.
+- Use route-level code splitting (`React.lazy`) to reduce initial bundle size; normalization complements but does not replace code splitting.
+- Cache server data with TanStack Query or Apollo Client instead of maintaining duplicate normalized copies in Redux unless offline editing or complex client-side workflows require it.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Typical tests:
+
+```tsx
+it("adds users in normalized format", () => {
+  // Dispatch usersLoaded()
+  // Assert ids and entities are populated correctly
+});
+
+it("updates only one entity", () => {
+  // Dispatch userUpdated()
+  // Verify only the targeted user changed
+});
+```
+
+Use **Playwright** for end-to-end testing of CRUD flows that update multiple related entities.
+
+---
+
+# Ops & Deployment
+
+- Keep normalized entity slices separate from transient UI state.
+- Log entity update failures and API synchronization issues using tools like Sentry or OpenTelemetry.
+- For SSR applications (e.g., Next.js), hydrate normalized state carefully to avoid mismatches between server and client.
+- Monitor bundle size; Redux Toolkit is lightweight, but avoid storing large duplicated datasets.
+
+---
+
+# Pitfalls
+
+- **Normalizing small or simple state**, adding unnecessary complexity where nested objects are sufficient.
+- **Duplicating the same server data** in both TanStack Query/Apollo Client and Redux, leading to synchronization issues.
+- **Performing joins directly inside components** instead of using memoized selectors, causing unnecessary recomputation and re-renders.
+
 ## Question 7. How do you implement advanced performance optimization with useMemo and useCallback?
+
+# Short answer
+
+`useMemo` and `useCallback` are **memoization hooks** used to optimize React performance by avoiding unnecessary computations and function recreations.
+
+- **`useMemo`** memoizes the **result of an expensive calculation**.
+- **`useCallback`** memoizes a **function reference**.
+
+They should be used **only after profiling** with the React DevTools Profiler. Overusing them can increase memory usage and add unnecessary complexity without improving performance.
+
+---
+
+# Explanation
+
+React re-renders a component whenever its state or props change. During each render:
+
+- Variables are recreated.
+- Functions are recreated.
+- Calculations are executed again.
+
+Example:
+
+```text
+Parent Render
+      │
+      ├── Function recreated
+      ├── Array recreated
+      ├── Object recreated
+      └── Expensive calculation repeated
+```
+
+Memoization allows React to reuse previous values when dependencies have not changed.
+
+---
+
+## `useMemo`
+
+`useMemo` caches the **computed value**.
+
+Without `useMemo`:
+
+```tsx
+const sortedUsers = users.sort(sortFn);
+```
+
+The sorting runs on every render.
+
+With `useMemo`:
+
+```tsx
+const sortedUsers = useMemo(() => {
+  return [...users].sort(sortFn);
+}, [users]);
+```
+
+Flow:
+
+```text
+Render
+   │
+Dependencies changed?
+   │
+ ┌─Yes──────────────┐
+ │ Recalculate      │
+ └──────────┬───────┘
+            │
+          No│
+            ▼
+Return cached value
+```
+
+Common use cases:
+
+- Sorting large lists
+- Filtering/searching
+- Data transformations
+- Complex calculations
+- Building lookup maps
+
+---
+
+## `useCallback`
+
+`useCallback` caches a **function reference**.
+
+Without it:
+
+```tsx
+<Child onClick={() => save()} />
+```
+
+A new function is created on every render.
+
+With it:
+
+```tsx
+const handleSave = useCallback(() => {
+  save();
+}, [save]);
+```
+
+Flow:
+
+```text
+Render
+   │
+Dependencies changed?
+   │
+ ┌─Yes──────────────┐
+ │ Create function  │
+ └──────────┬───────┘
+            │
+          No│
+            ▼
+Reuse previous function
+```
+
+This is useful when passing callbacks to memoized children.
+
+---
+
+## Combining with `React.memo`
+
+The biggest benefit comes from combining `useCallback` with `React.memo`.
+
+Without memoization:
+
+```text
+Parent Render
+      │
+New Function
+      │
+Child Props Changed
+      │
+Child Re-renders
+```
+
+With memoization:
+
+```text
+Parent Render
+      │
+Same Function Reference
+      │
+React.memo
+      │
+Child Skips Render
+```
+
+Example:
+
+```tsx
+const Child = React.memo(({ onSave }: Props) => {
+  return <button onClick={onSave}>Save</button>;
+});
+```
+
+---
+
+## Memoizing Derived Data
+
+Instead of storing derived state:
+
+❌
+
+```tsx
+const [filteredUsers, setFilteredUsers] = useState([]);
+```
+
+Prefer:
+
+```tsx
+const filteredUsers = useMemo(() => {
+  return users.filter((u) => u.name.includes(search));
+}, [users, search]);
+```
+
+This avoids duplicated state and synchronization issues.
+
+---
+
+## Common Optimization Pattern
+
+```text
+API Data
+    │
+    ▼
+useMemo
+(Filter / Sort)
+    │
+    ▼
+React.memo Child
+    │
+    ▼
+useCallback Handlers
+```
+
+This minimizes both computation and rendering.
+
+---
+
+## React 18 Considerations
+
+React 18 introduced:
+
+- Automatic batching
+- Concurrent rendering
+- `startTransition`
+- `useDeferredValue`
+
+These reduce many rendering costs automatically, so **memoization is no longer the first optimization step**.
+
+Use `useMemo` and `useCallback` when:
+
+- Expensive calculations are measurable.
+- Stable references are required for `React.memo`.
+- Dependency arrays in custom hooks need stable callbacks.
+- Third-party libraries compare function references.
+
+Avoid using them around trivial computations or every event handler by default.
+
+---
+
+# Example
+
+**Scaffold with Vite (React + TypeScript):**
+
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
+
+**App.tsx**
+
+```tsx
+import { memo, useCallback, useMemo, useState } from "react";
+
+type User = {
+  id: number;
+  name: string;
+};
+
+const UserList = memo(
+  ({ users, onSelect }: { users: User[]; onSelect: (id: number) => void }) => (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>
+          <button onClick={() => onSelect(user.id)}>{user.name}</button>
+        </li>
+      ))}
+    </ul>
+  ),
+);
+
+export default function App() {
+  const [search, setSearch] = useState("");
+
+  const users: User[] = [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "Bob" },
+    { id: 3, name: "Charlie" },
+  ];
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) =>
+      u.name.toLowerCase().includes(search.toLowerCase()),
+    );
+  }, [users, search]);
+
+  const handleSelect = useCallback((id: number) => {
+    console.log("Selected:", id);
+  }, []);
+
+  return (
+    <>
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search users"
+      />
+
+      <UserList users={filteredUsers} onSelect={handleSelect} />
+    </>
+  );
+}
+```
+
+In this example:
+
+- `filteredUsers` is recomputed only when `users` or `search` changes.
+- `handleSelect` keeps the same function reference across renders.
+- `UserList` skips unnecessary re-renders thanks to `React.memo`.
+
+---
+
+# Tooling & Setup
+
+**Preferred stack:** **Vite + React + TypeScript**. Avoid **Create React App (CRA)** because it is deprecated.
+
+- **Bundler:** Vite provides fast HMR and optimized production builds.
+- **Module system:** Use **ESM** (`import`/`export`) for modern tooling and tree-shaking.
+- **Frameworks:** Next.js App Router and Remix also benefit from memoization, but remember that React Server Components reduce the amount of client-side JavaScript, changing where optimizations are most valuable.
+
+Run:
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+# Performance
+
+- **Profile first:** Use the **React DevTools Profiler** to identify expensive renders before adding memoization.
+- **Use `React.memo` strategically:** `useCallback` is most effective when passed to memoized child components.
+- **Memoize expensive calculations:** Use `useMemo` for sorting, filtering, grouping, or computationally intensive work—not simple expressions.
+- **Code splitting:** Combine memoization with route-level code splitting (`React.lazy`) to reduce both rendering cost and bundle size.
+- **Cache server data:** For API responses, prefer **TanStack Query** or **Apollo Client** caching instead of using `useMemo` as a data cache.
+
+---
+
+# Testing
+
+Use **Vitest** with **React Testing Library**.
+
+Install:
+
+```bash
+npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+Testing ideas:
+
+```tsx
+it("renders filtered users", () => {
+  // Update search input
+  // Verify only matching users are displayed
+});
+
+it("does not re-render memoized child unnecessarily", () => {
+  // Track render count with a mock or counter
+});
+```
+
+Use **Playwright** to measure perceived responsiveness during interactions with large datasets.
+
+---
+
+# Ops & Deployment
+
+- Measure render frequency and commit times using the React DevTools Profiler before and after optimization.
+- Use logging and monitoring tools (e.g., Sentry, OpenTelemetry) to identify performance bottlenecks in production.
+- Pair memoization with bundle analysis (`rollup-plugin-visualizer` for Vite) and CDN delivery for optimal application performance.
+- Add **Error Boundaries** around complex UI sections to isolate failures without affecting the rest of the application.
+
+---
+
+# Pitfalls
+
+- **Using `useMemo` or `useCallback` everywhere**, increasing memory usage and code complexity without measurable gains.
+- **Providing incorrect dependency arrays**, causing stale values or stale closures.
+- **Expecting `useCallback` alone to prevent re-renders**; it is effective only when consumers compare function references (e.g., `React.memo`).
 
 ## Question 8. How do you handle heavy computations without blocking UI using web workers?
 
+# Short answer
+
+Use **Web Workers** to move CPU-intensive work (parsing large files, image processing, complex calculations, data transformations) off the main UI thread. In React, communicate with the worker using `postMessage`/`onmessage`, manage worker lifecycle with `useEffect`, and keep UI responsive while React 18 continues rendering concurrently. Use Vite's built-in worker support for a modern setup.
+
+---
+
+# Explanation
+
+React runs on the browser's **main thread**, which is also responsible for:
+
+- Rendering the UI
+- Handling user interactions
+- Running JavaScript
+- Layout and painting
+
+If you execute expensive synchronous work like:
+
+- Sorting 1 million records
+- Processing CSV/Excel files
+- Image manipulation
+- PDF generation
+- Encryption
+- Machine learning inference
+
+the browser cannot repaint until JavaScript finishes, causing:
+
+- Frozen UI
+- Delayed clicks
+- Janky animations
+- Slow rendering
+
+A **Web Worker** runs JavaScript on a separate thread.
+
+Architecture:
+
+```
+Main Thread (React)
+        │
+ postMessage()
+        │
+────────▼────────
+   Web Worker
+ Heavy computation
+        │
+ postMessage(result)
+────────▲────────
+        │
+ React updates state
+```
+
+### React integration
+
+A common production pattern is:
+
+- Create worker once with `useEffect`
+- Send work using `worker.postMessage()`
+- Receive result with `worker.onmessage`
+- Store result in React state
+- Cleanup worker on unmount using `terminate()`
+
+```text
+Component mounts
+      ↓
+Worker created
+      ↓
+User clicks
+      ↓
+Message sent
+      ↓
+Worker computes
+      ↓
+Returns result
+      ↓
+React re-renders
+```
+
+### React 18 considerations
+
+React 18 introduced:
+
+- Concurrent Rendering
+- Automatic batching
+- Transitions
+
+These improve rendering responsiveness but **do not make JavaScript calculations faster**.
+
+Example:
+
+```tsx
+startTransition(() => {
+  setItems(bigList);
+});
+```
+
+React schedules rendering better.
+
+But:
+
+```ts
+const result = expensiveCalculation();
+```
+
+still blocks the thread.
+
+Web Workers solve a different problem:
+
+- React concurrency → rendering optimization
+- Web Worker → computation optimization
+
+Often both are used together.
+
+---
+
+# Example
+
+### Create project
+
+```bash
+npm create vite@latest react-worker-demo -- --template react-ts
+cd react-worker-demo
+npm install
+npm run dev
+```
+
+### `src/workers/sumWorker.ts`
+
+```ts
+self.onmessage = (event: MessageEvent<number>) => {
+  const limit = event.data;
+
+  let sum = 0;
+
+  for (let i = 0; i < limit; i++) {
+    sum += i;
+  }
+
+  self.postMessage(sum);
+};
+
+export {};
+```
+
+---
+
+### `App.tsx`
+
+```tsx
+import { useEffect, useRef, useState } from "react";
+
+export default function App() {
+  const workerRef = useRef<Worker>();
+  const [result, setResult] = useState<number>();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    workerRef.current = new Worker(
+      new URL("./workers/sumWorker.ts", import.meta.url),
+      { type: "module" },
+    );
+
+    workerRef.current.onmessage = (event: MessageEvent<number>) => {
+      setResult(event.data);
+      setLoading(false);
+    };
+
+    return () => workerRef.current?.terminate();
+  }, []);
+
+  const calculate = () => {
+    setLoading(true);
+    workerRef.current?.postMessage(500_000_000);
+  };
+
+  return (
+    <div>
+      <button onClick={calculate}>Calculate Huge Sum</button>
+
+      {loading ? <p>Calculating...</p> : <p>{result}</p>}
+    </div>
+  );
+}
+```
+
+The UI remains responsive while the worker performs the heavy calculation.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript**
+- React 18+
+- Native ES Modules
+
+Avoid **Create React App**, as it is deprecated.
+
+### Why Vite?
+
+- Native worker support
+- Fast HMR
+- ESM-first architecture
+- Excellent TypeScript integration
+- Optimized production builds with Rollup
+
+Creating workers:
+
+```ts
+new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+```
+
+### ESM vs CommonJS
+
+- Browser workers use **ES Modules**
+- Modern React projects should use ESM
+- Vite handles module resolution and bundling automatically
+
+---
+
+# Performance
+
+### When to use Web Workers
+
+✔ Large JSON parsing
+
+✔ CSV parsing
+
+✔ Excel import
+
+✔ Image resizing
+
+✔ Face detection
+
+✔ ML inference
+
+✔ Encryption
+
+✔ Financial calculations
+
+✔ Graph algorithms
+
+### When NOT to use them
+
+Tiny calculations:
+
+```ts
+items.filter(...)
+```
+
+Simple sorting:
+
+```ts
+users.sort(...)
+```
+
+Small array operations
+
+Worker communication has overhead, so lightweight tasks may become slower.
+
+### Combine with React optimizations
+
+Use:
+
+- `React.memo`
+- `useMemo`
+- `useCallback`
+- `useTransition`
+- `useDeferredValue`
+
+Example:
+
+```tsx
+const expensiveValue = useMemo(() => transform(data), [data]);
+```
+
+Keep rendering efficient while workers handle CPU-bound tasks.
+
+### Use Transferable Objects
+
+Instead of copying large binary data:
+
+```ts
+worker.postMessage(buffer, [buffer]);
+```
+
+Ownership transfers to the worker, avoiding expensive cloning.
+
+### SharedArrayBuffer
+
+For advanced scenarios:
+
+- real-time processing
+- video editors
+- collaborative tools
+- games
+
+Shared memory avoids serialization costs but requires appropriate browser security headers.
+
+### Profiling
+
+Use:
+
+- React DevTools Profiler
+- Chrome Performance tab
+- Chrome Memory tab
+- Lighthouse
+- Performance Insights
+
+Verify that long tasks disappear from the main thread after moving work to a worker.
+
+---
+
+# Testing
+
+Unit test computation logic separately from the worker transport layer.
+
+Example using **Vitest + React Testing Library**:
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+Test the pure computation function independently, then mock the `Worker` API in component tests to verify message passing and state updates. Use Playwright for end-to-end testing if you need to validate responsiveness during long-running operations.
+
+---
+
+# Ops & Deployment
+
+Production considerations:
+
+- Add an Error Boundary for UI failures (workers won't be caught by it, so also handle `worker.onerror`).
+- Handle worker errors:
+
+```ts
+worker.onerror = (err) => {
+  console.error(err);
+};
+```
+
+- Lazy-load workers only when needed to reduce initial bundle size.
+- Cache worker scripts using CDN/browser caching.
+- Offload only CPU-intensive work; network requests generally don't require workers.
+- For SSR frameworks like Next.js, create workers only on the client (e.g., inside `useEffect` or client components) because workers rely on browser APIs.
+
+---
+
+# Pitfalls
+
+- **Creating a new worker on every render** instead of reusing a single instance and terminating it on unmount.
+- **Passing huge objects repeatedly**, which incurs structured clone overhead; prefer Transferable Objects for binary data.
+- **Using workers for trivial computations**, where messaging overhead outweighs any performance benefit.
+
 ## Question 9. How do you implement offline-first apps with service workers?
 
+# Short answer
+
+An **offline-first** React app continues to function without a network connection by caching application assets and data locally. The standard approach is to use a **Service Worker** to cache static files, runtime API responses, and assets, often with **Workbox**. In React, pair a Service Worker with local storage (IndexedDB), background synchronization, and data-fetching libraries like React Query to provide a resilient user experience.
+
+---
+
+# Explanation
+
+A **Service Worker** is a background JavaScript process that sits between your React application and the network.
+
+It can:
+
+- Cache HTML, CSS, JavaScript, fonts, and images
+- Cache API responses
+- Serve cached content when offline
+- Synchronize queued requests when connectivity returns
+- Receive push notifications
+- Enable Progressive Web App (PWA) capabilities
+
+Architecture:
+
+```text
+                Internet
+                    ▲
+                    │
+            fetch()
+                    │
+       ┌────────────┴────────────┐
+       │     Service Worker      │
+       │  Cache / Network Logic  │
+       └────────────┬────────────┘
+                    │
+          React Application
+                    │
+         React Query / IndexedDB
+```
+
+### Offline-first request flow
+
+```text
+User requests page
+        │
+        ▼
+Service Worker intercepts request
+        │
+        ├── Cache available?
+        │        │
+        │       Yes
+        │        │
+        ▼        ▼
+Return cached response
+        │
+        No
+        │
+Fetch from network
+        │
+Store in cache
+        │
+Return response
+```
+
+---
+
+## Common caching strategies
+
+### 1. Cache First
+
+Best for:
+
+- Images
+- Fonts
+- JavaScript bundles
+- CSS
+
+```text
+Cache → Network (fallback)
+```
+
+Fastest loading.
+
+---
+
+### 2. Network First
+
+Best for:
+
+- User profile
+- Dashboard
+- Frequently changing data
+
+```text
+Network → Cache (fallback)
+```
+
+Keeps data fresh.
+
+---
+
+### 3. Stale While Revalidate
+
+Best for:
+
+- Product lists
+- Blog posts
+- News feeds
+
+```text
+Return cache immediately
+        ↓
+Fetch latest
+        ↓
+Update cache
+```
+
+Provides both speed and freshness.
+
+---
+
+### 4. Network Only
+
+For:
+
+- Authentication
+- Payments
+- Sensitive operations
+
+Never cache these requests.
+
+---
+
+### 5. Cache Only
+
+Useful for immutable assets packaged with the application.
+
+---
+
+## React architecture
+
+A production-ready offline-first app typically includes:
+
+- **React UI**
+- **Service Worker** (asset and request caching)
+- **IndexedDB** (persistent structured storage)
+- **React Query** (query caching and synchronization)
+- **Background Sync** (retry failed mutations)
+- **Push Notifications** (optional)
+
+```text
+React
+ │
+ ▼
+React Query
+ │
+ ▼
+IndexedDB
+ │
+ ▼
+Service Worker
+ │
+ ▼
+Network
+```
+
+---
+
+# Example
+
+## Create project
+
+```bash
+npm create vite@latest offline-demo -- --template react-ts
+cd offline-demo
+npm install
+npm install vite-plugin-pwa
+npm run dev
+```
+
+---
+
+## `vite.config.ts`
+
+```ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
+      },
+    }),
+  ],
+});
+```
+
+The plugin generates and registers a production-ready Service Worker using **Workbox**.
+
+---
+
+## Register the Service Worker
+
+```tsx
+import { registerSW } from "virtual:pwa-register";
+
+registerSW({
+  immediate: true,
+});
+```
+
+---
+
+## React component
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [online, setOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  return (
+    <div>
+      <h2>{online ? "🟢 Online" : "🔴 Offline"}</h2>
+      <p>The app continues working using cached assets.</p>
+    </div>
+  );
+}
+```
+
+This example detects connectivity changes while the Service Worker serves cached resources when the network is unavailable.
+
+---
+
+# Tooling & Setup
+
+### Recommended stack
+
+- **Vite + React + TypeScript**
+- **vite-plugin-pwa**
+- **Workbox**
+- **React Query**
+- **IndexedDB** (via libraries such as `idb` or `Dexie`)
+
+Avoid **Create React App**, as it is deprecated.
+
+### Why Vite?
+
+- Fast development server
+- Native ESM support
+- Excellent PWA integration
+- Optimized production builds
+- Automatic Service Worker generation through plugins
+
+### ESM vs CommonJS
+
+- Modern React applications should use **ES Modules (ESM)**.
+- Service Worker code is bundled as ESM-compatible output by Vite.
+- Rollup handles production bundling and asset hashing automatically.
+
+---
+
+# Performance
+
+### Cache static assets
+
+- JavaScript
+- CSS
+- Fonts
+- Images
+- Icons
+
+Avoid repeated downloads.
+
+---
+
+### Cache API responses
+
+Example strategy:
+
+```text
+Products → Stale While Revalidate
+
+User profile → Network First
+
+Settings → Cache First
+```
+
+---
+
+### Use IndexedDB for offline data
+
+Store:
+
+- Draft forms
+- Todo items
+- Messages
+- Search history
+- Recently viewed content
+
+IndexedDB is asynchronous and suitable for large structured datasets, unlike `localStorage`.
+
+---
+
+### Queue failed mutations
+
+If a user submits data while offline:
+
+```text
+User submits form
+        │
+Offline
+        │
+Store request
+        │
+Reconnect
+        │
+Replay request
+```
+
+This is often implemented using Workbox Background Sync or custom retry logic.
+
+---
+
+### React Query integration
+
+React Query complements Service Workers by:
+
+- Serving cached query data immediately
+- Refetching when the network returns
+- Retrying failed requests
+- Persisting cache to IndexedDB with persistence plugins
+
+---
+
+### Code splitting
+
+Use lazy loading to minimize the initial download:
+
+```tsx
+const Dashboard = React.lazy(() => import("./Dashboard"));
+```
+
+---
+
+### Profiling
+
+Use:
+
+- React DevTools Profiler
+- Chrome DevTools → Application → Cache Storage
+- Chrome DevTools → Network (Offline mode)
+- Lighthouse PWA audit
+
+Verify offline behavior by simulating network loss in DevTools.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library** for component testing:
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+Test:
+
+- Offline banners
+- Cached UI rendering
+- Retry logic after reconnecting
+- React Query cache hydration
+
+For end-to-end testing, use **Playwright** to emulate offline mode and verify that cached routes and assets continue to work.
+
+---
+
+# Ops & Deployment
+
+Production considerations:
+
+- Serve over **HTTPS**, as Service Workers require secure contexts (except on `localhost` during development).
+- Configure cache versioning and cleanup to remove outdated assets after deployments.
+- Use hashed filenames to ensure clients receive updated bundles.
+- Handle Service Worker updates gracefully, prompting users to refresh when a new version is available.
+- Use a CDN for static assets while allowing the Service Worker to manage client-side caching.
+- In SSR frameworks like Next.js, register the Service Worker only on the client after hydration.
+
+---
+
+# Pitfalls
+
+- **Caching authenticated or sensitive responses**, which can expose stale or private data. Prefer network-only strategies for these endpoints.
+- **Forgetting cache invalidation**, causing users to remain on outdated application versions after deployment.
+- **Relying solely on the browser cache**, instead of combining Service Workers with IndexedDB and robust synchronization for a true offline-first experience.
+
 ## Question 10. How do you implement A/B testing in React applications?
+
+# Short answer
+
+A/B testing in React is typically implemented using a **feature flag/experimentation platform** (e.g., LaunchDarkly, Optimizely, GrowthBook, Statsig, PostHog) or an in-house solution. The application determines a user's experiment variant, stores it consistently, renders the corresponding UI, and tracks exposure and conversion events. Keep experiment logic separate from business logic, ensure users remain in the same variant across sessions, and remove stale experiments once they conclude.
+
+---
+
+# Explanation
+
+A/B testing compares two or more UI or behavior variants to determine which performs better against a defined metric (conversion, engagement, retention, etc.).
+
+Example:
+
+```text
+Experiment: Checkout Button
+
+Variant A (Control)
+-------------------
+Blue button
+
+Variant B (Treatment)
+---------------------
+Green button
+
+Goal:
+Increase checkout completion rate
+```
+
+## Architecture
+
+```text
+              User
+                │
+                ▼
+      Feature Flag Service
+                │
+      Variant Assignment
+                │
+         A / B / C
+                │
+                ▼
+        React Application
+                │
+      Conditional Rendering
+                │
+                ▼
+     Analytics / Event Tracking
+```
+
+The assignment should be deterministic (sticky) so the same user consistently sees the same variant.
+
+---
+
+## Typical flow
+
+```text
+User visits app
+      │
+      ▼
+Identify user
+      │
+      ▼
+Fetch experiment assignments
+      │
+      ▼
+Render assigned variant
+      │
+      ▼
+Track exposure event
+      │
+      ▼
+User interacts
+      │
+      ▼
+Track conversion metrics
+```
+
+---
+
+## Feature flags vs A/B testing
+
+Feature flags:
+
+- Enable or disable functionality
+- Gradual rollouts
+- Operational control
+
+A/B testing:
+
+- Randomized user assignment
+- Statistical comparison
+- Measures business impact
+
+Many platforms support both capabilities.
+
+---
+
+## React implementation
+
+A common approach:
+
+- Initialize the experimentation SDK at app startup.
+- Load user identity and experiment assignments.
+- Expose assignments via Context or a custom hook.
+- Conditionally render UI.
+- Track exposure when the experiment is viewed.
+- Track conversion events separately.
+
+---
+
+# Example
+
+## Create project
+
+```bash
+npm create vite@latest react-ab-demo -- --template react-ts
+cd react-ab-demo
+npm install
+npm run dev
+```
+
+---
+
+## Experiment Context
+
+```tsx
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+
+type Variant = "A" | "B";
+
+const ExperimentContext = createContext<Variant>("A");
+
+export function ExperimentProvider({ children }: { children: ReactNode }) {
+  // Replace with SDK result (LaunchDarkly, GrowthBook, etc.)
+  const variant = useMemo<Variant>(() => (Math.random() > 0.5 ? "A" : "B"), []);
+
+  return (
+    <ExperimentContext.Provider value={variant}>
+      {children}
+    </ExperimentContext.Provider>
+  );
+}
+
+export function useExperiment() {
+  return useContext(ExperimentContext);
+}
+```
+
+---
+
+## Component
+
+```tsx
+import { useExperiment } from "./ExperimentContext";
+
+export default function CheckoutButton() {
+  const variant = useExperiment();
+
+  return <button>{variant === "A" ? "Buy Now" : "Complete Purchase"}</button>;
+}
+```
+
+> **Note:** This example uses `Math.random()` only for demonstration. In production, use a server-side or SDK-provided assignment to ensure users consistently receive the same variant across sessions.
+
+---
+
+# Tooling & Setup
+
+### Preferred stack
+
+- **Vite + React + TypeScript**
+- React 18+
+- ES Modules
+
+Avoid **Create React App**, as it is deprecated.
+
+### Common experimentation platforms
+
+- **LaunchDarkly** – Feature flags and experimentation
+- **Optimizely** – Enterprise experimentation
+- **GrowthBook** – Open-source feature flags and A/B testing
+- **Statsig** – Feature management and experimentation
+- **PostHog** – Product analytics with experiments
+
+### Why Vite?
+
+- Fast development server
+- Native ESM support
+- Optimized production builds
+- Excellent TypeScript support
+
+### ESM vs CommonJS
+
+Modern React applications should use **ES Modules (ESM)**. Vite bundles dependencies with Rollup for production while providing a fast ESM-based development experience.
+
+---
+
+# Performance
+
+### Avoid unnecessary re-renders
+
+Memoize expensive experiment-dependent calculations:
+
+```tsx
+const config = useMemo(() => buildConfig(variant), [variant]);
+```
+
+Memoize callbacks passed to children:
+
+```tsx
+const handleClick = useCallback(() => {
+  trackConversion();
+}, []);
+```
+
+Use `React.memo` for components that receive stable props.
+
+---
+
+### Lazy-load experiment code
+
+If an experiment introduces a large component:
+
+```tsx
+const NewCheckout = React.lazy(() => import("./NewCheckout"));
+```
+
+Load it only for users assigned to that variant.
+
+---
+
+### Server-side assignment
+
+Prefer assigning variants on the server or edge for:
+
+- Consistent SSR/CSR rendering
+- Reduced layout shifts
+- SEO-sensitive pages
+- Stable hydration
+
+---
+
+### Profiling
+
+Use:
+
+- React DevTools Profiler
+- Browser Performance panel
+- Lighthouse
+- Bundle analyzer
+
+Verify that experiment code does not significantly increase bundle size or render time.
+
+---
+
+# Testing
+
+Use **Vitest + React Testing Library**:
+
+```bash
+npm install -D vitest @testing-library/react jsdom
+```
+
+Example:
+
+```tsx
+render(
+  <ExperimentContext.Provider value="B">
+    <CheckoutButton />
+  </ExperimentContext.Provider>,
+);
+
+expect(screen.getByText("Complete Purchase")).toBeInTheDocument();
+```
+
+Also add integration tests to verify:
+
+- Correct variant rendering
+- Exposure tracking
+- Conversion event tracking
+- Sticky assignment behavior
+
+Use **Playwright** for end-to-end tests covering complete experiment flows.
+
+---
+
+# Ops & Deployment
+
+- Roll out experiments gradually (e.g., 1% → 10% → 50% → 100%).
+- Keep experiment assignment sticky across sessions and devices where appropriate.
+- Track exposure before measuring conversions to avoid biased results.
+- Log experiment IDs and variants for debugging and analytics.
+- Remove completed experiments promptly to reduce technical debt and bundle size.
+- For SSR frameworks (e.g., Next.js), perform variant assignment on the server when possible to avoid hydration mismatches.
+
+---
+
+# Pitfalls
+
+- **Assigning variants on every render**, causing users to switch experiences. Persist assignments using an SDK, cookie, or user profile.
+- **Running multiple overlapping experiments** on the same UI without considering interaction effects, which can invalidate results.
+- **Leaving completed experiment code** in the codebase, increasing maintenance costs and bundle size.
 
 ## Question 11. How do you integrate analytics (Google Analytics, Segment) in React apps?
 
