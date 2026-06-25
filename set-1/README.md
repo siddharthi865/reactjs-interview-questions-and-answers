@@ -1550,13 +1550,1468 @@ test("renders counter title", () => {
 
 ## Question 6. What is the difference between props and state in React?
 
+# Props vs State in React
+
+## Short answer
+
+**Props** are read-only inputs passed from a parent component to a child, while **state** is internal, mutable data managed within a component that can change over time and triggers re-rendering when updated.
+
+---
+
+# Explanation
+
+## 1. What are Props?
+
+**Props (properties)** are used to pass data from one component to another, typically from parent → child.
+
+### Key idea:
+
+> Props are immutable (read-only) inside the receiving component.
+
+### Example:
+
+```tsx id="props1"
+type Props = {
+  name: string;
+};
+
+export default function Greeting({ name }: Props) {
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+### Usage:
+
+```tsx id="props2"
+<Greeting name="Alice" />
+```
+
+### Characteristics of Props:
+
+- Passed from parent to child
+- Read-only
+- Used for configuration and data flow
+- Enable component reusability
+
+---
+
+## 2. What is State?
+
+**State** is data managed inside a component that can change over time.
+
+### Key idea:
+
+> State is mutable and triggers re-render when updated.
+
+### Example:
+
+```tsx id="state1"
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <p>{count}</p>
+
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+### Characteristics of State:
+
+- Managed inside a component
+- Mutable via `setState` / `useState`
+- Triggers re-render on update
+- Used for dynamic UI behavior
+
+---
+
+## 3. Key Differences
+
+| Feature           | Props                 | State                        |
+| ----------------- | --------------------- | ---------------------------- |
+| Definition        | Input to a component  | Internal data of a component |
+| Mutability        | Immutable (read-only) | Mutable                      |
+| Ownership         | Parent component      | Component itself             |
+| Purpose           | Pass data down        | Manage dynamic behavior      |
+| Re-render trigger | Parent change         | State update                 |
+| Direction         | Top-down              | Internal                     |
+
+---
+
+## 4. Data Flow Concept
+
+React follows **unidirectional data flow**:
+
+```text id="flow1"
+Parent State
+     ↓
+   Props
+     ↓
+Child Component
+```
+
+Example:
+
+```tsx id="flow2"
+function Parent() {
+  const [name] = useState("Alice");
+
+  return <Child name={name} />;
+}
+
+function Child({ name }: { name: string }) {
+  return <h1>{name}</h1>;
+}
+```
+
+Here:
+
+- Parent owns the data (state)
+- Child receives it (props)
+
+---
+
+## 5. When to use Props vs State
+
+### Use Props when:
+
+- Passing data to child components
+- Configuring reusable components
+- Sharing read-only values
+
+### Use State when:
+
+- Data changes over time
+- Handling user interactions
+- Managing UI behavior (toggle, form input, modal open/close)
+
+---
+
+## 6. React 18 behavior (important for interviews)
+
+When state or props change:
+
+- React schedules a re-render
+- Uses **automatic batching** (React 18)
+- Updates Virtual DOM
+- Applies minimal changes to real DOM via reconciliation
+
+### Example:
+
+```tsx id="react18"
+setCount(1);
+setName("John");
+// React batches both updates into a single render
+```
+
+---
+
+## 7. Example combining Props + State
+
+### Setup (Vite + React + TypeScript)
+
+```bash id="setup-props-state"
+npm create vite@latest props-state-demo -- --template react-ts
+cd props-state-demo
+npm install
+npm run dev
+```
+
+---
+
+### Example:
+
+```tsx id="example1"
+import { useState } from "react";
+
+type ButtonProps = {
+  label: string;
+  onClick: () => void;
+};
+
+function Button({ label, onClick }: ButtonProps) {
+  return <button onClick={onClick}>{label}</button>;
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <h1>Count: {count}</h1>
+
+      <Button label="Increment" onClick={() => setCount((c) => c + 1)} />
+    </div>
+  );
+}
+```
+
+### What this demonstrates:
+
+- `count` → state (internal to App)
+- `label`, `onClick` → props (passed to Button)
+- Clear separation of responsibilities
+
+---
+
+## 8. Performance considerations
+
+- **State changes trigger re-renders** → avoid unnecessary state duplication
+- Lift state up only when necessary (avoid prop drilling explosion)
+- Use memoization:
+  - `React.memo` for props-only components
+  - `useMemo` for derived values
+  - `useCallback` for stable function props
+
+- Avoid passing new object/array props every render unless needed
+
+---
+
+## 9. Testing
+
+Using **Vitest + React Testing Library**:
+
+```bash id="test-props-state"
+npm install -D vitest @testing-library/react jsdom
+```
+
+### Example test:
+
+```tsx id="test1"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("renders count and button", () => {
+  render(<App />);
+  expect(screen.getByText(/Count:/)).toBeInTheDocument();
+  expect(screen.getByRole("button")).toBeInTheDocument();
+});
+```
+
+---
+
+## 10. Ops & Deployment
+
+- State-heavy apps should be optimized for re-renders (React DevTools Profiler)
+- Use state management libraries when props drilling becomes complex:
+  - Zustand
+  - Redux Toolkit
+  - React Context (for lightweight sharing)
+
+- Prefer SSR (Next.js) for SEO-heavy or initial-load-sensitive apps
+- Deploy via Vercel/Netlify with CDN caching for static assets
+- Use error boundaries to handle runtime failures gracefully
+
+---
+
+## 11. Common pitfalls
+
+- ❌ Mutating props inside a component (React enforces immutability)
+- ❌ Overusing state for data that could be props
+- ❌ Prop drilling too deeply instead of using context or state libraries
+- ❌ Treating state updates as synchronous (they are batched in React 18)
+
 ## Question 7. How do you pass data from parent to child component?
+
+# Passing Data from Parent to Child in React
+
+## Short answer
+
+In React, data is passed from a **parent component to a child component using props**. Props are read-only values passed as attributes when rendering the child component.
+
+---
+
+# Explanation
+
+## 1. Core Concept: Unidirectional Data Flow
+
+React follows a **top-down (unidirectional) data flow**:
+
+```text
+Parent Component
+       ↓ props
+Child Component
+```
+
+- Parent owns the data
+- Child receives data via props
+- Child cannot directly modify parent data (it can only request changes via callbacks)
+
+This makes the data flow predictable and easier to debug.
+
+---
+
+## 2. Basic Props Passing
+
+### Parent Component
+
+```tsx id="parent1"
+import Child from "./Child";
+
+export default function Parent() {
+  const message = "Hello from Parent";
+
+  return <Child text={message} />;
+}
+```
+
+### Child Component
+
+```tsx id="child1"
+type Props = {
+  text: string;
+};
+
+export default function Child({ text }: Props) {
+  return <h1>{text}</h1>;
+}
+```
+
+---
+
+## 3. Passing Different Types of Data
+
+Props can pass:
+
+- Strings
+- Numbers
+- Booleans
+- Arrays
+- Objects
+- Functions (callbacks)
+- JSX elements
+
+### Example:
+
+```tsx id="types1"
+<Child
+  name="Alice"
+  age={25}
+  isLoggedIn={true}
+  hobbies={["coding", "music"]}
+  user={{ id: 1, role: "admin" }}
+/>
+```
+
+---
+
+## 4. Passing Functions (Important Pattern)
+
+To allow child → parent communication, you pass a function as a prop.
+
+### Parent
+
+```tsx id="parent2"
+import Child from "./Child";
+
+export default function Parent() {
+  const handleMessage = (msg: string) => {
+    console.log("Child says:", msg);
+  };
+
+  return <Child onSendMessage={handleMessage} />;
+}
+```
+
+### Child
+
+```tsx id="child2"
+type Props = {
+  onSendMessage: (msg: string) => void;
+};
+
+export default function Child({ onSendMessage }: Props) {
+  return (
+    <button onClick={() => onSendMessage("Hello Parent!")}>Send Message</button>
+  );
+}
+```
+
+### Why this is important:
+
+- Enables child-to-parent communication
+- Used in forms, modals, event handling, etc.
+
+---
+
+## 5. Passing JSX as Props (Composition Pattern)
+
+React allows passing UI as props for flexible layouts.
+
+### Parent
+
+```tsx id="parent3"
+import Child from "./Child";
+
+export default function Parent() {
+  return (
+    <Child>
+      <p>This is passed as children</p>
+    </Child>
+  );
+}
+```
+
+### Child
+
+```tsx id="child3"
+type Props = {
+  children: React.ReactNode;
+};
+
+export default function Child({ children }: Props) {
+  return <div>{children}</div>;
+}
+```
+
+---
+
+## 6. React 18 Behavior (Important Interview Insight)
+
+When props change:
+
+- Parent re-renders
+- Child re-renders (unless memoized)
+- React uses **Virtual DOM diffing** to update only changed parts
+
+### Optimization tools:
+
+- `React.memo` → prevents unnecessary child re-renders
+- `useCallback` → stabilizes function props
+- `useMemo` → stabilizes computed props
+
+---
+
+## 7. Example (Complete)
+
+### Setup (Vite + React + TypeScript)
+
+```bash id="setup1"
+npm create vite@latest parent-child-demo -- --template react-ts
+cd parent-child-demo
+npm install
+npm run dev
+```
+
+---
+
+### Parent Component
+
+```tsx id="parent4"
+import { useState } from "react";
+import Child from "./Child";
+
+export default function Parent() {
+  const [count, setCount] = useState(0);
+
+  const increment = () => setCount((c) => c + 1);
+
+  return (
+    <div>
+      <h1>Parent Count: {count}</h1>
+
+      <Child value={count} onIncrement={increment} />
+    </div>
+  );
+}
+```
+
+---
+
+### Child Component
+
+```tsx id="child4"
+type Props = {
+  value: number;
+  onIncrement: () => void;
+};
+
+export default function Child({ value, onIncrement }: Props) {
+  return (
+    <div>
+      <h2>Child sees value: {value}</h2>
+
+      <button onClick={onIncrement}>Increment from Child</button>
+    </div>
+  );
+}
+```
+
+### Key idea:
+
+- Parent owns state
+- Child displays and triggers updates
+- Data flows down, actions flow up
+
+---
+
+## 8. Performance considerations
+
+- Passing new object/array props every render causes child re-renders
+- Use memoization:
+
+```tsx id="memo1"
+const memoizedValue = useMemo(() => computeExpensiveValue(), []);
+const memoizedFn = useCallback(() => {}, []);
+```
+
+- Wrap child in `React.memo`:
+
+```tsx id="memo2"
+export default React.memo(Child);
+```
+
+- Avoid unnecessary re-renders in large component trees
+
+---
+
+## 9. Testing
+
+Using **Vitest + React Testing Library**:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react jsdom
+```
+
+### Example test:
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import Parent from "./Parent";
+
+test("passes data to child", () => {
+  render(<Parent />);
+  expect(screen.getByText(/Child sees value:/)).toBeInTheDocument();
+});
+```
+
+---
+
+## 10. Ops & Deployment
+
+- Avoid excessive prop drilling in deep component trees
+- Use:
+  - Context API (lightweight global state)
+  - Zustand / Redux Toolkit (complex apps)
+
+- Use React DevTools to inspect prop flow
+- Deploy via Vite build (`npm run build`) to CDN (Vercel, Netlify, Cloudflare)
+- Add error boundaries for runtime safety
+
+---
+
+## 11. Common pitfalls
+
+- ❌ Mutating props inside child components
+- ❌ Overusing prop drilling instead of context/state libraries
+- ❌ Passing unstable references (causing unnecessary re-renders)
+- ❌ Mixing state ownership between parent and child (confusing data flow)
 
 ## Question 8. What are default props?
 
+# Default Props in React
+
+## Short answer
+
+**Default props** are fallback values assigned to component props when no value is provided by the parent. In modern React (functional components), default values are typically handled using **ES6 default parameters** instead of `defaultProps`.
+
+---
+
+# Explanation
+
+## 1. What are Default Props?
+
+Default props ensure that a component behaves correctly even if some props are not passed.
+
+### Example problem:
+
+If a parent forgets to pass a prop, the component might render `undefined`.
+
+```tsx id="bad1"
+function Greeting({ name }) {
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+If used like:
+
+```tsx id="bad2"
+<Greeting />
+```
+
+Output:
+
+```
+Hello, undefined ❌
+```
+
+---
+
+## 2. Solution: Default Props
+
+### ✅ Modern approach (recommended): Default parameters
+
+```tsx id="default1"
+type Props = {
+  name?: string;
+};
+
+export default function Greeting({ name = "Guest" }: Props) {
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+Now:
+
+```tsx id="default2"
+<Greeting />
+```
+
+Output:
+
+```
+Hello, Guest ✅
+```
+
+---
+
+## 3. Alternative (Legacy): defaultProps
+
+Used mainly in **class components** or older React codebases.
+
+```tsx id="legacy1"
+type Props = {
+  name?: string;
+};
+
+function Greeting({ name }: Props) {
+  return <h1>Hello, {name}</h1>;
+}
+
+Greeting.defaultProps = {
+  name: "Guest",
+};
+```
+
+⚠️ Note:
+
+- Still supported, but **not recommended for functional components**
+- Considered legacy in modern React
+
+---
+
+## 4. Default Props in Class Components
+
+```tsx id="class1"
+import React from "react";
+
+type Props = {
+  name?: string;
+};
+
+class Greeting extends React.Component<Props> {
+  static defaultProps = {
+    name: "Guest",
+  };
+
+  render() {
+    return <h1>Hello, {this.props.name}</h1>;
+  }
+}
+```
+
+---
+
+## 5. Default Props with Destructuring (Best Practice)
+
+### Recommended modern pattern:
+
+```tsx id="best1"
+type Props = {
+  name?: string;
+  age?: number;
+};
+
+export default function User({ name = "Guest", age = 18 }: Props) {
+  return (
+    <p>
+      {name} is {age} years old
+    </p>
+  );
+}
+```
+
+---
+
+## 6. Why Default Props are important
+
+### 1. Prevent undefined UI bugs
+
+Avoid rendering issues like:
+
+- `undefined`
+- `null`
+- broken layouts
+
+---
+
+### 2. Improve component reusability
+
+Components become self-contained and safe to use.
+
+---
+
+### 3. Better developer experience
+
+Callers don’t need to pass every prop.
+
+---
+
+## 7. React 18 Behavior
+
+Default props are applied:
+
+- During function execution (before rendering)
+- Before React reconciliation
+- No special runtime cost from React itself
+
+React treats them like normal JavaScript values.
+
+---
+
+## 8. Example (Full setup)
+
+### Setup (Vite + React + TypeScript)
+
+```bash id="setup1"
+npm create vite@latest default-props-demo -- --template react-ts
+cd default-props-demo
+npm install
+npm run dev
+```
+
+---
+
+### Component Example
+
+```tsx id="example1"
+type Props = {
+  title?: string;
+  count?: number;
+};
+
+export default function Card({ title = "Default Title", count = 0 }: Props) {
+  return (
+    <div>
+      <h2>{title}</h2>
+      <p>Count: {count}</p>
+    </div>
+  );
+}
+```
+
+### Usage:
+
+```tsx id="example2"
+<Card />
+<Card title="Custom Title" count={5} />
+```
+
+---
+
+## 9. Performance considerations
+
+- Default props are simple JS defaults → no performance overhead
+- Avoid computing expensive defaults inline unnecessarily:
+
+❌ Bad:
+
+```tsx id="perf1"
+function Comp({ data = expensiveCalculation() }) {}
+```
+
+✔ Better:
+
+```tsx id="perf2"
+const defaultValue = expensiveCalculation();
+
+function Comp({ data = defaultValue }) {}
+```
+
+- Works well with memoized components (`React.memo`)
+
+---
+
+## 10. Testing
+
+Using **Vitest + React Testing Library**:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react jsdom
+```
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import Card from "./Card";
+
+test("renders default values", () => {
+  render(<Card />);
+  expect(screen.getByText(/Default Title/)).toBeInTheDocument();
+});
+```
+
+---
+
+## 11. Ops & Deployment
+
+- Default props help reduce runtime errors in production
+- Combine with TypeScript optional props (`?`) for safety
+- Works well in SSR frameworks (Next.js, Remix)
+- Helps prevent hydration mismatches caused by undefined values
+- Use error boundaries for fallback UI at a higher level
+
+---
+
+## 12. Common pitfalls
+
+- ❌ Using `defaultProps` in modern functional components (deprecated pattern)
+- ❌ Forgetting optional props (`?`) in TypeScript
+- ❌ Computing expensive default values inline
+- ❌ Assuming default props override explicitly passed `null` (they do not)
+
 ## Question 9. How do you handle events in React? Give examples
 
+# Handling Events in React
+
+## Short answer
+
+In React, events are handled using **camelCase event handlers** (like `onClick`, `onChange`) and passing **functions** instead of strings. React wraps native browser events using a **Synthetic Event system** to ensure consistent behavior across browsers.
+
+---
+
+# Explanation
+
+## 1. React Event System
+
+React does not use raw DOM event strings like HTML:
+
+### ❌ HTML-style (not used in React)
+
+```html
+<button onclick="handleClick()">Click</button>
+```
+
+### ✅ React style
+
+```tsx id="event1"
+<button onClick={handleClick}>Click</button>
+```
+
+### Key differences:
+
+- Event names are **camelCase** (`onClick`, `onChange`, `onSubmit`)
+- You pass a **function reference**, not a string
+- React uses a **SyntheticEvent wrapper** for cross-browser consistency
+
+---
+
+## 2. Basic Event Handling
+
+### Example: Click event
+
+```tsx id="click1"
+export default function App() {
+  function handleClick() {
+    console.log("Button clicked!");
+  }
+
+  return <button onClick={handleClick}>Click me</button>;
+}
+```
+
+---
+
+## 3. Inline Event Handlers
+
+You can also define handlers inline:
+
+```tsx id="inline1"
+<button onClick={() => console.log("Clicked!")}>Click me</button>
+```
+
+⚠️ Use inline handlers carefully (can cause re-renders in large apps)
+
+---
+
+## 4. Passing Parameters to Event Handlers
+
+You must use an arrow function to pass arguments:
+
+```tsx id="param1"
+function greet(name: string) {
+  console.log("Hello", name);
+}
+
+export default function App() {
+  return <button onClick={() => greet("Alice")}>Greet Alice</button>;
+}
+```
+
+---
+
+## 5. Handling Form Events
+
+### Example: onChange + controlled input
+
+```tsx id="form1"
+import { useState } from "react";
+
+export default function App() {
+  const [value, setValue] = useState("");
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setValue(e.target.value);
+  }
+
+  return (
+    <div>
+      <input value={value} onChange={handleChange} />
+      <p>You typed: {value}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## 6. Form Submission Event
+
+```tsx id="submit1"
+function App() {
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    console.log("Form submitted");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+### Important:
+
+- `e.preventDefault()` stops page reload
+
+---
+
+## 7. React Synthetic Events
+
+React wraps native browser events into a **SyntheticEvent**.
+
+### Benefits:
+
+- Cross-browser compatibility
+- Consistent API
+- Event pooling (older React versions)
+
+Example:
+
+```tsx id="synthetic1"
+function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+  console.log(e.type); // "click"
+  console.log(e.target);
+}
+```
+
+---
+
+## 8. Common Event Types in React
+
+| Event        | Type                           |
+| ------------ | ------------------------------ |
+| Click        | `onClick`                      |
+| Input change | `onChange`                     |
+| Form submit  | `onSubmit`                     |
+| Key press    | `onKeyDown`, `onKeyUp`         |
+| Focus        | `onFocus`                      |
+| Blur         | `onBlur`                       |
+| Mouse events | `onMouseEnter`, `onMouseLeave` |
+
+---
+
+## 9. Example: Multiple Events Together
+
+```tsx id="multi1"
+import { useState } from "react";
+
+export default function App() {
+  const [text, setText] = useState("");
+
+  return (
+    <div>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={() => console.log("Focused")}
+        onBlur={() => console.log("Blurred")}
+      />
+
+      <button onClick={() => alert(text)}>Show Text</button>
+    </div>
+  );
+}
+```
+
+---
+
+## 10. React 18 Behavior
+
+Event handling in React 18 integrates with:
+
+- **Automatic batching**
+  - Multiple state updates inside events are batched
+
+```tsx id="batch1"
+function handleClick() {
+  setCount((c) => c + 1);
+  setName("John");
+  // React batches both updates → single re-render
+}
+```
+
+- **Concurrent rendering**
+  - Event updates can be interrupted or prioritized
+
+- **Synthetic event system still applies**, but is now more aligned with native browser behavior (less pooling than older React versions)
+
+---
+
+## 11. Example (Full Setup)
+
+### Setup (Vite + React + TypeScript)
+
+```bash id="setup1"
+npm create vite@latest react-events -- --template react-ts
+cd react-events
+npm install
+npm run dev
+```
+
+---
+
+### Example Component
+
+```tsx id="example1"
+import { useState } from "react";
+
+export default function App() {
+  const [message, setMessage] = useState("");
+
+  function handleClick() {
+    setMessage("Button clicked!");
+  }
+
+  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
+    setMessage(e.target.value);
+  }
+
+  return (
+    <div>
+      <input value={message} onChange={handleInput} />
+
+      <button onClick={handleClick}>Click Me</button>
+
+      <p>{message}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## 12. Performance considerations
+
+- Avoid creating inline functions unnecessarily in large lists
+- Use `useCallback` to memoize event handlers:
+
+```tsx id="perf1"
+const handleClick = useCallback(() => {
+  setCount((c) => c + 1);
+}, []);
+```
+
+- Prevent unnecessary re-renders with `React.memo`
+- Avoid heavy computations inside event handlers
+- Debounce/throttle input-heavy events (search, scroll)
+
+---
+
+## 13. Testing events
+
+Using **Vitest + React Testing Library**:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react @testing-library/user-event jsdom
+```
+
+### Example:
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "./App";
+
+test("handles click event", async () => {
+  render(<App />);
+
+  const button = screen.getByText("Click Me");
+  await userEvent.click(button);
+
+  expect(screen.getByText(/clicked/i)).toBeInTheDocument();
+});
+```
+
+---
+
+## 14. Ops & Deployment
+
+- Ensure event handlers are stable to reduce re-renders
+- Use error boundaries for event-driven runtime failures
+- Monitor performance using React DevTools Profiler
+- Optimize large forms with controlled vs uncontrolled inputs
+- Deploy via Vite build (`npm run build`) to CDN (Vercel/Netlify/Cloudflare)
+
+---
+
+## 15. Common pitfalls
+
+- ❌ Calling function instead of passing it: `onClick={handleClick()}`
+- ❌ Using inline handlers everywhere in large components
+- ❌ Forgetting `preventDefault()` in forms
+- ❌ Not typing event objects in TypeScript
+- ❌ Overusing state updates inside rapid events without debouncing
+
 ## Question 10. What is conditional rendering? Give examples
+
+# Conditional Rendering in React
+
+## Short answer
+
+**Conditional rendering** in React means showing or hiding UI elements based on certain conditions (like state, props, or logic). It allows components to render different outputs dynamically depending on application state.
+
+---
+
+# Explanation
+
+## 1. Core idea
+
+In React, UI is a function of state:
+
+```text id="cr1"
+UI = f(state)
+```
+
+So when state or props change, React decides **what to render using conditions**.
+
+Unlike frameworks with templates, React uses **JavaScript logic directly inside JSX**.
+
+---
+
+## 2. Common ways to do conditional rendering
+
+---
+
+## 2.1 If-else (outside JSX)
+
+Best for complex logic.
+
+```tsx id="cr2"
+function App() {
+  const isLoggedIn = true;
+
+  if (isLoggedIn) {
+    return <h1>Welcome Back!</h1>;
+  }
+
+  return <h1>Please Login</h1>;
+}
+```
+
+---
+
+## 2.2 Ternary operator (inside JSX)
+
+Most commonly used.
+
+```tsx id="cr3"
+function App() {
+  const isLoggedIn = true;
+
+  return <div>{isLoggedIn ? <h1>Welcome</h1> : <h1>Login</h1>}</div>;
+}
+```
+
+---
+
+## 2.3 Logical AND (&&)
+
+Used when you want to render **something or nothing**.
+
+```tsx id="cr4"
+function App() {
+  const showMessage = true;
+
+  return <div>{showMessage && <p>This is a conditional message</p>}</div>;
+}
+```
+
+### Behavior:
+
+- If `true` → renders element
+- If `false` → renders nothing
+
+---
+
+## 2.4 Multiple conditions
+
+```tsx id="cr5"
+function App() {
+  const status = "loading";
+
+  return (
+    <div>
+      {status === "loading" && <p>Loading...</p>}
+      {status === "success" && <p>Data loaded!</p>}
+      {status === "error" && <p>Something went wrong</p>}
+    </div>
+  );
+}
+```
+
+---
+
+## 2.5 Switch-case (outside JSX)
+
+Useful for complex state-based rendering.
+
+```tsx id="cr6"
+function renderContent(status: string) {
+  switch (status) {
+    case "loading":
+      return <p>Loading...</p>;
+    case "success":
+      return <p>Success!</p>;
+    case "error":
+      return <p>Error occurred</p>;
+    default:
+      return null;
+  }
+}
+
+export default function App() {
+  const status = "loading";
+
+  return <div>{renderContent(status)}</div>;
+}
+```
+
+---
+
+## 3. Conditional rendering with state
+
+### Example: Toggle UI
+
+```tsx id="cr7"
+import { useState } from "react";
+
+export default function App() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setIsOpen((prev) => !prev)}>Toggle</button>
+
+      {isOpen ? <p>Modal is Open</p> : <p>Modal is Closed</p>}
+    </div>
+  );
+}
+```
+
+---
+
+## 4. Conditional rendering of components
+
+You can conditionally render entire components.
+
+```tsx id="cr8"
+function AdminPanel() {
+  return <h1>Admin Dashboard</h1>;
+}
+
+function UserPanel() {
+  return <h1>User Dashboard</h1>;
+}
+
+export default function App() {
+  const role = "admin";
+
+  return <div>{role === "admin" ? <AdminPanel /> : <UserPanel />}</div>;
+}
+```
+
+---
+
+## 5. Conditional rendering with null
+
+Returning `null` means “render nothing”.
+
+```tsx id="cr9"
+function App() {
+  const showHeader = false;
+
+  return <div>{showHeader ? <h1>Header</h1> : null}</div>;
+}
+```
+
+---
+
+## 6. React 18 behavior
+
+Conditional rendering interacts with:
+
+### 1. Reconciliation
+
+React compares previous and new Virtual DOM and:
+
+- Mounts new elements when condition becomes true
+- Unmounts when condition becomes false
+
+### 2. Automatic batching
+
+State updates that affect conditions are batched:
+
+```tsx id="cr10"
+setIsLoggedIn(true);
+setLoading(false);
+// React batches → single re-render
+```
+
+### 3. Component lifecycle effects
+
+When conditionally rendering components:
+
+- Mount → `useEffect(() => {}, [])`
+- Unmount → cleanup function runs
+
+```tsx id="cr11"
+useEffect(() => {
+  return () => {
+    console.log("Component unmounted");
+  };
+}, []);
+```
+
+---
+
+## 7. Example (Full App)
+
+### Setup (Vite + React + TypeScript)
+
+```bash id="setup1"
+npm create vite@latest conditional-demo -- --template react-ts
+cd conditional-demo
+npm install
+npm run dev
+```
+
+---
+
+### Example:
+
+```tsx id="cr12"
+import { useState } from "react";
+
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setIsLoggedIn((v) => !v)}>Toggle Login</button>
+
+      <button onClick={() => setLoading((v) => !v)}>Toggle Loading</button>
+
+      {loading ? (
+        <p>Loading...</p>
+      ) : isLoggedIn ? (
+        <h1>Welcome User</h1>
+      ) : (
+        <h1>Please Login</h1>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## 8. Performance considerations
+
+- Avoid complex inline conditions in JSX (extract logic into variables/functions)
+- Be careful with deeply nested ternaries (hard to maintain)
+- Use memoized components (`React.memo`) to avoid unnecessary re-renders
+- Conditional rendering causes mount/unmount cycles → can be expensive if overused
+- Use `Suspense` for async conditional UI instead of manual loading flags
+
+---
+
+## 9. Testing conditional rendering
+
+Using **Vitest + React Testing Library**:
+
+```bash id="test1"
+npm install -D vitest @testing-library/react jsdom
+```
+
+### Example:
+
+```tsx id="test2"
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+
+test("shows login message", () => {
+  render(<App />);
+  expect(screen.getByText(/Please Login/i)).toBeInTheDocument();
+});
+```
+
+---
+
+## 10. Ops & Deployment
+
+- Conditional rendering impacts bundle usage via code splitting (`React.lazy`)
+- Use error boundaries to handle failed conditional components
+- SSR frameworks (Next.js) may pre-render different UI paths
+- Avoid rendering heavy components unnecessarily (performance optimization)
+- Monitor UI branching complexity in large apps
+
+---
+
+## 11. Common pitfalls
+
+- ❌ Using `&&` with non-boolean values (e.g., numbers like `0`)
+- ❌ Overusing nested ternary operators (hard to read)
+- ❌ Forgetting component unmount cleanup in conditional rendering
+- ❌ Rendering expensive components without memoization
+- ❌ Mixing multiple conditional styles without structure
 
 ## Question 11. What are lists and keys in React? Why are keys important?
 
