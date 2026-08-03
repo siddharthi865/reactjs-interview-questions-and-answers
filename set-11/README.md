@@ -24,6 +24,24 @@
 
 ## Question 1. What is the difference between React and React Native?
 
+## Question 2. How do you include CSS in React components?
+
+## Question 3. What is the difference between inline, internal, and external CSS in React?
+
+## Question 4. How do you apply conditional rendering with ternary operators?
+
+## Question 5. How do you handle multiple class names dynamically?
+
+## Question 6. What is the difference between state and props immutability?
+
+## Question 7. How do you combine multiple states into a single object in functional components?
+
+## Question 8. What are `defaultProps` and when are they useful?
+
+## Question 9. How do you pass props to nested child components?
+
+## Question 10. How do you handle button click events in functional components?
+
 ## Question 11. How do you render HTML content from a string safely?
 
 ## Question 12. How do you stop event propagation in React?
