@@ -25,6 +25,24 @@
 
 ## Question 1. How do you share state between sibling components?
 
+## Question 2. How do you create a reusable modal component with context?
+
+## Question 3. How do you implement tab-based navigation with state?
+
+## Question 4. How do you optimize component rendering with `React.memo`?
+
+## Question 5. How do you use `useEffect` to listen to window resize events?
+
+## Question 6. How do you implement theme switching using context and hooks?
+
+## Question 7. How do you debounce input search using `useEffect`?
+
+## Question 8. How do you cancel fetch requests in `useEffect`?
+
+## Question 9. How do you implement a countdown timer with hooks?
+
+## Question 10. How do you implement a "read more / read less" feature?
+
 ## Question 11. How do you fetch data when a user scrolls to the bottom of a page?
 
 ## Question 12. How do you implement a dynamic form with multiple sections?
