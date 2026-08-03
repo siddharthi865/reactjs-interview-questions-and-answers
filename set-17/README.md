@@ -25,6 +25,14 @@
 
 ## Question 1. How do you toggle CSS classes dynamically in React?
 
+## Question 2. How do you render a "loading" spinner while data is being fetched?
+
+## Question 3. How do you create a reusable input component?
+
+## Question 4. How do you handle simple inline validation for an input field?
+
+## Question 5. How do you implement a "show password" toggle?
+
 ## Question 6. How do you display the length of a text input dynamically?
 
 ## Question 7. How do you clear input fields after submission?
