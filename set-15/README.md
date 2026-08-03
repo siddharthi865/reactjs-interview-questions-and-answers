@@ -25,6 +25,24 @@
 
 ## Question 1. How do you implement protected routes with React Router v6?
 
+## Question 2. How do you implement role-based access control in React apps?
+
+## Question 3. How do you integrate GraphQL with Apollo Client?
+
+## Question 4. How do you implement lazy-loaded routes with React Router?
+
+## Question 5. How do you implement React Query for data fetching and caching?
+
+## Question 6. How do you implement state normalization for complex apps?
+
+## Question 7. How do you implement advanced performance optimization with useMemo and useCallback?
+
+## Question 8. How do you handle heavy computations without blocking UI using web workers?
+
+## Question 9. How do you implement offline-first apps with service workers?
+
+## Question 10. How do you implement A/B testing in React applications?
+
 ## Question 11. How do you integrate analytics (Google Analytics, Segment) in React apps?
 
 ## Question 12. How do you implement micro-frontend architecture using React?
