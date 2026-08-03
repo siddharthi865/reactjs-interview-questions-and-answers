@@ -25,6 +25,14 @@
 
 ## Question 1. How do you implement a dynamic table with sorting and filtering?
 
+## Question 2. How do you implement a search input with debounce in a functional component?
+
+## Question 3. How do you implement a reusable modal component with animations?
+
+## Question 4. How do you implement a multi-step wizard form with progress tracking?
+
+## Question 5. How do you implement a global loader for API requests?
+
 ## Question 6. How do you implement optimistic UI updates when deleting a list item?
 
 ## Question 7. How do you implement a “copy to clipboard” button in React?
