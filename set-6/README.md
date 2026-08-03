@@ -25,6 +25,24 @@
 
 ## Question 1. What are the differences between React and Angular?
 
+## Question 2. What are the differences between React and Vue.js?
+
+## Question 3. How does React handle DOM updates?
+
+## Question 4. What is the purpose of React.createElement?
+
+## Question 5. Explain the difference between functional and class components in terms of lifecycle methods
+
+## Question 6. How do you pass multiple props to a child component?
+
+## Question 7. Can you use props to modify parent state? Why or why not?
+
+## Question 8. How do you render a component conditionally without using if statements?
+
+## Question 9. What are fragments used for in React?
+
+## Question 10. How do you prevent default form submission in React?
+
 ## Question 11. How do you bind this in class components?
 
 ## Question 12. What is the difference between state updates in class vs functional components?
