@@ -25,6 +25,14 @@
 
 ## Question 1. How do you implement virtualized lists for large datasets?
 
+## Question 2. How do you handle dynamic tabs with add/remove functionality?
+
+## Question 3. How do you implement a toast notification system globally?
+
+## Question 4. How do you implement a live search component that fetches results dynamically?
+
+## Question 5. How do you create a reusable card component with dynamic content?
+
 ## Question 6. How do you implement keyboard navigation for interactive elements?
 
 ## Question 7. How do you implement image preview before upload?
