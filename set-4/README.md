@@ -25,6 +25,24 @@
 
 ## Question 1. What is prop-types and why is it used?
 
+## Question 2. How do you test React components?
+
+## Question 3. Difference between shallow rendering and full rendering in testing
+
+## Question 4. How do you handle async operations in React?
+
+## Question 5. Explain debouncing and throttling in React components
+
+## Question 6. How do you use React.forwardRef?
+
+## Question 7. Explain controlled input with dynamic validation
+
+## Question 8. How do you fetch API data in React?
+
+## Question 9. Difference between fetch and axios in React
+
+## Question 10. How do you use setState asynchronously in class components?
+
 ## Question 11. Explain React Fiber architecture
 
 ## Question 12. How does React handle reconciliation?
