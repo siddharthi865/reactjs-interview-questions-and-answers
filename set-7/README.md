@@ -25,6 +25,24 @@
 
 ## Question 1. What are default values for props and state?
 
+## Question 2. How do you access DOM elements in class components?
+
+## Question 3. What is the difference between ReactDOM.render and ReactDOM.createRoot?
+
+## Question 4. How do you prevent a component from rendering?
+
+## Question 5. What is the difference between local and global state in React?
+
+## Question 6. Can you update state directly without setState? Why not?
+
+## Question 7. How do you handle multiple inputs in a form?
+
+## Question 8. How do you pass functions as props?
+
+## Question 9. How do you conditionally render components using logical operators?
+
+## Question 10. How do you debug React component lifecycle issues?
+
 ## Question 11. What is the difference between a controlled input and a read-only input?
 
 ## Question 12. How do you handle component cleanup in functional components?
