@@ -25,6 +25,24 @@
 
 ## Question 1. Difference between thunk, saga, and observable in Redux
 
+## Question 2. How do you structure a large React project?
+
+## Question 3. How do you implement authentication in React?
+
+## Question 4. Explain JWT-based authentication in React apps
+
+## Question 5. How do you implement route guards in React Router?
+
+## Question 6. Explain Progressive Web App (PWA) features in React
+
+## Question 7. How do you handle real-time updates in React apps (WebSocket, SSE)?
+
+## Question 8. How do you prevent XSS attacks in React apps?
+
+## Question 9. What is lazy loading of images in React?
+
+## Question 10. How do you implement infinite scrolling in React?
+
 ## Question 11. Difference between controlled, uncontrolled, and hybrid components
 
 ## Question 12. How do you memoize expensive functions in React?
