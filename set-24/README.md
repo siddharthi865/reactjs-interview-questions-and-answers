@@ -25,6 +25,14 @@
 
 ## Question 1. How do you implement scroll-to-top buttons dynamically?
 
+## Question 2. How do you implement a global error handling system with context?
+
+## Question 3. How do you implement a multi-select dropdown with search functionality?
+
+## Question 4. How do you implement a sortable table with dynamic columns?
+
+## Question 5. How do you implement infinite scrolling with API pagination?
+
 ## Question 6. How do you implement sticky footers in React layouts?
 
 ## Question 7. How do you implement collapsible sections in content pages?
