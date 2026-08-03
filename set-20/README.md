@@ -25,6 +25,14 @@
 
 ## Question 1. How do you implement offline-first React apps with service workers?
 
+## Question 2. How do you implement analytics tracking (Google Analytics, Segment) in React?
+
+## Question 3. How do you handle cross-tab state synchronization using localStorage or IndexedDB?
+
+## Question 4. How do you implement dynamic forms driven by JSON schema?
+
+## Question 5. How do you handle large forms efficiently using React Hook Form?
+
 ## Question 6. How do you implement multi-language support (i18n) with dynamic content?
 
 ## Question 7. How do you implement virtualization for tables with thousands of rows?
