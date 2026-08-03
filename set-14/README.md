@@ -25,6 +25,24 @@
 
 ## Question 1. How do you use `useLayoutEffect` to measure DOM elements?
 
+## Question 2. How do you implement infinite scroll with pagination?
+
+## Question 3. How do you handle conditional rendering based on API response?
+
+## Question 4. How do you implement a toast notification system?
+
+## Question 5. How do you implement drag-and-drop lists in React?
+
+## Question 6. How do you implement collapsible panels or accordions?
+
+## Question 7. How do you manage state for multiple modals?
+
+## Question 8. How do you implement sorting functionality in a table?
+
+## Question 9. How do you implement a multi-select dropdown in React?
+
+## Question 10. How do you handle errors globally using an ErrorBoundary component?
+
 ## Question 11. How do you implement server-side rendering with data fetching?
 
 ## Question 12. How do you implement static generation with Next.js?
