@@ -25,6 +25,24 @@
 
 ## Question 1. How do you handle click events on dynamically created elements?
 
+## Question 2. How do you handle multiple input fields with one onChange handler?
+
+## Question 3. How do you use `map()` to render components in JSX?
+
+## Question 4. How do you conditionally render `null` in React?
+
+## Question 5. How do you prevent re-rendering when props haven't changed?
+
+## Question 6. What are the rules of JSX syntax?
+
+## Question 7. How do you render components conditionally without using ternary operators?
+
+## Question 8. How do you pass an event argument to a handler function?
+
+## Question 9. How do you implement a simple counter using state?
+
+## Question 10. How do you render default content when a prop is missing?
+
 ## Question 11. How do you use logical AND (`&&`) for conditional rendering?
 
 ## Question 12. How do you implement simple form validation in React?
