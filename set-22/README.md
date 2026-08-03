@@ -25,6 +25,14 @@
 
 ## Question 1. How do you render a default “No data available” message?
 
+## Question 2. How do you use Fragment shorthand syntax?
+
+## Question 3. How do you handle onClick events for dynamically generated buttons?
+
+## Question 4. How do you implement a “toggle visibility” component?
+
+## Question 5. How do you implement a simple slider using state?
+
 ## Question 6. How do you implement a counter with step increments?
 
 ## Question 7. How do you render elements conditionally using ternary operators in JSX?
