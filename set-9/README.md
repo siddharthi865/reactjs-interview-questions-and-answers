@@ -24,6 +24,24 @@
 
 ## Question 1. How do you handle API errors globally in React?
 
+## Question 2. How do you prevent memory leaks with subscriptions in React?
+
+## Question 3. How do you use React Context with TypeScript?
+
+## Question 4. How do you implement tab navigation in React?
+
+## Question 5. How do you implement a modal component with portals?
+
+## Question 6. How do you handle multiple async API calls simultaneously in React?
+
+## Question 7. How do you optimize re-renders in large forms?
+
+## Question 8. How do you dynamically import components in React?
+
+## Question 9. How do you implement a responsive layout in React?
+
+## Question 10. How do you handle global notifications or toast messages?
+
 ## Question 11. How does React Fiber improve performance over older React versions?
 
 ## Question 12. How do you handle Suspense for data fetching?
