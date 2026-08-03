@@ -25,6 +25,14 @@
 
 ## Question 1. How do you implement optimistic updates for likes, votes, or comments?
 
+## Question 2. How do you implement multi-tab state synchronization with localStorage events?
+
+## Question 3. How do you implement dynamic component rendering based on a JSON configuration?
+
+## Question 4. How do you implement complex drag-and-drop dashboards?
+
+## Question 5. How do you implement multi-language internationalization (i18n) in React apps?
+
 ## Question 6. How do you implement advanced memoization strategies to optimize performance?
 
 ## Question 7. How do you implement code splitting and tree shaking for large apps?
