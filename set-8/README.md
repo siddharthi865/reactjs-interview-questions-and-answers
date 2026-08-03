@@ -25,6 +25,24 @@
 
 ## Question 1. What is the difference between `useState` lazy initialization vs direct initialization?
 
+## Question 2. How do you implement theme switching using context API?
+
+## Question 3. Explain the concept of Render Props in React
+
+## Question 4. Difference between render props and higher-order components
+
+## Question 5. How do you implement infinite scroll using IntersectionObserver in React?
+
+## Question 6. How do you handle memoization of components with dynamic props?
+
+## Question 7. How do you prevent stale closures in hooks?
+
+## Question 8. Explain the difference between `componentDidMount` and `useEffect(() => {}, [])`
+
+## Question 9. How do you handle forms with dynamic fields in React?
+
+## Question 10. How do you manage state across multiple components using context?
+
 ## Question 11. How do you implement dark mode in React?
 
 ## Question 12. How do you debounce input changes in React?
