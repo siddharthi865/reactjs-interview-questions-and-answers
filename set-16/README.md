@@ -25,6 +25,18 @@
 
 ## Question 1. What is the difference between SPA (Single Page Application) and MPA (Multi Page Application) in the context of React?
 
+## Question 2. How do you create a React project without using Create React App?
+
+## Question 3. How do you update state based on previous state in functional components?
+
+## Question 4. What is the difference between setState callback and useEffect?
+
+## Question 5. How do you handle multiple sibling components updating the same state?
+
+## Question 6. How do you pass props with default values in React?
+
+## Question 7. How do you prevent default anchor (`<a>`) behavior in React?
+
 ## Question 8. What is the difference between componentDidUpdate and useEffect?
 
 ## Question 9. How do you implement a simple tab component in React?
