@@ -25,6 +25,14 @@
 
 ## Question 1. How do you implement infinite scrolling with IntersectionObserver?
 
+## Question 2. How do you implement a debounce function in React?
+
+## Question 3. How do you memoize a component that receives multiple props?
+
+## Question 4. How do you implement a multi-select dropdown with checkboxes?
+
+## Question 5. How do you implement conditional animations in React?
+
 ## Question 6. How do you share state between deeply nested components without props drilling?
 
 ## Question 7. How do you implement drag-and-drop reordering of a list?
