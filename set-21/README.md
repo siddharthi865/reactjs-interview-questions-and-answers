@@ -25,6 +25,14 @@
 
 ## Question 1. How do you explain React to someone who knows only HTML, CSS, and JavaScript?
 
+## Question 2. What is the difference between React elements and React components?
+
+## Question 3. What are the rules of hooks in React?
+
+## Question 4. How do you handle events with parameters in functional components?
+
+## Question 5. How do you render text, numbers, and expressions in JSX?
+
 ## Question 6. How do you pass multiple children to a component?
 
 ## Question 7. How do you implement conditional rendering with switch statements?
