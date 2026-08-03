@@ -25,6 +25,24 @@
 
 ## Question 1. How do you integrate Redux with React?
 
+## Question 2. How do you implement Redux selectors and memoization?
+
+## Question 3. How do you implement asynchronous Redux actions using Thunk or Saga?
+
+## Question 4. How do you integrate React with GraphQL?
+
+## Question 5. How do you handle caching with Apollo Client?
+
+## Question 6. How do you implement WebSocket-based real-time updates?
+
+## Question 7. How do you implement offline-first React apps?
+
+## Question 8. How do you implement service workers in React apps?
+
+## Question 9. How do you monitor React app performance with React Profiler?
+
+## Question 10. How do you debug memory leaks in React?
+
 ## Question 11. How do you prevent unnecessary network requests in React?
 
 ## Question 12. How do you implement drag-and-drop with React DnD or similar libraries?
